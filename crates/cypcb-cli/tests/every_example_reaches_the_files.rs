@@ -227,28 +227,39 @@ fn excellon_holes(text: &str) -> Vec<(f64, f64, f64)> {
     out
 }
 
-/// Every placed part on a board, as (refdes, x mm, y mm).
+/// Every placed part on a board, as (refdes, x mm, y mm) of the point the
+/// placement file is to give: `Footprint::placement_centre`, turned with the
+/// part, which is the origin of a surface-mount part and the middle of a
+/// through-hole part's pads.
 fn placed_parts(world: &mut BoardWorld, library: &FootprintLibrary) -> Vec<(String, f64, f64)> {
-    use cypcb_world::components::{FootprintRef, Position, RefDes};
+    use cypcb_world::components::{place_pad, FootprintRef, Position, RefDes, Rotation};
 
     let ecs = world.ecs_mut();
-    let mut query = ecs.query::<(&RefDes, &Position, &FootprintRef)>();
+    let mut query = ecs.query::<(&RefDes, &Position, &FootprintRef, Option<&Rotation>)>();
     let mut parts: Vec<(String, f64, f64)> = query
         .iter(ecs)
         // A mounting hole is a part on the board and not a part anybody
         // places: it has no copper, so there is nothing to solder and nothing
         // for a machine to pick. The placement file leaves it out on purpose,
         // and this counted it as missing.
-        .filter(|(_, _, footprint_ref)| {
+        .filter(|(_, _, footprint_ref, _)| {
             library
                 .get(&footprint_ref.0)
                 .is_none_or(|footprint| !footprint.is_mechanical())
         })
-        .map(|(refdes, position, _)| {
+        .map(|(refdes, position, footprint_ref, rotation)| {
+            let point = match library.get(&footprint_ref.0) {
+                Some(footprint) => place_pad(
+                    position.0,
+                    footprint.placement_centre(),
+                    rotation.copied().unwrap_or(Rotation::ZERO),
+                ),
+                None => position.0,
+            };
             (
                 refdes.as_str().to_string(),
-                position.0.x.0 as f64 / 1_000_000.0,
-                position.0.y.0 as f64 / 1_000_000.0,
+                point.x.0 as f64 / 1_000_000.0,
+                point.y.0 as f64 / 1_000_000.0,
             )
         })
         .collect();
