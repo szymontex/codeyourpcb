@@ -27,6 +27,10 @@ struct Case {
 
 const BAD: &[Case] = &[
     Case {
+        what: "a courtyard centre with one coordinate",
+        source: "footprint HEADER {\n    courtyard 2mm x 4mm at 0mm\n}\n",
+    },
+    Case {
         what: "a property with its value missing",
         source: "version 1\nboard test {\n    size 50mm x 30mm\n    layers\n}\n",
     },
@@ -104,6 +108,11 @@ const BAD: &[Case] = &[
 ];
 
 const GOOD: &[Case] = &[
+    Case {
+        what: "a courtyard whose centre is not the footprint's origin",
+        source: "footprint HEADER {\n    pad 1 rect at 0mm, 0mm size 1.7mm x 1.7mm drill 1mm\n    \
+                 courtyard 2.2mm x 4.74mm at 0mm, -1.27mm\n}\n",
+    },
     Case {
         what: "a board on its own",
         source: "version 1\nboard t {\n    size 30mm x 20mm\n    layers 2\n}\n",

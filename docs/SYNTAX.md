@@ -1142,7 +1142,7 @@ Define custom footprints inline:
 ```
 footprint <name> {
     description "<text>"
-    courtyard <width> x <height>
+    courtyard <width> x <height> [at <x>, <y>]
     pad <number> <shape> at <x>, <y> size <w> x <h> [drill <d> [x <d2>]] [corner <n>%] [mask <m>]
     silk line <x>, <y> to <x>, <y> [width <w>]
     silk circle <x>, <y> radius <r> [width <w>]
@@ -1161,6 +1161,24 @@ footprint MY_CONNECTOR {
     pad 3 rect at 2mm, 0mm size 1mm x 1.5mm drill 0.8mm
 }
 ```
+
+**Where the courtyard stands.** A courtyard is centred on the footprint's
+origin unless `at` says where its centre is. A KiCad footprint's origin is
+often pin 1 rather than the middle of the part, so a pin header whose pins run
+down from its origin states the centre it has:
+
+```
+footprint HEADER_1X03 {
+    courtyard 2.2mm x 7.28mm at 0mm, -2.54mm
+
+    pad 1 rect at 0mm, 0mm size 1.7mm x 1.7mm drill 1mm
+    pad 2 oblong at 0mm, -2.54mm size 1.7mm x 1.7mm drill 1mm
+    pad 3 oblong at 0mm, -5.08mm size 1.7mm x 1.7mm drill 1mm
+}
+```
+
+Without `at` the centre is the origin, which is what every file written
+before `at` existed means.
 
 **Holes: drilled or milled.** One drill number is a round hole. Two are a
 **slot**, milled along its length with a bit the width of its narrow

@@ -1471,6 +1471,7 @@ impl<'a> Reader<'a> {
         let mut description = None;
         let mut pads = Vec::new();
         let mut courtyard = None;
+        let mut courtyard_centre = None;
         let mut silk = Vec::new();
 
         while !self.done() && !self.eat(&TokenKind::RBrace) {
@@ -1492,6 +1493,16 @@ impl<'a> Reader<'a> {
                         Some(pair) => courtyard = Some(pair),
                         None => self.unexpected("a courtyard like `2mm x 1mm`"),
                     }
+                    // `at X, Y` is where its centre is, instead of the origin.
+                    if self.eat_word("at") {
+                        let x = self.dimension();
+                        self.eat(&TokenKind::Comma);
+                        let y = self.dimension();
+                        match x.zip(y) {
+                            Some(centre) => courtyard_centre = Some(centre),
+                            None => self.unexpected("a centre like `0mm, -1.27mm`"),
+                        }
+                    }
                 }
                 Some("pad") => match self.pad(property_start) {
                     Some(pad) => pads.push(pad),
@@ -1512,6 +1523,7 @@ impl<'a> Reader<'a> {
             description,
             pads,
             courtyard,
+            courtyard_centre,
             silk,
             span: Span::new(start, self.behind()),
         })

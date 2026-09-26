@@ -1057,6 +1057,14 @@ pub struct FootprintDef {
     pub pads: Vec<PadDef>,
     /// Optional explicit courtyard dimensions (width, height).
     pub courtyard: Option<(Dimension, Dimension)>,
+    /// Where the courtyard's centre is, when the design says: `courtyard 2mm
+    /// x 5mm at 0mm, -1.27mm`.
+    ///
+    /// `None` is the footprint's origin, which is what every file written
+    /// before this field meant. A KiCad footprint's origin is often pin 1
+    /// rather than the middle of the part, so a courtyard carried without its
+    /// place moved on every save.
+    pub courtyard_centre: Option<(Dimension, Dimension)>,
     /// Silkscreen artwork the footprint carries.
     pub silk: Vec<SilkDef>,
     /// Source span.

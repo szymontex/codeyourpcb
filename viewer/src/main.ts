@@ -3768,10 +3768,20 @@ async function init(): Promise<void> {
    * the way `from-kicad` writes it, to a new file, and that file is the design
    * from then on.
    */
+  /**
+   * What the `.cypcb` written from this board leaves out, as a status suffix:
+   * ` - not written: 2 zone(s) ...`. Empty when the design is the whole board.
+   */
+  function notWrittenNote(): string {
+    const lines = engine.design_not_written().split('\n').filter(Boolean);
+    return lines.length ? ` - not written: ${lines.join('; ')}` : '';
+  }
+
   async function saveKicadBoardAsDesign(): Promise<void> {
     const kicadName = currentFilePath || 'board.kicad_pcb';
     try {
       const design = engine.design_as_dsl();
+      const notWritten = notWrittenNote();
       statusText.textContent = `${kicadName} is a KiCad board - saving it as .cypcb, ${kicadName} stays untouched`;
       const handle = await saveFile(design, null, designNameFor(kicadName));
       if (!handle) {
@@ -3794,7 +3804,7 @@ async function init(): Promise<void> {
       updateTitle();
       addRecentFile(handle.name, snap, buildRenderStateForThumbnail(), design);
       dirty = true;
-      statusText.textContent = trouble || `Saved as ${handle.name} - ${kicadName} untouched`;
+      statusText.textContent = trouble || `Saved as ${handle.name} - ${kicadName} untouched${notWritten}`;
     } catch (err) {
       console.error('[Save] Error saving file:', err);
       statusText.textContent = `Error saving file: ${err}`;
@@ -4240,6 +4250,8 @@ async function init(): Promise<void> {
       // A KiCad board goes out as the design `from-kicad` would write; the
       // desktop saves it as a `.cypcb`, never over the board.
       if (loadedKind === 'kicad_pcb') {
+        const notWritten = notWrittenNote();
+        if (notWritten) statusText.textContent = `Saving ${currentFilePath} as .cypcb${notWritten}`;
         window.dispatchEvent(new CustomEvent('desktop:content-response', {
           detail: { content: engine.design_as_dsl() },
         }));

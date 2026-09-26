@@ -358,13 +358,32 @@ fn a_layer_kind_with_no_word_here_is_reported_rather_than_skipped_in_silence() {
 fn a_board_with_no_stackup_node_arrives_without_one() {
     let mut world = board(BARE, 4);
     let plain = write_board(&mut world, "test");
+    // The whole `(setup ...)` block, up to its own closing line. Dropping only
+    // the lines that open it left their closing parentheses behind, and the
+    // board ended at the first stray one: what this read was a board with no
+    // layers and no nets, which the reader accepted while it ignored whatever
+    // followed a board.
+    let mut in_setup = false;
     let stripped: String = plain
         .lines()
         .filter(|line| {
-            !line.contains("(layer \"") && !line.contains("(stackup") && *line != "  (setup"
+            if *line == "  (setup" {
+                in_setup = true;
+                return false;
+            }
+            if in_setup {
+                in_setup = *line != "  )";
+                return false;
+            }
+            true
         })
         .collect::<Vec<_>>()
         .join("\n");
+    assert!(!stripped.contains("stackup"), "\n{stripped}");
+    assert!(
+        stripped.contains("(layers"),
+        "the board lost more than its setup:\n{stripped}"
+    );
     let result = cypcb_kicad::pcb_parser::parse_kicad_pcb_str(&stripped).expect("parses");
     assert!(result.world.stackup().is_none(), "\n{stripped}");
     assert!(result.metadata.stackup_refusals.is_empty());

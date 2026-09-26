@@ -561,7 +561,7 @@ const KEYWORD_DOCS: Record<string, string> = {
   locked: 'Prevent autorouter modification.\n\nSyntax: `locked`',
   bounds: 'Zone boundary.\n\nSyntax: `bounds <x1>mm,<y1>mm to <x2>mm,<y2>mm`',
   pad: 'Footprint pad.\n\nSyntax: `pad <n> <rect|circle|roundrect|oblong> at <x>mm,<y>mm size <w>mm x <h>mm [drill <d>mm] [corner <n>%] [mask <m>mm]`\n\nTwo drill numbers make a slot, milled along its length rather than drilled: `drill 2.4mm x 1.0mm`. That is how a USB receptacle, a barrel jack or a latching header anchors itself.\n\n`corner 20%` is how round a `roundrect` pad is, as a percentage of its short side - the figure KiCad writes on every rounded pad. A pad that states none is drawn at 25%.\n\n`mask 0.1016mm` is the solder mask opening this pad asks for, past its own copper. A pad that states none takes the board\'s expansion; stating none is not the same as stating zero.',
-  courtyard: 'Courtyard.\n\nSyntax: `courtyard <w>mm x <h>mm`',
+  courtyard: 'Courtyard.\n\nSyntax: `courtyard <w>mm x <h>mm [at <x>mm, <y>mm]`\n\nCentred on the footprint\'s origin unless `at` says where its centre is.',
   description: 'Description.\n\nSyntax: `description "<text>"`',
   stackup: 'Layer stackup.\n\nSyntax: `stackup { copper ... prepreg ... }`',
   copper: 'Copper foil.\n\nSyntax: `copper 1oz` or `copper 0.035mm`. Ounces per square foot is how every fab table states it: 1oz is 34,998nm.',

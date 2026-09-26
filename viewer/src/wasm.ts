@@ -245,6 +245,12 @@ export interface PcbEngine {
    */
   design_as_dsl(): string;
 
+  /**
+   * What `design_as_dsl` cannot write, one line per kind, joined by newlines.
+   * Empty when the design is the whole board.
+   */
+  design_not_written(): string;
+
   /** Get minimum copper clearance in nanometers from active design rules. */
   get_min_clearance_nm(): number;
 
@@ -336,6 +342,7 @@ export interface WasmPcbEngine {
   trace_count(): number;
   export_traces_as_dsl(): string;
   design_as_dsl(): string;
+  design_not_written(): string;
   get_min_clearance_nm(): bigint;
   min_trace_width_for_current_ma(current_ma: number): number;
   trace_width_notes_for_current_ma(current_ma: number): string;
@@ -796,6 +803,14 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     return this.wasmEngine.design_as_dsl();
   }
 
+  design_not_written(): string {
+    // Silence here would be the loss this method exists to report.
+    if (typeof this.wasmEngine.design_not_written !== 'function') {
+      throw new Error('This engine cannot say what a .cypcb design leaves out');
+    }
+    return this.wasmEngine.design_not_written();
+  }
+
   get_min_clearance_nm(): number {
     if (typeof this.wasmEngine.get_min_clearance_nm === 'function') {
       // The engine answers in a `u64`, which reaches JavaScript as a BigInt.
@@ -1050,6 +1065,11 @@ export class MockPcbEngine implements PcbEngine {
   design_as_dsl(): string {
     // The mock has no KiCad reader, so the board this is asked for never
     // reaches it; it holds a snapshot, not a design it could write.
+    return '';
+  }
+
+  design_not_written(): string {
+    // It writes nothing, so nothing is left out of what it writes.
     return '';
   }
 
