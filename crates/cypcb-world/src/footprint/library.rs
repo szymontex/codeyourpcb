@@ -6,7 +6,7 @@ use bevy_ecs::prelude::Resource;
 
 use cypcb_core::{Nm, Point, Rect};
 
-use crate::components::{Layer, PadShape};
+use crate::components::{place_pad, Layer, PadShape, Rotation};
 
 /// A single pad definition within a footprint.
 ///
@@ -93,6 +93,26 @@ pub struct PadDef {
     pub mask_margin: Option<Nm>,
 }
 
+/// One pad as it lands on the board: where, what shape, and how big along the
+/// board's own axes.
+///
+/// A footprint states its pads in its own frame; a part is placed turned. The
+/// Gerber writers, the checker and the viewer all need the turned pad, and
+/// each used to turn it - or not - by itself. The Gerber writers did not:
+/// they flashed an 0805 turned 90 degrees with the aperture of the unturned
+/// part, 1.0 wide and 1.45 tall where the copper is 1.45 wide and 1.0 tall,
+/// while the checker swapped the two and passed a board nobody was sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PadOutline {
+    /// The pad's centre on the board.
+    pub centre: Point,
+    /// The pad's shape.
+    pub shape: PadShape,
+    /// Width along the board's x, height along its y, once every quarter turn
+    /// of the part is taken up by swapping the pad's own two sides.
+    pub size: (Nm, Nm),
+}
+
 impl PadDef {
     /// Check if this is an SMD pad (no drill hole).
     #[inline]
@@ -176,6 +196,29 @@ impl PadDef {
     #[inline]
     pub fn is_slot(&self) -> bool {
         matches!(self.slot, Some((width, height)) if width != height)
+    }
+
+    /// This pad as it lands on the board, for a part at `at` turned `rotation`.
+    ///
+    /// The one place a pad is turned: the position through [`place_pad`],
+    /// the sides swapped for every odd quarter turn. A turn between quarter
+    /// turns stands the pad at an angle a width and a height cannot state;
+    /// this takes the quarter turn below it, and no board in this repository
+    /// places a part that way (every `rotate` in its designs is 90, 180 or
+    /// 270, measured 2026-09-26).
+    pub fn outline(&self, at: Point, rotation: Rotation) -> PadOutline {
+        let turn = rotation.0.rem_euclid(360_000);
+        let (width, height) = self.size;
+        let size = if (turn / 90_000) % 2 == 1 {
+            (height, width)
+        } else {
+            (width, height)
+        };
+        PadOutline {
+            centre: place_pad(at, self.position, rotation),
+            shape: self.shape,
+            size,
+        }
     }
 
     /// Half the distance the milling bit travels, in the pad's own frame.

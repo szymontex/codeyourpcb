@@ -21,7 +21,7 @@ use cypcb_world::components::{FootprintRef, Layer, NetConnections, NetId, Positi
 use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
-use super::{rotate_point, DrcRule};
+use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
@@ -69,8 +69,6 @@ impl DrcRule for PasteClearanceRule {
             let Some(footprint) = lib.get(footprint_ref.as_str()) else {
                 continue; // Unknown footprint - sync already reported it
             };
-            let degrees = rotation.to_degrees();
-            let quarter_turn = (degrees.rem_euclid(180.0) - 90.0).abs() < 0.001;
 
             for pad in &footprint.pads {
                 // A through-hole pad is soldered by wave or by hand and gets
@@ -79,16 +77,12 @@ impl DrcRule for PasteClearanceRule {
                     continue;
                 }
 
-                let offset = rotate_point(pad.position, degrees);
-                let center = Point::new(
-                    Nm(position.0.x.0 + offset.x.0),
-                    Nm(position.0.y.0 + offset.y.0),
-                );
-                let (w, h) = if quarter_turn {
-                    (pad.size.1 .0, pad.size.0 .0)
-                } else {
-                    (pad.size.0 .0, pad.size.1 .0)
-                };
+                // The pad turned with its part, from the same place the
+                // Gerber writers take it, so the checker measures the
+                // openings the fab is sent.
+                let outline = pad.outline(position.0, *rotation);
+                let center = outline.centre;
+                let (w, h) = (outline.size.0 .0, outline.size.1 .0);
 
                 for top_side in [true, false] {
                     let layer = if top_side {
