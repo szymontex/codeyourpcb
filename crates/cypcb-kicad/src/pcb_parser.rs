@@ -2226,6 +2226,11 @@ pub fn parse_layer_name(name: &str) -> Option<Layer> {
 /// Appends matching layers to the `layers` vec.
 fn parse_layer_names(name: &str, layers: &mut Vec<Layer>) {
     match name {
+        // KiCad's "all of the copper layers". The list only has the two faces
+        // to name, because this reader does not know the layer count; the
+        // copper a plated pad has on the inner layers comes from
+        // `PadDef::copper_mask`, not from this list, and every reader of pad
+        // copper asks that.
         "*.Cu" => {
             layers.push(Layer::TopCopper);
             layers.push(Layer::BottomCopper);
