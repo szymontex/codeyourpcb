@@ -54,9 +54,10 @@ import { selectableTraceIds, selectionAfterClick, selectionAfterRect } from './s
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile, updateProjectFiles } from './project-manager';
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
 import { fetchComponentFootprint } from './jlcpcb';
-import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from './wasm';
+import { registerDynamicFootprint, register3DModel, hasDynamicFootprint, fetchedFootprints } from './wasm';
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
 import { isWorkerResponse, type WorkerRequest } from './worker-protocol';
+import { loadDesignInto, type Design, type DesignKind } from './design-load';
 import { reportLostTraces } from './trace-census';
 import { describeViolationKind } from './violation-kinds';
 import { renderStack } from './stack-panel';
@@ -1293,9 +1294,7 @@ async function init(): Promise<void> {
         // Parse and update board, with the reader this board came from. A
         // KiCad board handed to the DSL reader comes back as an empty world
         // and a page of parse errors.
-        const errors = loadedKind === 'kicad_pcb'
-          ? engine.load_kicad(content)
-          : loadDesign(content);
+        const errors = loadDesign(content, loadedKind);
         if (errors) {
           console.warn('[Editor] Parse errors:', errors);
         }
@@ -1525,8 +1524,9 @@ async function init(): Promise<void> {
    * gets its blocks whether it arrived from a template, the editor, a reload
    * or the undo stack.
    */
-  function loadDesign(source: string): string {
-    const errors = engine.load_source_with_imports(source, importedFiles);
+  function loadDesign(source: string, kind: DesignKind = 'cypcb'): string {
+    const errors = loadDesignInto(engine, designOf(source, kind));
+    if (kind === 'kicad_pcb') return errors;
 
     // The other half of the round trip, counted. `syncEditorTraces` already
     // compares the engine against the editor; this compares the text against
@@ -1541,6 +1541,26 @@ async function init(): Promise<void> {
 
     void followImports(source);
     return errors;
+  }
+
+  /**
+   * This text as a design, with everything the page holds for it: the files
+   * it imports and the footprints fetched for its parts.
+   */
+  function designOf(source: string, kind: DesignKind): Design {
+    return { kind, source, imports: { ...importedFiles }, footprints: fetchedFootprints() };
+  }
+
+  /**
+   * The design a routing worker builds its engine from, or null when there is
+   * nothing to send.
+   *
+   * Only a `.cypcb` design: the routed copper comes back as DSL and is merged
+   * into the text, and a KiCad board's text is not DSL.
+   */
+  function designToRoute(): Design | null {
+    if (!lastLoadedSource || loadedKind !== 'cypcb') return null;
+    return designOf(lastLoadedSource, loadedKind);
   }
 
   /**
@@ -1569,7 +1589,7 @@ async function init(): Promise<void> {
     }
     if (!changed) return;
 
-    const errors = engine.load_source_with_imports(source, importedFiles);
+    const errors = loadDesignInto(engine, designOf(source, 'cypcb'));
     if (errors) console.warn('[Imports] After fetching the library:', errors);
 
     const snap = pullSnapshot();
@@ -1667,7 +1687,7 @@ async function init(): Promise<void> {
       // is in its first token; nothing else has to be stored to know.
       const isKicad = source.trimStart().startsWith('(kicad_pcb');
       loadedKind = isKicad ? 'kicad_pcb' : 'cypcb';
-      const errors = isKicad ? engine.load_kicad(source) : loadDesign(source);
+      const errors = loadDesign(source, loadedKind);
       if (errors) console.warn('[Recent] Parse warnings:', errors);
 
       lastLoadedSource = source;
@@ -1972,11 +1992,9 @@ async function init(): Promise<void> {
   // extension and no test can otherwise get at.
   (window as any).__loadBoard = (source: string, kind?: string) => {
     loadedKind = kind === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
-    if (kind === 'kicad_pcb') {
-      engine.load_kicad(source);
-    } else {
-      loadDesign(source);
-    }
+    // Every other loader keeps the text, and routing reads it from here.
+    lastLoadedSource = source;
+    loadDesign(source, loadedKind);
     const snap = pullSnapshot();
     if (snap.board) {
       viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
@@ -2269,9 +2287,7 @@ async function init(): Promise<void> {
         // viewer could open the project's own format and nothing else, so
         // somebody with a `.kicad_pcb` had no way to look at it here.
         loadedKind = ext === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
-        const errors = loadedKind === 'kicad_pcb'
-          ? engine.load_kicad(content)
-          : loadDesign(content);
+        const errors = loadDesign(content, loadedKind);
         if (errors) {
           console.warn('Parse errors:', errors);
         }
@@ -2388,9 +2404,7 @@ async function init(): Promise<void> {
       // all. Two code paths load a file, drag-and-drop and this one; the other
       // learned to read a KiCad board and this one did not.
       loadedKind = ext === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
-      const errors = loadedKind === 'kicad_pcb'
-        ? engine.load_kicad(result.content)
-        : loadDesign(result.content);
+      const errors = loadDesign(result.content, loadedKind);
       if (errors) console.warn('Parse errors:', errors);
 
       lastLoadedSource = result.content;
@@ -3081,7 +3095,8 @@ async function init(): Promise<void> {
    * says again.
    */
   function triggerTuningRoute(): void {
-    if (!lastLoadedSource || !snapshot?.board) {
+    const design = designToRoute();
+    if (!design || !snapshot?.board) {
       return;
     }
 
@@ -3097,7 +3112,6 @@ async function init(): Promise<void> {
       roundness: params.roundness,
       density: params.density,
     });
-    const source = lastLoadedSource;
 
     let worker: Worker;
     try {
@@ -3114,7 +3128,7 @@ async function init(): Promise<void> {
       }
       const message = event.data;
       if (message.type === 'ready') {
-        const request: WorkerRequest = { type: 'route', source, params: rustParams };
+        const request: WorkerRequest = { type: 'route', design, params: rustParams };
         worker.postMessage(request);
         return;
       }
@@ -3186,9 +3200,10 @@ async function init(): Promise<void> {
       return;
     }
 
-    // The worker reads the design from text, so a board this thread holds only
-    // as a snapshot - one imported from KiCad, say - has nothing to send.
-    if (!lastLoadedSource) {
+    // The worker builds the design from its text, so a board this thread holds
+    // only as a snapshot - one imported from KiCad, say - has nothing to send.
+    const design = designToRoute();
+    if (!design) {
       statusText.textContent = 'Routing needs the design source';
       setTimeout(() => {
         statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
@@ -3203,7 +3218,6 @@ async function init(): Promise<void> {
       roundness: params.roundness,
       density: params.density,
     });
-    const source = lastLoadedSource;
 
     isRouting = true;
     routingStartTime = Date.now();
@@ -3227,7 +3241,7 @@ async function init(): Promise<void> {
       }
       const message = event.data;
       if (message.type === 'ready') {
-        const request: WorkerRequest = { type: 'route', source, params: rustParams };
+        const request: WorkerRequest = { type: 'route', design, params: rustParams };
         worker.postMessage(request);
         return;
       }
@@ -3327,7 +3341,8 @@ async function init(): Promise<void> {
    * as toggleable overlays. Shift+click Route to activate.
    */
   function triggerDebugRouting(): void {
-    if (!snapshot?.board || !lastLoadedSource) {
+    const design = designToRoute();
+    if (!snapshot?.board || !design) {
       statusText.textContent = 'Load a board first';
       return;
     }
@@ -3345,7 +3360,6 @@ async function init(): Promise<void> {
       roundness: params.roundness,
       density: params.density,
     });
-    const source = lastLoadedSource;
 
     statusText.textContent = 'Debug routing…';
 
@@ -3365,7 +3379,7 @@ async function init(): Promise<void> {
       }
       const message = event.data;
       if (message.type === 'ready') {
-        const request: WorkerRequest = { type: 'route-debug', source, params: rustParams };
+        const request: WorkerRequest = { type: 'route-debug', design, params: rustParams };
         worker.postMessage(request);
         return;
       }

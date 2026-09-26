@@ -476,6 +476,19 @@ impl FootprintLibrary {
         self.design_defined.entry(name).or_insert(shadowed);
     }
 
+    /// Register a footprint from outside the design - one the host fetched -
+    /// beneath any the design defines under the same name.
+    ///
+    /// The design's own definition is what its author wrote, so it wins while
+    /// it exists; this one takes its place when
+    /// [`clear_design`](FootprintLibrary::clear_design) removes it.
+    pub fn register_beneath_design(&mut self, footprint: Footprint) {
+        match self.design_defined.get_mut(&footprint.name) {
+            Some(shadowed) => *shadowed = Some(footprint),
+            None => self.register(footprint),
+        }
+    }
+
     /// Drop every footprint added by [`register_design`](FootprintLibrary::register_design),
     /// restoring any built-in they shadowed.
     pub fn clear_design(&mut self) {

@@ -1500,7 +1500,7 @@ impl PcbEngine {
         footprint.silk = silk.iter().flat_map(SilkInfo::to_shapes).collect();
         self.fetched_footprints
             .insert(name.to_string(), footprint.clone());
-        self.footprint_lib.register(footprint);
+        self.footprint_lib.register_beneath_design(footprint);
         self.world.set_footprints(self.footprint_lib.clone());
     }
 
