@@ -57,6 +57,13 @@
 # Prints what it compared and exits 0 when the committed module is current;
 # says which input moved and exits 1 when it is not.
 #
+# The gate asks a narrower question than a hand run. It grades the commit, so
+# `--dirty-inputs`, run before it builds anything, fails on any edit to a file
+# the module is built from; and `--committed`, run after its rebuild, turns
+# the notice into a failure, because with the tree held to the commit a
+# rebuild that changes the module means the committed module was not built
+# from the committed source.
+#
 # `--print-inputs` prints the paths the first half asks about, one per line,
 # and answers nothing else. `--lock-packages OLD NEW` prints the closure
 # packages whose `Cargo.lock` entries differ between two lock files.
@@ -163,7 +170,14 @@ verdict() {
   fi
 }
 
+MODE=tree
 case "${1:-}" in
+  --dirty-inputs)
+    MODE=dirty
+    ;;
+  --committed)
+    MODE=committed
+    ;;
   --print-inputs)
     printf '%s\n' "${SOURCES[@]}"
     exit 0
@@ -178,7 +192,7 @@ case "${1:-}" in
     ;;
   "") ;;
   *)
-    echo "usage: $(basename "$0") [--print-inputs | --lock-packages OLD NEW | --verdict MOVED REBUILT]" >&2
+    echo "usage: $(basename "$0") [--dirty-inputs | --committed | --print-inputs | --lock-packages OLD NEW | --verdict MOVED REBUILT]" >&2
     exit 2
     ;;
 esac
@@ -201,6 +215,35 @@ if [ "${#SOURCES[@]}" -lt "$INPUTS_FLOOR" ] || [ "${#MISSING[@]}" -gt 0 ]; then
     printf '  not on disk, so nothing is compared for it: %s\n' "${MISSING[@]}"
   fi
   exit 1
+fi
+
+# Whether the working tree is the commit, in every file the module is built
+# from. The gate builds the module from the working tree, so with any of these
+# edited its rebuild answers for a tree nobody committed - and with none of
+# them edited, the rebuild IS the committed source's module, and comparing it
+# with the committed module needs no second build.
+#
+# Wider than the history half's inputs on purpose: a crate's manifest and its
+# build script change the module as surely as its source does, and so do the
+# workspace manifest, where the `wasm-release` profile lives, and the toolchain
+# file. Untracked files count too - a new module file is an edit.
+if [ "$MODE" = dirty ]; then
+  TREE_INPUTS=("${SOURCES[@]}" Cargo.toml Cargo.lock rust-toolchain.toml viewer/pkg)
+  for source in "${SOURCES[@]}"; do
+    case "$source" in
+      crates/*/src) TREE_INPUTS+=("${source%/src}/Cargo.toml" "${source%/src}/build.rs") ;;
+    esac
+  done
+  DIRTY=$(git status --porcelain --untracked-files=all -- "${TREE_INPUTS[@]}")
+  if [ -n "$DIRTY" ]; then
+    echo "wasm-pkg-stale: the working tree is not the commit in files the module"
+    echo "  is built from, so a build here would grade a tree nobody committed:"
+    echo "$DIRTY" | sed 's/^/    /'
+    echo "  commit or stash them, then run the gate again."
+    exit 1
+  fi
+  echo "wasm-pkg-stale: the working tree is the commit in all ${#TREE_INPUTS[@]} paths the module is built from"
+  exit 0
 fi
 
 PKG_COMMIT=$(git log -1 --format=%H -- viewer/pkg)
@@ -242,6 +285,21 @@ case "$(verdict "$MOVED$LOCK_REASON" "$REBUILT")" in
     exit 0
     ;;
   notice)
+    # Asked by the gate, after `--dirty-inputs` has held the tree to the
+    # commit, the same answer means something else: the committed source does
+    # not build the committed module. That is a module built from a tree that
+    # was never committed and committed beside the source without the edit -
+    # `cfcb8a1c` carried 151 bytes, a string no file of that commit contains,
+    # and this branch of the script let it through with exit 0.
+    if [ "$MODE" = committed ]; then
+      echo "wasm-pkg-stale: the committed source does not build the committed module."
+      echo "  Nothing committed has moved since viewer/pkg was committed, and the"
+      echo "  working tree is that commit, yet rebuilding it changes:"
+      echo "$REBUILT" | sed 's/^/    /'
+      echo "  The module was built from a tree that was not committed. Rebuild with"
+      echo "  ./viewer/build-wasm.sh from the committed source and commit viewer/pkg."
+      exit 1
+    fi
     echo "  note: nothing committed has moved, and rebuilding this source changes"
     echo "        what is committed:"
     echo "$REBUILT" | sed 's/^/    /'

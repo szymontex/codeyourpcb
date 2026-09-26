@@ -183,6 +183,15 @@ free_port() {
 echo "=== Quality Gate ==="
 echo ""
 
+# The gate grades a commit, and the browser module is the one thing it builds
+# from the working tree and then compares with what is committed. An edit to a
+# file the module is built from would make that comparison about a tree nobody
+# committed, so it is refused here, before anything is built.
+if ! ./scripts/wasm-pkg-stale.sh --dirty-inputs; then
+  exit 1
+fi
+echo ""
+
 # The stage headings below carry no number. They used to, and the numbers had
 # drifted: two comments both said "Stage 10", nothing said 9 or 14, and the
 # `[n/N]` labels a reader actually sees were counting something else. One fact
@@ -453,7 +462,7 @@ if ./viewer/build-wasm.sh >/dev/null 2>&1; then
 else
   fail "build-wasm"
 fi
-if ! ./scripts/wasm-pkg-stale.sh; then
+if ! ./scripts/wasm-pkg-stale.sh --committed; then
   echo ""
   fail "stale viewer/pkg"
 fi
