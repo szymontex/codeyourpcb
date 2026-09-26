@@ -1577,6 +1577,21 @@ impl<'a> Reader<'a> {
         let x = self.dimension()?;
         self.eat(&TokenKind::Comma);
         let y = self.dimension()?;
+        // `rotate 90` turns the pad inside its footprint. It follows the
+        // position the way a part's `rotate` follows its `at`, and the size
+        // after it is the pad's own, before the turn.
+        let rotation = if self.peek_ident() == Some("rotate") {
+            let property_start = self.here();
+            self.bump();
+            let (angle, _) = self.number()?;
+            self.eat_word("deg");
+            Some(RotationExpr {
+                angle,
+                span: Span::new(property_start, self.behind()),
+            })
+        } else {
+            None
+        };
         if !self.eat_word("size") {
             self.unexpected("`size` after a pad position");
             return None;
@@ -1645,6 +1660,7 @@ impl<'a> Reader<'a> {
             drill_height,
             corner_ratio,
             mask_margin,
+            rotation,
             span: Span::new(start, self.behind()),
         })
     }

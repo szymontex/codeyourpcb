@@ -56,6 +56,7 @@ fn board_with_slots(positions: &[(f64, f64)]) -> BoardWorld {
                 cypcb_world::components::Layer::BottomCopper,
             ],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         ..base
     });

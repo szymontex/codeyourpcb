@@ -40,6 +40,7 @@ fn pin_header_1x12() -> Footprint {
             slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         })
         .collect();
     Footprint {
@@ -68,6 +69,7 @@ fn module_on_its_body(peg: bool) -> Footprint {
         slot: None,
         layers: vec![Layer::TopCopper],
         mask_margin: None,
+        rotation: Rotation::ZERO,
     };
     let mut pads = vec![smd("1", -2.0), smd("2", 2.0)];
     if peg {
@@ -80,6 +82,7 @@ fn module_on_its_body(peg: bool) -> Footprint {
             slot: None,
             layers: Vec::new(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         });
     }
     Footprint {

@@ -494,6 +494,7 @@ mod tests {
             drill: None,
             slot: None,
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
 
         let pad2 = PadDef {
@@ -505,6 +506,7 @@ mod tests {
             drill: None,
             slot: None,
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
 
         Footprint {
@@ -631,6 +633,7 @@ mod tests {
             drill: None,
             slot: None,
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
 
         let footprint = Footprint {

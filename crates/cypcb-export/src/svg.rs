@@ -84,7 +84,7 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
             }
             let centre = place_pad_millideg(position, pad.position, rotation);
             let (width, height) = pad.size;
-            let turn = rotation as f64 / 1000.0;
+            let turn = (rotation + pad.rotation.0) as f64 / 1000.0;
             let transform = format!(
                 " transform=\"rotate({:.3} {} {})\"",
                 -turn,

@@ -38,6 +38,7 @@ fn board_with_pour(pad_at: Point, cut: bool) -> BoardWorld {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library);

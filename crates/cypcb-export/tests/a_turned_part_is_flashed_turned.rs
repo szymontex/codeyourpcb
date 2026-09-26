@@ -39,6 +39,7 @@ fn chip() -> Footprint {
         slot: None,
         layers: vec![Layer::TopCopper, Layer::TopMask, Layer::TopPaste],
         mask_margin: None,
+        rotation: Rotation::ZERO,
     };
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.9), Nm::from_mm(1.45)));
     Footprint {

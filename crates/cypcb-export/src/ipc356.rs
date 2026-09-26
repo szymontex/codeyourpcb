@@ -249,7 +249,7 @@ pub fn export_ipc356(
                 y: centre.y,
                 size_x: pad.size.0,
                 size_y: pad.size.1,
-                rotation_deg: ((rotation / 1000).rem_euclid(360)) as u32,
+                rotation_deg: (((rotation + pad.rotation.0) / 1000).rem_euclid(360)) as u32,
                 soldermask: if pad.drill.is_some() { '3' } else { '1' },
             });
         }

@@ -308,7 +308,7 @@ fn into_pad_frame(pad: &PadDef, at: Point, rotation_deg: f64, p: Point) -> Point
     let centre = pad_centre(pad, at, rotation_deg);
     rotate_point(
         Point::from_raw(p.x.raw() - centre.x.raw(), p.y.raw() - centre.y.raw()),
-        -rotation_deg,
+        -(rotation_deg + pad.rotation.to_degrees()),
     )
 }
 
@@ -871,6 +871,7 @@ mod tests {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }
     }
 
@@ -1130,6 +1131,7 @@ mod tests {
                 slot: None,
                 layers,
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             }],
             ..base
         });
@@ -1592,5 +1594,37 @@ mod tests {
         // The wedge is reported where the copper meets the land, not at the
         // other end of a 10mm run.
         assert_eq!(violations[0].location, Point::from_mm(10.0, 10.0));
+    }
+
+    /// A trace entering a pad turned inside its footprint enters it as it
+    /// would the same pad square on a part turned the same.
+    #[test]
+    fn a_pad_s_own_turn_turns_the_land_a_trace_enters() {
+        use cypcb_world::components::Rotation;
+        let pad = |turn: Rotation| PadDef {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(1.0), Nm::from_mm(2.0)),
+            drill: None,
+            slot: None,
+            layers: vec![Layer::TopCopper],
+            mask_margin: None,
+            rotation: turn,
+        };
+        let at = Point::from_mm(10.0, 10.0);
+        let (end, arm, width) = (
+            Point::from_mm(10.5, 10.2),
+            Point::from_mm(12.0, 10.8),
+            Nm::from_mm(0.2),
+        );
+        let entry =
+            |turn: Rotation, part: f64| entry_angle_placed(&pad(turn), at, part, end, arm, width);
+        assert_eq!(entry(Rotation::DEG_90, 0.0), entry(Rotation::ZERO, 90.0));
+        assert_ne!(
+            entry(Rotation::DEG_90, 0.0),
+            entry(Rotation::ZERO, 0.0),
+            "the control"
+        );
     }
 }

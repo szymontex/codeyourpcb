@@ -1031,6 +1031,17 @@ pub struct PadDef {
     /// importer has read it since 2026-08-31; without this the figure survived
     /// an import and not a save.
     pub mask_margin: Option<Dimension>,
+    /// How far the pad is turned inside its footprint, when the design turns
+    /// it.
+    ///
+    /// `rotate 90`, written after the pad's position the way a part's own
+    /// `rotate` follows its `at`. The size is the pad's own, before the turn:
+    /// `size 1.524mm x 3.048mm rotate 90` is a pad 3.048mm across the
+    /// footprint's x axis.
+    ///
+    /// `None` is the ordinary case and means the pad stands square to its
+    /// footprint.
+    pub rotation: Option<RotationExpr>,
     /// Source span.
     pub span: Span,
 }

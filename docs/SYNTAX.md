@@ -1243,6 +1243,17 @@ footprint POLARISED {
 - KiCad states this per pad, and a through-hole connector asks for 4 mil so the
   mask does not creep onto copper a hand-soldered joint has to wet
 
+**Turn:**
+- `rotate <a>` after the pad's position turns the pad inside its footprint,
+  the way `rotate` after a part's `at` turns the part on the board:
+  `pad 1 oblong at 0mm, 0mm rotate 90 size 1.524mm x 3.048mm drill 1mm`
+- The size, the slot and the corner are the pad's own, before the turn; the
+  pad above is 3.048mm across the footprint's x axis
+- A pad that states none stands square to its footprint
+- On the board a pad is turned by its own turn plus its part's
+- KiCad writes a pad's angle on the board, part and pad together; `from-kicad`
+  takes the part's angle off it, and `to-kicad` adds it back
+
 **Drill:**
 - If `drill` is specified, pad is through-hole (THT)
 - Without `drill`, pad is surface-mount (SMD)

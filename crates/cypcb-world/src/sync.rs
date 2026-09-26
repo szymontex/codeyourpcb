@@ -2245,6 +2245,11 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
                         // SMD pads on top copper with paste and mask
                         vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask]
                     },
+                    rotation: p
+                        .rotation
+                        .as_ref()
+                        .map(|r| Rotation::from_degrees(r.angle))
+                        .unwrap_or(Rotation::ZERO),
                 }
             })
             .collect();
@@ -2328,8 +2333,10 @@ fn calculate_footprint_bounds(pads: &[FootprintPadDef]) -> Rect {
     let mut max_y = Nm(i64::MIN);
 
     for pad in pads {
-        let half_w = Nm(pad.size.0 .0 / 2);
-        let half_h = Nm(pad.size.1 .0 / 2);
+        // Its sides along the footprint's axes, once its own turn is taken up.
+        let (width, height) = pad.outline(Point::ORIGIN, Rotation::ZERO).size;
+        let half_w = Nm(width.0 / 2);
+        let half_h = Nm(height.0 / 2);
 
         let pad_min_x = Nm(pad.position.x.0 - half_w.0);
         let pad_min_y = Nm(pad.position.y.0 - half_h.0);

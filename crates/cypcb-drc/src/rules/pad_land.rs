@@ -138,6 +138,7 @@ mod tests {
                 slot: None,
                 layers: vec![Layer::TopCopper, Layer::BottomCopper],
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             }],
             ..base
         });
@@ -246,6 +247,7 @@ mod tests {
                 slot: None,
                 layers: vec![Layer::TopCopper],
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             }],
             ..base
         });

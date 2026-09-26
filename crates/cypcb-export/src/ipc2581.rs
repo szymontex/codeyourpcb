@@ -281,7 +281,7 @@ pub fn export_ipc2581_with(
                 placed.push((
                     layer_name.clone(),
                     place_pad_millideg(position, pad.position, rotation),
-                    rotation,
+                    rotation + pad.rotation.0,
                     id,
                 ));
             }

@@ -40,6 +40,7 @@ fn square_pad(number: &str, x_mm: f64) -> PadDef {
         slot: None,
         layers: vec![Layer::TopCopper],
         mask_margin: None,
+        rotation: Rotation::ZERO,
     }
 }
 

@@ -215,7 +215,9 @@ pub fn copper_on_layer(
                     min: Point::new(Nm(-half_w), Nm(-half_h)),
                     max: Point::new(Nm(half_w), Nm(half_h)),
                 },
-                rotation,
+                // The pad turns about its own centre by its part's turn and
+                // its own together.
+                Rotation(rotation.0 + pad.rotation.0),
             );
             if is_own {
                 own.push(box_);
@@ -302,6 +304,7 @@ mod tests {
                 slot: None,
                 layers: vec![Layer::TopCopper],
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             }],
         });
 
@@ -379,6 +382,35 @@ mod tests {
         assert!(
             !filled.spokes.is_empty(),
             "a pad on the pour's own net is connected by thermal spokes"
+        );
+    }
+
+    /// The copper a pour keeps clear of, for one 1.0 by 2.0 pad at the origin
+    /// of a part at (10, 10): the part turned `part`, the pad `pad`.
+    fn pad_boxes(part: Rotation, pad: Rotation) -> (Vec<Rect>, Vec<Rect>) {
+        let (mut world, mut library) = board_with_one_pad(1);
+        let mut footprint = library.get("PAD1").unwrap().clone();
+        footprint.pads[0].size = (Nm::from_mm(1.0), Nm::from_mm(2.0));
+        footprint.pads[0].rotation = pad;
+        library.register(footprint);
+        for mut rotation in world
+            .ecs_mut()
+            .query::<&mut Rotation>()
+            .iter_mut(&mut *world.ecs_mut())
+        {
+            *rotation = part;
+        }
+        copper_on_layer(&mut world, &library, Layer::TopCopper, None)
+    }
+
+    #[test]
+    fn a_pad_turned_in_its_footprint_keeps_the_pour_off_as_its_part_turned() {
+        let turned_pad = pad_boxes(Rotation::ZERO, Rotation::DEG_90);
+        assert_eq!(turned_pad, pad_boxes(Rotation::DEG_90, Rotation::ZERO));
+        assert_ne!(
+            turned_pad,
+            pad_boxes(Rotation::ZERO, Rotation::ZERO),
+            "the control"
         );
     }
 }

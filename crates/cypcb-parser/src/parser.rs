@@ -1250,6 +1250,11 @@ impl CypcbParser {
             None => None,
         };
 
+        // `rotate 90`, the same field the hand reader takes: the pad's turn
+        // inside its footprint.
+        let rotation = get_child_by_field(node, "rotation")
+            .and_then(|n| self.convert_rotation(source, &n, errors));
+
         Some(PadDef {
             number,
             shape,
@@ -1261,6 +1266,7 @@ impl CypcbParser {
             drill_height,
             corner_ratio,
             mask_margin,
+            rotation,
             span: span_of(node),
         })
     }
@@ -2955,6 +2961,32 @@ footprint ROUNDED {
             // A pad that states none carries none, and the 25% a board is
             // drawn with is decided where the design becomes a board.
             assert_eq!(fp.pads[1].corner_ratio, None);
+        } else {
+            panic!("expected footprint definition");
+        }
+    }
+
+    /// A pad's turn inside its footprint, through the tree-sitter reader.
+    #[test]
+    fn a_pad_states_its_turn_in_its_footprint() {
+        let source = r#"
+footprint HEADER {
+    pad 1 oblong at 0mm, 0mm rotate 90 size 1.524mm x 3.048mm drill 1mm
+    pad 2 oblong at 2.54mm, 0mm size 1.524mm x 3.048mm drill 1mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Footprint(fp) = &result.value.definitions[0] {
+            let turn = fp.pads[0]
+                .rotation
+                .as_ref()
+                .expect("the first pad states a turn");
+            assert!((turn.angle - 90.0).abs() < 1e-9);
+            // The size stays the pad's own, before the turn.
+            assert!((fp.pads[0].width.value - 1.524).abs() < 1e-9);
+            assert!(fp.pads[1].rotation.is_none());
         } else {
             panic!("expected footprint definition");
         }

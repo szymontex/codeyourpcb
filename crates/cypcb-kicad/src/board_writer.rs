@@ -628,9 +628,22 @@ fn write_footprints(
                 .and_then(|c| c.pin_net(&pad.number))
                 .and_then(|id| net_number.get(&id).map(|n| (*n, id)));
 
+            // A pad's angle in a board file is its turn on the board, the
+            // part's and its own together, and none at all when that is zero:
+            // KiCad's writer prints `GetOrientation()` and leaves it out when
+            // it `IsZero()` (`pcb_io_kicad_sexpr.cpp` at a62d8cd4, read
+            // 2026-09-26), and its reader takes the part's turn back off
+            // (`PAD::SetOrientation` in `pad.cpp`). Written without it, every
+            // pad of a turned part opened in KiCad lying the other way.
+            let on_board = (rotation + pad.rotation.0).rem_euclid(360_000);
+            let angle = if on_board == 0 {
+                String::new()
+            } else {
+                format!(" {}", on_board as f64 / 1000.0)
+            };
             let _ = write!(
                 out,
-                "    (pad \"{}\" {kind} {shape} (at {} {}) (size {} {}) (layers {layers})",
+                "    (pad \"{}\" {kind} {shape} (at {} {}{angle}) (size {} {}) (layers {layers})",
                 pad.number,
                 mm(pad.position.x),
                 local_y(pad.position.y),

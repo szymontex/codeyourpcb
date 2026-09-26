@@ -2291,6 +2291,22 @@
           }
         },
         {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "FIELD",
+              "name": "rotation",
+              "content": {
+                "type": "SYMBOL",
+                "name": "rotation_property"
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
           "type": "STRING",
           "value": "size"
         },

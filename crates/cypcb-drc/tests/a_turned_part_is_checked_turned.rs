@@ -32,6 +32,7 @@ fn board(spacing_mm: f64, rotation: Rotation) -> BoardWorld {
         slot: None,
         layers: vec![Layer::TopCopper, Layer::TopMask, Layer::TopPaste],
         mask_margin: None,
+        rotation: Rotation::ZERO,
     };
     let mut library = FootprintLibrary::new();
     let base = library

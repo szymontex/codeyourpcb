@@ -85,7 +85,8 @@ impl BoardObstacles {
             for pad in &footprint.pads {
                 let offset = rotate_about_origin(pad.position, *rotation_deg);
                 let (w, h) = (pad.size.0.raw() as f64, pad.size.1.raw() as f64);
-                let quarter_turns = rotation_deg / 90.0;
+                // The pad's sides turn by its part's turn and its own.
+                let quarter_turns = (rotation_deg + pad.rotation.to_degrees()) / 90.0;
                 let half_extent = (quarter_turns.fract() == 0.0).then(|| {
                     let (hw, hh) = (pad.size.0.raw() / 2, pad.size.1.raw() / 2);
                     if (quarter_turns as i64).rem_euclid(2) == 0 {
@@ -1404,5 +1405,48 @@ mod tests {
         let (_, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.15), Nm(0));
 
         assert_eq!(opt_vias.len(), 2);
+    }
+
+    /// A via beside a pad turned inside its footprint is kept off the pad as
+    /// it stands: its sides swap with its own turn as with its part's.
+    #[test]
+    fn a_pad_s_own_turn_swaps_the_sides_a_via_keeps_off() {
+        use cypcb_world::components::{FootprintRef, PadShape, Position, RefDes, Rotation, Value};
+        use cypcb_world::footprint::{Footprint, PadDef};
+        let extent = |part: Rotation, pad: Rotation| {
+            let mut world = BoardWorld::new();
+            world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
+            let mut library = FootprintLibrary::new();
+            library.register(Footprint {
+                name: "P".into(),
+                description: String::new(),
+                bounds: cypcb_core::Rect::new(Point::ORIGIN, Point::ORIGIN),
+                courtyard: cypcb_core::Rect::new(Point::ORIGIN, Point::ORIGIN),
+                silk: Vec::new(),
+                pads: vec![PadDef {
+                    number: "1".into(),
+                    shape: PadShape::Rect,
+                    position: Point::ORIGIN,
+                    size: (Nm::from_mm(1.0), Nm::from_mm(2.0)),
+                    drill: None,
+                    slot: None,
+                    layers: vec![Layer::TopCopper],
+                    mask_margin: None,
+                    rotation: pad,
+                }],
+            });
+            world.spawn_component(
+                RefDes::new("R1"),
+                Value::new("x"),
+                Position::from_mm(10.0, 10.0),
+                part,
+                FootprintRef::new("P"),
+                NetConnections::new(),
+            );
+            BoardObstacles::from_board(&mut world, &library).pads[0].half_extent
+        };
+        let turned_pad = extent(Rotation::ZERO, Rotation::DEG_90);
+        assert_eq!(turned_pad, extent(Rotation::DEG_90, Rotation::ZERO));
+        assert_eq!(turned_pad, Some([1_000_000, 500_000]));
     }
 }

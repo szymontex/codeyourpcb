@@ -855,7 +855,7 @@ pub(crate) fn pad_copper(
             Point::new(Nm(-half_w), Nm(-half_h)),
             Point::new(Nm(half_w), Nm(half_h)),
         ),
-        rotation,
+        Rotation(rotation.0 + pad.rotation.0),
     );
     let core = AABB::from_corners([core.min.x.0, core.min.y.0], [core.max.x.0, core.max.y.0]);
     Copper { core, radius }
@@ -2342,6 +2342,34 @@ mod tests {
             violations.len(),
             1,
             "Trace on unrelated net near component should still violate"
+        );
+    }
+
+    /// A pad turned inside its footprint is the copper of a square pad on a
+    /// part turned the same: its own turn adds to its part's.
+    #[test]
+    fn a_pad_s_own_turn_turns_its_copper() {
+        use cypcb_world::components::{PadShape, Rotation};
+        use cypcb_world::footprint::PadDef;
+        let pad = |turn: Rotation| PadDef {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(1.0), Nm::from_mm(2.9)),
+            drill: None,
+            slot: None,
+            layers: vec![Layer::TopCopper],
+            mask_margin: None,
+            rotation: turn,
+        };
+        let at = Point::from_mm(10.0, 10.0);
+        let turned_pad = pad_copper(&pad(Rotation::DEG_90), at, 0.0);
+        let turned_part = pad_copper(&pad(Rotation::ZERO), at, 90.0);
+        let square = pad_copper(&pad(Rotation::ZERO), at, 0.0);
+        assert_eq!(turned_pad.core, turned_part.core);
+        assert_ne!(
+            turned_pad.core, square.core,
+            "the control: a turn moves the core"
         );
     }
 }

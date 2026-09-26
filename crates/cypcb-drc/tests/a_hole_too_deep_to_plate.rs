@@ -95,6 +95,7 @@ fn board_with_mounting_hole(drill_mm: f64, thickness_mm: f64) -> BoardWorld {
             // reads exactly this, and so does the drill file.
             layers: Vec::new(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         ..base
     });

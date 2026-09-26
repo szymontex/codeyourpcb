@@ -123,6 +123,7 @@ fn two_pads_with_no_net_are_compared_to_each_other() {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
 

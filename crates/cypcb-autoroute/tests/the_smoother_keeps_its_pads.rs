@@ -41,6 +41,7 @@ fn part(width: f64, height: f64) -> Footprint {
         slot: None,
         layers: vec![Layer::TopCopper, Layer::TopMask],
         mask_margin: None,
+        rotation: Rotation::ZERO,
     };
     let size = (Nm::from_mm(1.0 + width), Nm::from_mm(height));
     Footprint {

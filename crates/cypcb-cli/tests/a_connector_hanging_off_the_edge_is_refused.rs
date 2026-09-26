@@ -134,6 +134,7 @@ fn board_with_pad_and_body(gap_mm: f64, courtyard_half_mm: f64) -> BoardWorld {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
 

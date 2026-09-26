@@ -46,6 +46,7 @@ fn board_with_hole_and_part(pad_gap_mm: f64, body_half_mm: f64) -> BoardWorld {
             // No copper layer at all is what makes a hole unplated.
             layers: Vec::new(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     library.register(Footprint {
@@ -66,6 +67,7 @@ fn board_with_hole_and_part(pad_gap_mm: f64, body_half_mm: f64) -> BoardWorld {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
 

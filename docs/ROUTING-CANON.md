@@ -495,7 +495,7 @@ on a layer the pad is on and the net the pad is on - and returns an
 cannot say whether anything was looked at. The rows it writes carry
 `ViolationKind::PadEntry` (`crates/cypcb-drc/src/violation.rs:104`). What the rule cannot see is the
 wedge beside a corner; see "What nothing measures". `grep -c '#\[test\]'
-crates/cypcb-drc/src/rules/pad_entry.rs` answers 29 at `4ff318c` and 30 with the pass-through case this measurement added.
+crates/cypcb-drc/src/rules/pad_entry.rs` answers 31: 29 at `4ff318c`, 30 with the pass-through case this measurement added, 31 with the pad turned inside its footprint (2026-09-26).
 
 **The teardrop condition has no check, and measuring it on 2026-09-12 found
 three reasons that go deeper than "nobody wrote the rule".**

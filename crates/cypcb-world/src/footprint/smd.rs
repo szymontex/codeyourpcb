@@ -31,7 +31,7 @@
 use cypcb_core::{Nm, Point, Rect};
 
 use super::library::{Footprint, PadDef};
-use crate::components::{Layer, PadShape};
+use crate::components::{Layer, PadShape, Rotation};
 
 /// Generate a standard 2-pad chip footprint.
 ///
@@ -74,6 +74,7 @@ fn chip_footprint(
                 slot: None,
                 layers: smd_layers.clone(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             PadDef {
                 number: "2".into(),
@@ -84,6 +85,7 @@ fn chip_footprint(
                 slot: None,
                 layers: smd_layers,
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (body_width, body_height)),

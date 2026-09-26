@@ -186,7 +186,7 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
                 _ => polyline(
                     &mut body,
                     &copper,
-                    &rectangle(centre, width, height, rotation),
+                    &rectangle(centre, width, height, rotation + pad.rotation.0),
                     true,
                     None,
                 ),

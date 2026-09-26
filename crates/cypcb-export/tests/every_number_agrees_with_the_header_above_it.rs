@@ -51,6 +51,7 @@ fn two_pin_header() -> Footprint {
         slot: None,
         layers: vec![Layer::TopCopper, Layer::BottomCopper],
         mask_margin: None,
+        rotation: Rotation::ZERO,
     };
 
     Footprint {
