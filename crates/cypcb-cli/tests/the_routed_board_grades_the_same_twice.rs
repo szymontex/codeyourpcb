@@ -13,9 +13,11 @@
 //! ```
 //!
 //! Two commands, one board, two answers, and the number a user acts on is
-//! whichever they happened to run. `route` measures the world it just routed;
-//! `check` measures the file. Anything the writer does to the board between
-//! them lands here.
+//! whichever they happened to run. `route` measured the world it had just
+//! routed and `check` the file, so anything the writer did to the board
+//! between them landed here. Since 2026-09-26 `route` reads the text it writes
+//! through the checker's reader and reports on that;
+//! `route_and_check_count_the_same_board` holds every benchmark board to it.
 
 use std::process::Command;
 

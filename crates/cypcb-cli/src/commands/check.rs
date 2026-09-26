@@ -6,8 +6,6 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use cypcb_drc::{run_drc, Preset, PresetRules};
-use cypcb_world::footprint::FootprintLibrary;
-use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
 
 /// Check a .cypcb file for errors.
@@ -91,46 +89,14 @@ impl CheckCommand {
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to read {}", self.file.display()))?;
 
-        let result = cypcb_parser::parse(&source);
-
-        // Report parse errors
-        if result.has_errors() {
-            // The file first, because the diagnostics under it do not carry a
-            // name: a person running this over a directory sees a column and a
-            // line and no way to tell which board they belong to.
-            eprintln!("{}: {} error(s)", self.file.display(), result.errors.len());
-            for err in result.errors {
-                eprintln!("{:?}", miette::Report::new(err));
-            }
+        // One reader for a design, shared with `cypcb route`, which reads the
+        // file it writes through this before it says what the checker will
+        // find in it. Its diagnostics are printed as it goes; an error here
+        // has nothing more to say.
+        let Ok(loaded) = crate::board_source::read_cypcb(&self.file, &source, true) else {
             std::process::exit(1);
-        }
-
-        let ast = result.value;
-
-        // Bring in whatever the file imports, resolved against its own
-        // directory. Errors are collected rather than fatal so the rest of the
-        // design is still checked.
-        let mut import_errors = Vec::new();
-        let ast = cypcb_parser::resolve_imports(&ast, &self.file, &mut import_errors);
-        for error in &import_errors {
-            eprintln!("Import error: {error}");
-        }
-
-        // Semantic validation: build the board model from the AST.
-        let mut world = BoardWorld::new();
-        let mut library = FootprintLibrary::new();
-        let sync_result = sync_ast_to_world(&ast, &source, &mut world, &mut library);
-
-        if !sync_result.errors.is_empty() {
-            for err in &sync_result.errors {
-                eprintln!("{:?}", miette::Report::new(err.clone()));
-            }
-            std::process::exit(1);
-        }
-
-        for warning in &sync_result.warnings {
-            eprintln!("{:?}", miette::Report::new(warning.clone()));
-        }
+        };
+        let world = loaded.world;
 
         self.check_board(world, &source)
     }
