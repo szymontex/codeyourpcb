@@ -1,8 +1,8 @@
 /**
  * The autorouter, off the main thread.
  *
- * The worker owns its own `PcbEngine`: it reads the design text it is given,
- * routes it, and sends back the engine's JSON answer together with the routed
+ * The worker owns its own `PcbEngine`: it loads the design it is given the way
+ * the page loaded it, routes it, and sends back the engine's JSON answer together with the routed
  * copper as DSL. Nothing is shared - a `PcbEngine` lives in wasm memory that
  * cannot cross a `postMessage` - so the main thread applies the copper to its
  * own engine through the same merge the save path uses.
@@ -13,6 +13,8 @@
  * still carries the first run's copper.
  */
 
+import { loadDesignInto, type DesignLoader } from './design-load';
+import type { PadInfo, SilkShape } from './types';
 import { isWorkerRequest, type WorkerResponse } from './worker-protocol';
 
 /**
@@ -34,7 +36,9 @@ function post(message: WorkerResponse): void {
 }
 
 interface RoutingEngine {
-  load_source(source: string): string;
+  register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string;
+  load_source_with_imports(source: string, files_json: string): string;
+  load_kicad(source: string): string;
   auto_route_with_params(params: string): string;
   auto_route_debug(params: string): string;
   export_traces_as_dsl(): string;
@@ -73,9 +77,10 @@ ctx.onmessage = async (event: MessageEvent<unknown>): Promise<void> => {
   try {
     const { PcbEngine } = await wasm();
     engine = new PcbEngine();
-    const loaded = engine.load_source(request.source);
-    const loadError = readError(loaded);
+    const loadError = loadDesignInto(loader(engine), request.design);
     if (loadError) {
+      // Routing what did load would answer about a smaller board than the
+      // one on screen, and say nothing about the difference.
       post({ type: 'failed', error: loadError });
       return;
     }
@@ -95,17 +100,14 @@ ctx.onmessage = async (event: MessageEvent<unknown>): Promise<void> => {
   }
 };
 
-/** `load_source` answers with JSON that may carry an error the load survived. */
-function readError(answer: string): string | null {
-  try {
-    const parsed = JSON.parse(answer) as { ok?: unknown; error?: unknown };
-    if (parsed.ok === false && typeof parsed.error === 'string') {
-      return parsed.error;
-    }
-  } catch {
-    // Not JSON: older builds answered with a bare string, which is not an error.
-  }
-  return null;
+/** The raw engine takes the imported files as JSON text. */
+function loader(engine: RoutingEngine): DesignLoader {
+  return {
+    register_footprint: (name, pads, silk) => engine.register_footprint(name, pads, silk),
+    load_source_with_imports: (source, files) =>
+      engine.load_source_with_imports(source, JSON.stringify(files)),
+    load_kicad: (source) => engine.load_kicad(source),
+  };
 }
 
 post({ type: 'ready' });

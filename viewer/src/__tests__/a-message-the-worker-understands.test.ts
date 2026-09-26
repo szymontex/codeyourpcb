@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { isWorkerRequest, isWorkerResponse } from '../worker-protocol';
+import type { Design } from '../design-load';
+
+const DESIGN: Design = { kind: 'cypcb', source: 'board b {}', imports: {}, footprints: [] };
 
 /**
  * The routing worker's protocol, held to what it claims to recognise.
@@ -32,14 +35,18 @@ describe('the routing protocol', () => {
     // draws traces cannot be handed one by mistake.
     expect(isWorkerResponse({ type: 'debugged', result: '{"ok":true,"stages":[]}' })).toBe(true);
     expect(isWorkerResponse({ type: 'debugged' })).toBe(false);
-    expect(isWorkerRequest({ type: 'route-debug', source: 'board b {}', params: '{}' })).toBe(true);
-    expect(isWorkerRequest({ type: 'route-debug', source: 'board b {}' })).toBe(false);
+    expect(isWorkerRequest({ type: 'route-debug', design: DESIGN, params: '{}' })).toBe(true);
+    expect(isWorkerRequest({ type: 'route-debug', design: DESIGN })).toBe(false);
   });
 
   it('accepts a routing request and refuses a half-written one', () => {
-    expect(isWorkerRequest({ type: 'route', source: 'board b {}', params: '{}' })).toBe(true);
-    expect(isWorkerRequest({ type: 'route', source: 'board b {}' })).toBe(false);
-    expect(isWorkerRequest({ type: 'route', source: 42, params: '{}' })).toBe(false);
+    expect(isWorkerRequest({ type: 'route', design: DESIGN, params: '{}' })).toBe(true);
+    expect(isWorkerRequest({ type: 'route', design: DESIGN })).toBe(false);
+    expect(isWorkerRequest({ type: 'route', design: { ...DESIGN, source: 42 }, params: '{}' })).toBe(false);
+    // The design as bare text, which is what left the worker without the
+    // footprints and files the page had.
+    expect(isWorkerRequest({ type: 'route', source: 'board b {}', params: '{}' })).toBe(false);
+    expect(isWorkerRequest({ type: 'route', design: { ...DESIGN, footprints: undefined }, params: '{}' })).toBe(false);
     expect(isWorkerRequest({ type: 'ready' })).toBe(false);
   });
 });

@@ -20,6 +20,7 @@
 
 import type { BoardSnapshot, PadInfo, TraceSegmentInfo, ViolationInfo, SilkShape } from './types';
 import { pointToSegmentDistance } from './geometry';
+import type { FetchedFootprint } from './design-load';
 
 /**
  * Recursively convert all BigInt values in an object to plain Numbers.
@@ -96,6 +97,14 @@ function replayRegisteredFootprints(engine: PcbEngine): void {
  */
 export function hasDynamicFootprint(packageName: string): boolean {
   return dynamicFootprintRegistry.has(packageName);
+}
+
+/**
+ * Every footprint the host fetched, for an engine that has to be taught them
+ * - the routing worker builds one per run.
+ */
+export function fetchedFootprints(): FetchedFootprint[] {
+  return [...dynamicFootprintRegistry].map(([name, { pads, silk }]) => ({ name, pads, silk }));
 }
 
 /**
@@ -329,7 +338,7 @@ interface WasmPcbEngine {
   auto_route_with_params(params_json: string): string;
   auto_route_variants(): string;
   auto_route_debug(params_json: string): string;
-  register_footprint(name: string, pads_json: string, silk_json: string): string;
+  register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string;
   register_3d_model(package_name: string, model: string): void;
   free(): void;
 }
@@ -587,7 +596,9 @@ export class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string {
-    return this.wasmEngine.register_footprint(name, JSON.stringify(pads), JSON.stringify(silk));
+    // The wasm build reads the pads as JavaScript values. JSON text reached it
+    // as a string, which it refused, so no fetched footprint ever got in.
+    return this.wasmEngine.register_footprint(name, pads, silk);
   }
 
   register_3d_model(packageName: string, uuid: string): void {

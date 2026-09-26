@@ -7,18 +7,20 @@
  * and the cancel button could not be clicked because nothing could be clicked.
  * R201 to R203 in `.gsd/REQUIREMENTS.md` are that report written down.
  *
- * The protocol is deliberately small. The worker gets the design as text and
- * the tuning parameters as the JSON string the engine already takes, and it
- * answers with what the engine returned plus the routed copper as DSL - the
- * same text `export_traces_as_dsl` produces for a save, so the main thread
- * applies it through the merge path that already exists.
+ * The protocol is deliberately small. The worker gets the design - its text,
+ * the files it imports and the footprints the host fetched, which the worker
+ * cannot fetch again - and the tuning parameters as the JSON string the engine
+ * already takes, and it answers with what the engine returned plus the routed
+ * copper as DSL - the same text `export_traces_as_dsl` produces for a save,
+ * so the main thread applies it through the merge path that already exists.
  */
+
+import { isDesign, type Design } from './design-load';
 
 /** Route this design with these parameters. */
 export interface RouteRequest {
   type: 'route';
-  /** The `.cypcb` source, imports already resolved by the main thread. */
-  source: string;
+  design: Design;
   /** `{"via_cost":N,"layer_preference":N,"roundness":N,"density":N}` */
   params: string;
 }
@@ -32,7 +34,7 @@ export interface RouteRequest {
  */
 export interface DebugRequest {
   type: 'route-debug';
-  source: string;
+  design: Design;
   params: string;
 }
 
@@ -95,10 +97,10 @@ export function isWorkerRequest(value: unknown): value is WorkerRequest {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
-  const message = value as { type?: unknown; source?: unknown; params?: unknown };
+  const message = value as { type?: unknown; design?: unknown; params?: unknown };
   return (
     (message.type === 'route' || message.type === 'route-debug') &&
-    typeof message.source === 'string' &&
+    isDesign(message.design) &&
     typeof message.params === 'string'
   );
 }
