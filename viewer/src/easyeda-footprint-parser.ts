@@ -6,6 +6,7 @@
  * shapes within a footprint (LIB block).
  *
  * Unit system: 1 EasyEDA unit = 10 mil = 0.254 mm = 254,000 nm
+ * Y grows down in EasyEDA and up in a footprint: see `footprintPoint`.
  * Layer mapping: 1=TopCopper, 2=BottomCopper, 3=TopSilk, 4=BottomSilk, 11=MultiLayer (THT)
  *
  * Reference: https://docs.easyeda.com/en/DocumentFormat/EasyEDA-Format-Standard/
@@ -15,6 +16,25 @@ import type { PadInfo, SilkShape } from './types';
 
 /** EasyEDA unit → nanometers (1 unit = 10 mil = 254,000 nm) */
 const EEDA_TO_NM = 254_000;
+
+/**
+ * An EasyEDA point as a footprint point, in nanometres from the origin.
+ *
+ * EasyEDA draws on an SVG canvas, and its Y grows down the screen. A
+ * footprint's Y grows up - the convention `cypcb_world::footprint` states for
+ * the board and every footprint on it. So Y is negated here, and every point
+ * this parser reads - pad, track, circle, arc - goes through this function.
+ * easyeda2kicad (fff10a38, read 2026-09-26) copies EasyEDA's Y into KiCad's
+ * unchanged, and KiCad's Y also grows down the sheet.
+ *
+ * Until 2026-09-26 nothing negated anything, and a part fetched from EasyEDA
+ * arrived as its own mirror image: AP2112K-3.3TRG1 in SOT25 counted its pins
+ * clockwise, where the datasheet (DS39724 Rev. 2-2) counts them
+ * counter-clockwise seen from the top.
+ */
+function footprintPoint(x: number, y: number, originX: number, originY: number): [number, number] {
+  return [(x - originX) * EEDA_TO_NM, (originY - y) * EEDA_TO_NM];
+}
 
 /**
  * Parsed footprint data from EasyEDA component response.
@@ -217,9 +237,7 @@ function parsePADShape(
   if (isNaN(absX) || isNaN(absY) || isNaN(width) || isNaN(height)) return null;
   if (!number) return null;
 
-  // Convert coordinates relative to footprint origin, then to nanometers
-  const relX = (absX - originX) * EEDA_TO_NM;
-  const relY = (absY - originY) * EEDA_TO_NM;
+  const [relX, relY] = footprintPoint(absX, absY, originX, originY);
   const widthNm = width * EEDA_TO_NM;
   const heightNm = height * EEDA_TO_NM;
 
@@ -302,10 +320,8 @@ function parseSilkTRACK(trackStr: string, ox: number, oy: number): SilkShape[] {
   const segments: SilkShape[] = [];
 
   for (let i = 0; i < coords.length - 2; i += 2) {
-    const x1 = (coords[i] - ox) * EEDA_TO_NM;
-    const y1 = (coords[i + 1] - oy) * EEDA_TO_NM;
-    const x2 = (coords[i + 2] - ox) * EEDA_TO_NM;
-    const y2 = (coords[i + 3] - oy) * EEDA_TO_NM;
+    const [x1, y1] = footprintPoint(coords[i], coords[i + 1], ox, oy);
+    const [x2, y2] = footprintPoint(coords[i + 2], coords[i + 3], ox, oy);
 
     if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
       segments.push({
@@ -333,8 +349,7 @@ function parseSilkCIRCLE(circleStr: string, ox: number, oy: number): SilkShape |
   const layer = silkLayer(fields[5]);
   if (!layer) return null;
 
-  const cx = (parseFloat(fields[1]) - ox) * EEDA_TO_NM;
-  const cy = (parseFloat(fields[2]) - oy) * EEDA_TO_NM;
+  const [cx, cy] = footprintPoint(parseFloat(fields[1]), parseFloat(fields[2]), ox, oy);
   const radius = parseFloat(fields[3]) * EEDA_TO_NM;
   const width = parseFloat(fields[4]) * EEDA_TO_NM;
 
@@ -369,26 +384,33 @@ function parseSilkARC(arcStr: string, ox: number, oy: number): SilkShape | null 
   const aMatch = pathData.match(/A\s*([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+(\d)\s+(\d)\s+([-\d.]+)\s+([-\d.]+)/);
   if (!mMatch || !aMatch) return null;
 
-  const sx = (parseFloat(mMatch[1]) - ox) * EEDA_TO_NM;
-  const sy = (parseFloat(mMatch[2]) - oy) * EEDA_TO_NM;
+  const [sx, sy] = footprintPoint(parseFloat(mMatch[1]), parseFloat(mMatch[2]), ox, oy);
   const rx = parseFloat(aMatch[1]) * EEDA_TO_NM;
   const ry = parseFloat(aMatch[2]) * EEDA_TO_NM;
   const largeArc = aMatch[4] === '1';
-  const sweep = aMatch[5] === '1';
-  const ex = (parseFloat(aMatch[6]) - ox) * EEDA_TO_NM;
-  const ey = (parseFloat(aMatch[7]) - oy) * EEDA_TO_NM;
+  // The sweep flag names the direction of rising angle in EasyEDA's Y-down
+  // frame. Negating Y turns that direction round, so the flag turns with it.
+  const sweep = aMatch[5] !== '1';
+  const [ex, ey] = footprintPoint(parseFloat(aMatch[6]), parseFloat(aMatch[7]), ox, oy);
 
   // Convert SVG arc to center + angles for canvas rendering
   const arc = svgArcToCenter(sx, sy, rx, ry, largeArc, sweep, ex, ey);
   if (!arc) return null;
+
+  // A silk arc runs counter-clockwise from its start to its end, which is how
+  // the canvas draws it. One that runs the other way is the same ink from its
+  // end to its start.
+  const [startAngle, endAngle] = arc.endAngle >= arc.startAngle
+    ? [arc.startAngle, arc.endAngle]
+    : [arc.endAngle, arc.startAngle];
 
   return {
     type: 'arc',
     cx: Math.round(arc.cx),
     cy: Math.round(arc.cy),
     radius: Math.round((rx + ry) / 2), // average for elliptical arcs
-    startAngle: arc.startAngle,
-    endAngle: arc.endAngle,
+    startAngle,
+    endAngle,
     width: Math.round(width),
     layer,
   };
