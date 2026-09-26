@@ -54,6 +54,62 @@ function hasFileSystemAccess(): boolean {
   return 'showOpenFilePicker' in window;
 }
 
+type WrittenFormat = 'kicad_pcb' | 'cypcb';
+
+/**
+ * The format a text is in. A KiCad board is one `(kicad_pcb ...)` expression
+ * and nothing after it: anything past its closing bracket is another format
+ * spliced on, which KiCad's own reader would stop short of - the trace blocks
+ * Ctrl+S used to append went exactly there, and the board reopened without
+ * them and without a word.
+ */
+export function formatOfText(content: string): WrittenFormat | 'mixed' {
+  const text = content.trimStart();
+  if (!text.startsWith('(kicad_pcb')) return 'cypcb';
+  let depth = 0;
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '\\') i++;
+      else if (c === '"') quoted = false;
+    } else if (c === '"') {
+      quoted = true;
+    } else if (c === '(') {
+      depth++;
+    } else if (c === ')' && --depth === 0) {
+      return text.slice(i + 1).trim() === '' ? 'kicad_pcb' : 'mixed';
+    }
+  }
+  return 'mixed';
+}
+
+/** The format a file name promises. */
+export function formatOfName(name: string): WrittenFormat {
+  return name.toLowerCase().endsWith('.kicad_pcb') ? 'kicad_pcb' : 'cypcb';
+}
+
+/**
+ * Refuse a write whose text is not in the format its file name promises.
+ *
+ * Every write of a design goes through here, in the browser and in the desktop
+ * app, so no save path can put one format in a file named for another.
+ */
+export function refuseForeignFormat(name: string, content: string): void {
+  const promised = formatOfName(name);
+  const found = formatOfText(content);
+  if (found === promised) return;
+  const what = found === 'mixed'
+    ? 'a KiCad board with other text after it'
+    : found === 'kicad_pcb' ? 'a KiCad board' : 'a .cypcb design';
+  throw new Error(`Not saved: ${name} would have been given ${what}`);
+}
+
+/** The name a KiCad board is saved under: its own, as a `.cypcb`. */
+export function designNameFor(name: string): string {
+  return formatOfName(name) === 'kicad_pcb' ? name.replace(/\.kicad_pcb$/i, '.cypcb') : name;
+}
+
 /**
  * Open a file using File System Access API with fallback.
  *
@@ -155,6 +211,9 @@ export async function saveFile(
   defaultName: string
 ): Promise<FileSystemFileHandle | null> {
   if (handle) {
+    // Outside the try: a refusal is an answer, not a failure to fall through
+    // to save-as on.
+    refuseForeignFormat(handle.name, content);
     // Save to existing handle - no dialog
     try {
       const writable = await handle.createWritable();
@@ -185,6 +244,7 @@ export async function saveFile(
         ],
       });
 
+      refuseForeignFormat(newHandle.name, content);
       const writable = await newHandle.createWritable();
       await writable.write(content);
       await writable.close();
@@ -202,6 +262,7 @@ export async function saveFile(
     }
   } else {
     // Fallback - trigger download
+    refuseForeignFormat(defaultName, content);
     const blob = new Blob([content], { type: 'application/x-cypcb' });
     const url = URL.createObjectURL(blob);
 

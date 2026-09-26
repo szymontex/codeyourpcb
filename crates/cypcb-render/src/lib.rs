@@ -734,6 +734,16 @@ impl PcbEngine {
         cypcb_world::dsl::traces_as_dsl(&mut self.world)
     }
 
+    /// The whole board as a `.cypcb` design - the text `from-kicad` writes.
+    ///
+    /// A KiCad board is saved as a design of this language, beside the file it
+    /// came from and never over it: the importer does not carry everything a
+    /// `.kicad_pcb` holds, so writing the board back as KiCad would lose what
+    /// it drops, and splicing trace blocks onto the KiCad text lost the copper.
+    pub fn design_as_dsl(&mut self) -> String {
+        cypcb_world::dsl::board_as_dsl(&mut self.world)
+    }
+
     /// Get the minimum copper clearance in nanometers.
     ///
     /// Returns the clearance value from the active design rules (default preset).

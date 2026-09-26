@@ -42,7 +42,7 @@ import {
 } from './layers';
 import { collectImportedFiles, importedPaths, readerForBaseUrl } from './imports';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
-import { openFile, saveFile } from './file-access';
+import { designNameFor, openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
 import { dialDevServer } from './dev-socket';
 import { decodeViewState } from './url-state';
@@ -422,6 +422,15 @@ async function init(): Promise<void> {
   function updateTitle(): void {
     const name = currentFilePath || 'Untitled';
     document.title = tracesUnsaved ? `\u2022 ${name} — CodeYourPCB` : `${name} — CodeYourPCB`;
+  }
+
+  /**
+   * Name the file the design is in. The title named it only when copper was
+   * marked or saved, so it went on naming the file opened before.
+   */
+  function setCurrentFile(name: string | null): void {
+    currentFilePath = name;
+    updateTitle();
   }
 
   /** Mark traces as modified (unsaved). */
@@ -1468,7 +1477,7 @@ async function init(): Promise<void> {
 
   // Start with empty state - user will open a file
   pullSnapshot();
-  currentFilePath = null;
+  setCurrentFile(null);
   statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
 
   // Preload Monaco editor in the background so Ctrl+E opens instantly
@@ -1545,7 +1554,10 @@ async function init(): Promise<void> {
     loadedKind = kind;
     lastLoadedSource = source;
     const errors = loadDesignInto(engine, designOf(source, kind));
-    if (kind === 'kicad_pcb') return errors;
+    if (kind === 'kicad_pcb') {
+      kicadCopperAsLoaded = engine.export_traces_as_dsl();
+      return errors;
+    }
 
     // The other half of the round trip, counted. `syncEditorTraces` already
     // compares the engine against the editor; this compares the text against
@@ -1567,6 +1579,16 @@ async function init(): Promise<void> {
    * the design it was for has gone can tell.
    */
   let designGeneration = 0;
+
+  /**
+   * The copper a KiCad board arrived with. The file keeps that copper, so
+   * only a change to it needs a `.cypcb` to live in.
+   */
+  let kicadCopperAsLoaded = '';
+
+  function kicadCopperChanged(): boolean {
+    return loadedKind === 'kicad_pcb' && engine.export_traces_as_dsl() !== kicadCopperAsLoaded;
+  }
 
   /**
    * Forget what belonged to the design on screen, before another replaces it.
@@ -1595,6 +1617,13 @@ async function init(): Promise<void> {
     currentFileHandle = null;
     importReader = null;
     for (const path of Object.keys(importedFiles)) delete importedFiles[path];
+    highlightedNet = null;
+    tracesUnsaved = false;
+    debugWorker?.terminate();
+    debugWorker = null;
+    debugOverlayStage = -1;
+    debugData = null;
+    document.getElementById('route-debug-panel')?.remove();
   }
 
   /**
@@ -1724,10 +1753,10 @@ async function init(): Promise<void> {
       if (snap.violations) updateErrorBadge(snap.violations);
       if (is3DActive && renderer3d) renderer3d.updateBoard(snap, layers);
 
-      currentFilePath = `${templateName}.cypcb`;
+      setCurrentFile(`${templateName}.cypcb`);
       statusText.textContent = `Loaded template: ${templateName}`;
 
-      addRecentFile(currentFilePath, snap, buildRenderStateForThumbnail(), source);
+      addRecentFile(`${templateName}.cypcb`, snap, buildRenderStateForThumbnail(), source);
       hideProjectManager();
       dirty = true;
 
@@ -1771,7 +1800,7 @@ async function init(): Promise<void> {
       if (snap.violations) updateErrorBadge(snap.violations);
       if (is3DActive && renderer3d) renderer3d.updateBoard(snap, layers);
 
-      currentFilePath = name;
+      setCurrentFile(name);
       statusText.textContent = `Loaded: ${name}`;
 
       hideProjectManager();
@@ -1801,7 +1830,7 @@ async function init(): Promise<void> {
       }
       if (is3DActive && renderer3d) renderer3d.updateBoard(snap, layers);
 
-      currentFilePath = null;
+      setCurrentFile(null);
       statusText.textContent = trouble ? `New board: ${trouble}` : usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
       hideProjectManager();
       dirty = true;
@@ -1830,6 +1859,12 @@ async function init(): Promise<void> {
         // open, permanently, and the only clue was a console line.
         if (lastLoadedSource) {
           addRecentFile(currentFilePath, snapshot, buildRenderStateForThumbnail(), lastLoadedSource);
+          // The KiCad entry keeps the board's own text, which has no place for
+          // copper drawn here. That copper goes on the list as the design a
+          // save would write, so reopening it does not lose it.
+          if (kicadCopperChanged()) {
+            addRecentFile(designNameFor(currentFilePath), snapshot, buildRenderStateForThumbnail(), engine.design_as_dsl());
+          }
         } else {
           console.warn(
             `[ProjectManager] Not refreshing ${currentFilePath}: there is no source in hand, ` +
@@ -2303,6 +2338,7 @@ async function init(): Promise<void> {
   (window as any).__renderState = {
     get selectedTraceId() { return selectedTraceId; },
     get hoveredTraceId() { return hoveredTraceId; },
+    get highlightedNet() { return highlightedNet; },
     get colorByNet() { return colorByNet; },
   };
 
@@ -2368,7 +2404,7 @@ async function init(): Promise<void> {
         }
 
         // Update current file path for routing
-        currentFilePath = file.name;
+        setCurrentFile(file.name);
 
         if (snap.board) {
           viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
@@ -2429,7 +2465,7 @@ async function init(): Promise<void> {
     // Persist current traces into source before showing project manager
     // so reopening the same project preserves routed traces
     const traceCount = engine.trace_count();
-    if (lastLoadedSource && traceCount > 0) {
+    if (lastLoadedSource && traceCount > 0 && loadedKind === 'cypcb') {
       const exportedTraces = engine.export_traces_as_dsl();
       lastLoadedSource = mergeTracesIntoDsl(lastLoadedSource, exportedTraces);
       if (currentFilePath) {
@@ -2451,7 +2487,7 @@ async function init(): Promise<void> {
       beginNewDesign();
       // Store handle for save-in-place
       currentFileHandle = result.handle;
-      currentFilePath = result.name;
+      setCurrentFile(result.name);
 
       // A KiCad board arrives here too, and used to fall past every branch to
       // `Unknown file type: .kicad_pcb` - written to a status bar the project
@@ -3721,6 +3757,50 @@ async function init(): Promise<void> {
    * Handle saving the current file (web only).
    * Uses File System Access API with handle for save-in-place.
    */
+  /**
+   * Save a KiCad board as a `.cypcb` design beside it, never over it.
+   *
+   * Ctrl+S spliced the copper, as trace blocks of this language, onto the end
+   * of the KiCad text and wrote that over the `.kicad_pcb` it came from. The
+   * reader stops at the board's closing bracket, so the file still opened -
+   * without the copper, and without a word. Writing the board back as KiCad
+   * would lose whatever the importer does not carry. So the board is written
+   * the way `from-kicad` writes it, to a new file, and that file is the design
+   * from then on.
+   */
+  async function saveKicadBoardAsDesign(): Promise<void> {
+    const kicadName = currentFilePath || 'board.kicad_pcb';
+    try {
+      const design = engine.design_as_dsl();
+      statusText.textContent = `${kicadName} is a KiCad board - saving it as .cypcb, ${kicadName} stays untouched`;
+      const handle = await saveFile(design, null, designNameFor(kicadName));
+      if (!handle) {
+        statusText.textContent = `${kicadName} not saved over - nothing written to it`;
+        return;
+      }
+      // The saved file is the design now. Reloading renumbers every trace, so
+      // nothing that points at the board's old ones may stay.
+      beginNewDesign();
+      const trouble = loadTrouble(loadDesign(design, 'cypcb'));
+      currentFileHandle = handle;
+      setCurrentFile(handle.name);
+      const snap = pullSnapshot();
+      if (editorReady && editorInstance) {
+        suppressSync = true;
+        editorInstance.setValue(design);
+        suppressSync = false;
+      }
+      tracesUnsaved = false;
+      updateTitle();
+      addRecentFile(handle.name, snap, buildRenderStateForThumbnail(), design);
+      dirty = true;
+      statusText.textContent = trouble || `Saved as ${handle.name} - ${kicadName} untouched`;
+    } catch (err) {
+      console.error('[Save] Error saving file:', err);
+      statusText.textContent = `Error saving file: ${err}`;
+    }
+  }
+
   async function handleSaveFile(): Promise<void> {
     // Use editor content if editor is active, otherwise use lastLoadedSource
     const sourceContent = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
@@ -3731,6 +3811,11 @@ async function init(): Promise<void> {
       setTimeout(() => {
         statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
       }, 2000);
+      return;
+    }
+
+    if (loadedKind === 'kicad_pcb') {
+      await saveKicadBoardAsDesign();
       return;
     }
 
@@ -4045,7 +4130,7 @@ async function init(): Promise<void> {
         if (file !== currentFilePath) beginNewDesign();
 
         // Track current file for routing
-        currentFilePath = file;
+        setCurrentFile(file);
 
         // This file came off the dev server's disk, so its library is beside
         // it there. The engine asks for paths relative to the design; the
@@ -4132,7 +4217,7 @@ async function init(): Promise<void> {
       }
 
       // Update current file path for routing
-      currentFilePath = path;
+      setCurrentFile(path);
 
       // Update status with filename
       const filename = path.split(/[/\\]/).pop() || path;
@@ -4151,6 +4236,15 @@ async function init(): Promise<void> {
 
       // Use editor content if editor is active, otherwise use lastLoadedSource
       const sourceContent = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
+
+      // A KiCad board goes out as the design `from-kicad` would write; the
+      // desktop saves it as a `.cypcb`, never over the board.
+      if (loadedKind === 'kicad_pcb') {
+        window.dispatchEvent(new CustomEvent('desktop:content-response', {
+          detail: { content: engine.design_as_dsl() },
+        }));
+        return;
+      }
 
       // Merge routed traces into the source before responding
       const exportedTraces = engine.export_traces_as_dsl();
@@ -4237,7 +4331,7 @@ async function init(): Promise<void> {
       }
 
       // Clear file state
-      currentFilePath = null;
+      setCurrentFile(null);
       lastLoadedSource = null;
 
       // Update status

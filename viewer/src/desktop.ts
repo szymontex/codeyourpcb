@@ -7,6 +7,8 @@
  * - Window management
  */
 
+import { formatOfName, refuseForeignFormat } from './file-access';
+
 // Module-level state for tracking current file
 let currentFilePath: string | null = null;
 
@@ -136,7 +138,8 @@ async function handleOpenFile(): Promise<void> {
  * Handle File > Save - save to current file path or trigger Save As.
  */
 async function handleSaveFile(): Promise<void> {
-  if (!currentFilePath) {
+  // A KiCad board is saved as a `.cypcb` beside it, never over it.
+  if (!currentFilePath || formatOfName(currentFilePath) === 'kicad_pcb') {
     // No file path yet, fall through to Save As
     await handleSaveFileAs();
     return;
@@ -152,6 +155,7 @@ async function handleSaveFile(): Promise<void> {
       return;
     }
 
+    refuseForeignFormat(currentFilePath, content);
     await tauriCore.invoke('save_file', { path: currentFilePath, content });
     console.log('[Desktop] File saved:', currentFilePath);
 
@@ -180,6 +184,8 @@ async function handleSaveFileAs(): Promise<void> {
       return;
     }
 
+    // Its dialog offers `.cypcb` and nothing else.
+    refuseForeignFormat('design.cypcb', content);
     const path = await tauriCore.invoke('save_file_as', { content }) as string | null;
 
     if (path) {
