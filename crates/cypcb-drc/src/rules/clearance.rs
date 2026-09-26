@@ -183,13 +183,12 @@ impl DrcRule for ClearanceRule {
 
         for entry in &entries {
             // A component is looked for from as far as its pads reach, not
-            // only its box in the index. That box is the courtyard moved to
-            // the part's position and never turned with it, so on a part
-            // rotated 90 degrees the pads stand outside it: C3 on
-            // `esp32_starter` has copper a trace overlaps, and the pair was
-            // only ever measured because another segment of the same trace
-            // entity reached the courtyard. Cut into one entity per segment,
-            // that trace lost the short. The pair is found from this side;
+            // only its box in the index. That box is the courtyard, turned and
+            // moved with the part, and a courtyard is what the footprint says
+            // it is: `PINHDR_1X12` on `esp32_starter` states one centred on
+            // pad 1 while its pads run down from pad 1 in one direction, so
+            // the lower pads stand outside it. A trace over pad 8 of J3 was
+            // only ever measured from here. The pair is found from this side;
             // the other side's query may still miss the box.
             let mut reach = entry.envelope;
             for pad in pad_map.get(&entry.entity.index()).into_iter().flatten() {

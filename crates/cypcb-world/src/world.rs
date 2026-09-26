@@ -415,7 +415,8 @@ impl BoardWorld {
     /// # Arguments
     ///
     /// * `footprint_bounds` - Function to get bounds for a footprint name.
-    ///   Used to calculate entity bounding boxes.
+    ///   Used to calculate entity bounding boxes, turned with the part and
+    ///   moved to it by [`place_box`].
     ///
     /// # Example
     ///
@@ -439,20 +440,24 @@ impl BoardWorld {
         let mut entries = Vec::new();
 
         // Query all positioned entities with footprints
-        let mut query = self.world.query::<(Entity, &Position, &FootprintRef)>();
+        let mut query = self
+            .world
+            .query::<(Entity, &Position, &FootprintRef, Option<&Rotation>)>();
 
-        for (entity, position, footprint) in query.iter(&self.world) {
-            let bounds = footprint_bounds(footprint.as_str());
-            let pos = position.0;
-
-            // Translate bounds by position
-            let min = Point::new(Nm(pos.x.0 + bounds.min.x.0), Nm(pos.y.0 + bounds.min.y.0));
-            let max = Point::new(Nm(pos.x.0 + bounds.max.x.0), Nm(pos.y.0 + bounds.max.y.0));
+        for (entity, position, footprint, rotation) in query.iter(&self.world) {
+            // The footprint's box turned with the part and moved to it
+            let placed = place_box(
+                position.0,
+                footprint_bounds(footprint.as_str()),
+                rotation.copied().unwrap_or(Rotation::ZERO),
+            );
 
             // Default to all layers for now (could be refined with pad layer info)
             let layer_mask = 0xFFFFFFFF;
 
-            entries.push(SpatialEntry::new(entity, min, max, layer_mask));
+            entries.push(SpatialEntry::new(
+                entity, placed.min, placed.max, layer_mask,
+            ));
         }
 
         self.world.resource_mut::<SpatialIndex>().rebuild(entries);
@@ -477,14 +482,19 @@ impl BoardWorld {
 
         // Index components (same as rebuild_spatial_index)
         {
-            let mut query = self.world.query::<(Entity, &Position, &FootprintRef)>();
-            for (entity, position, footprint) in query.iter(&self.world) {
-                let bounds = footprint_bounds(footprint.as_str());
-                let pos = position.0;
-                let min = Point::new(Nm(pos.x.0 + bounds.min.x.0), Nm(pos.y.0 + bounds.min.y.0));
-                let max = Point::new(Nm(pos.x.0 + bounds.max.x.0), Nm(pos.y.0 + bounds.max.y.0));
+            let mut query = self
+                .world
+                .query::<(Entity, &Position, &FootprintRef, Option<&Rotation>)>();
+            for (entity, position, footprint, rotation) in query.iter(&self.world) {
+                let placed = place_box(
+                    position.0,
+                    footprint_bounds(footprint.as_str()),
+                    rotation.copied().unwrap_or(Rotation::ZERO),
+                );
                 let layer_mask = 0xFFFFFFFF;
-                entries.push(SpatialEntry::new(entity, min, max, layer_mask));
+                entries.push(SpatialEntry::new(
+                    entity, placed.min, placed.max, layer_mask,
+                ));
             }
         }
 

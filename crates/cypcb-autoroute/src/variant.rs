@@ -12,7 +12,6 @@
 
 use serde::Serialize;
 
-use cypcb_core::Nm;
 use cypcb_drc::DesignRules;
 use cypcb_router::apply_routes;
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
@@ -694,14 +693,7 @@ fn clear_autorouted_traces(world: &mut BoardWorld) {
 
 /// Rebuild spatial index including traces.
 fn rebuild_spatial_index(world: &mut BoardWorld, library: &FootprintLibrary) {
-    world.rebuild_spatial_index_with_traces(|name| {
-        library.get(name).map(|fp| fp.courtyard).unwrap_or_else(|| {
-            cypcb_core::Rect::from_center_size(
-                cypcb_core::Point::ORIGIN,
-                (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            )
-        })
-    });
+    world.rebuild_spatial_index_from_library(library);
 }
 
 // ============================================================================
@@ -711,6 +703,7 @@ fn rebuild_spatial_index(world: &mut BoardWorld, library: &FootprintLibrary) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cypcb_core::Nm;
 
     #[test]
     fn default_variant_configs_cover_the_measured_settings() {

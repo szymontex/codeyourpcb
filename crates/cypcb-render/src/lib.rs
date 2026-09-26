@@ -1164,24 +1164,27 @@ impl PcbEngine {
         // ---- Also index component courtyards (for non-copper DRC like courtyard overlap) ----
         {
             let ecs = self.world.ecs_mut();
-            let mut query = ecs.query::<(Entity, &Position, &FootprintRef)>();
+            let mut query = ecs.query::<(Entity, &Position, &FootprintRef, Option<&Rotation>)>();
             let items: Vec<_> = query
                 .iter(ecs)
-                .map(|(e, p, f)| (e, p.0, f.as_str().to_string()))
+                .map(|(e, p, f, r)| {
+                    (
+                        e,
+                        p.0,
+                        f.as_str().to_string(),
+                        r.copied().unwrap_or(Rotation::ZERO),
+                    )
+                })
                 .collect();
 
             // Skip courtyard indexing for copper clearance — pads are indexed above.
             // We still keep courtyards for other DRC rules (courtyard clearance, etc.)
             // but mark them with layer_mask = 0 so copper clearance check skips them.
-            for (entity, pos, footprint_name) in &items {
+            for (entity, pos, footprint_name, rotation) in &items {
                 if let Some(fp) = self.footprint_lib.get(footprint_name) {
-                    let bounds = fp.courtyard;
-                    let min =
-                        Point::new(Nm(pos.x.0 + bounds.min.x.0), Nm(pos.y.0 + bounds.min.y.0));
-                    let max =
-                        Point::new(Nm(pos.x.0 + bounds.max.x.0), Nm(pos.y.0 + bounds.max.y.0));
+                    let placed = cypcb_world::components::place_box(*pos, fp.courtyard, *rotation);
                     // layer_mask = 0 means this entry won't match any copper layer check
-                    entries.push(SpatialEntry::new(*entity, min, max, 0));
+                    entries.push(SpatialEntry::new(*entity, placed.min, placed.max, 0));
                 }
             }
         }

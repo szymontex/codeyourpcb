@@ -3,7 +3,7 @@
 //! All coordinates use integer nanometers from cypcb-core for deterministic precision.
 
 use bevy_ecs::prelude::*;
-use cypcb_core::{Nm, Point};
+use cypcb_core::{Nm, Point, Rect};
 use serde::{Deserialize, Serialize};
 
 /// Position in nanometers from board origin (bottom-left).
@@ -159,6 +159,31 @@ pub fn place_pad(component_pos: Point, pad_offset: Point, rotation: Rotation) ->
         Nm(component_pos.x.0 + rotated.x.0),
         Nm(component_pos.y.0 + rotated.y.0),
     )
+}
+
+/// Where a footprint's box - its courtyard or its outline - lands on the board.
+///
+/// Each corner is placed as [`place_pad`] places a pad, and the result is the
+/// box around the four. A part turned 90 degrees has its box turned with it;
+/// the box stated in the footprint and moved without turning sits across the
+/// board from the pads on any part that is longer one way than the other.
+/// Turned by anything other than a multiple of 90 degrees, the box around the
+/// turned box is larger than the part, which is what an index needs: it may
+/// find a part it did not need to, never miss one.
+pub fn place_box(component_pos: Point, bounds: Rect, rotation: Rotation) -> Rect {
+    let corners = [
+        bounds.min,
+        Point::new(bounds.max.x, bounds.min.y),
+        bounds.max,
+        Point::new(bounds.min.x, bounds.max.y),
+    ]
+    .map(|corner| place_pad(component_pos, corner, rotation));
+    let mut placed = Rect::from_points(corners[0], corners[2]);
+    for corner in corners {
+        placed.min = Point::new(placed.min.x.min(corner.x), placed.min.y.min(corner.y));
+        placed.max = Point::new(placed.max.x.max(corner.x), placed.max.y.max(corner.y));
+    }
+    placed
 }
 
 /// Rotate a point about the origin, counter-clockwise-positive seen from the
