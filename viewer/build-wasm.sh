@@ -73,12 +73,18 @@ export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=2048
 # `cypcb_render_bg.wasm` differ; with it both are
 # `b0e94102cef39dec22557fc78f717e3d`.
 #
-# It is the checkout that is remapped and not the home directory, so this says
-# nothing about two machines: the registry and the toolchain still live at
-# their own paths. What it buys is that one machine's answer to "does
-# rebuilding this source change the committed module" no longer depends on
-# which directory the source is sitting in.
-export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$(pwd)=/cypcb"
+# The checkout was the only directory remapped until 2026-09-26, and the
+# module is a file every clone ships. The crates it links from the registry
+# were still named by where cargo keeps them - 47 paths into the home
+# directory of whoever built it, in every module committed since the first.
+# So the two other directories rustc reads source from get neutral names too:
+# cargo's home, where the registry is, and the toolchain's sysroot, where the
+# standard library's source is when it is installed. None of the three names
+# says anything about the machine, and the module is the same bytes from any
+# directory on it.
+CARGO_HOME_DIR="${CARGO_HOME:-$HOME/.cargo}"
+SYSROOT_DIR="$(rustc --print sysroot)"
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$(pwd)=/cypcb --remap-path-prefix=${CARGO_HOME_DIR}=/cargo --remap-path-prefix=${SYSROOT_DIR}=/sysroot"
 
 # The `wasm` feature carries the Rust reader, so this module parses .cypcb
 # itself and PcbEngine::load_source is exported to JS.

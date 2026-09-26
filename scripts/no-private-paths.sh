@@ -125,12 +125,80 @@ else
     echo "no-private-paths: no file names a private path"
 fi
 
+# Binary files, which the scan above never reads: `grep -I` skips them. That is
+# where the leak was. The committed browser module carried 47 paths into the
+# home directory of the machine that built it, one per registry crate source
+# rustc recorded for a panic message, in every module committed from the
+# first. A text scan passed over all of them.
+#
+# The shape is looser here. Strings in a compiled module sit end to end with
+# no separator, so a path follows the last letter of the string before it and
+# the guard that keeps a URL out of the text scan would let every one of them
+# through. A binary has no URLs worth that guard.
+BIN_PATTERN="/($ROOTS)/[A-Za-z0-9._-]"
+
+binaries() {
+    files | xargs -0 grep -IL '' 2>/dev/null
+}
+
+bin_scan() {
+    grep -aoE "$BIN_PATTERN" 2>/dev/null | grep -vE "$ALLOWED"
+}
+
+# The same kind of control as above, on bytes: a path glued to the string
+# before it and fenced by NULs has to be found, and the neutral name the build
+# gives cargo's home has to not be.
+bin_caught=$(printf 'x\0mod.rs%scon''fig%s.cargo%sregistry\0y' "$SL" "$SL" "$SL" | bin_scan | wc -l)
+bin_neutral=$(printf 'x\0mod.rs%scargo%sregistry\0y' "$SL" "$SL" | bin_scan | wc -l)
+if [ "$bin_caught" -ne 1 ] || [ "$bin_neutral" -ne 0 ]; then
+    echo "no-private-paths: the binary check itself is broken and proves nothing"
+    echo "  a private path in bytes was caught : $bin_caught (want 1)"
+    echo "  a neutral path in bytes was caught : $bin_neutral (want 0)"
+    exit 1
+fi
+
+# The denominator: the module is the binary this check exists for, so a list
+# that does not hold it has collapsed, whatever else it holds.
+BINARIES=$(binaries)
+bin_count=$(printf '%s' "$BINARIES" | grep -c . || true)
+echo "no-private-paths: binary files offered to the check: $bin_count"
+if ! printf '%s\n' "$BINARIES" | grep -qx 'viewer/pkg/cypcb_render_bg.wasm'; then
+    echo "no-private-paths: the browser module was not among them, so the"
+    echo "  binary half is not a verdict"
+    status=1
+fi
+
+BIN_FOUND=""
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    n=$(bin_scan < "$file" | wc -l)
+    [ "$n" -gt 0 ] && BIN_FOUND="${BIN_FOUND}  $file: $n
+"
+done <<< "$BINARIES"
+if [ -n "$BIN_FOUND" ]; then
+    # Counts, not the paths: printing them would put them in a log that is
+    # itself shared.
+    echo "no-private-paths: a binary file names a private path"
+    printf '%s' "$BIN_FOUND" | head -20
+    echo ""
+    echo "  A compiled module records the paths of the sources it was built"
+    echo "  from. Rebuild it with ./viewer/build-wasm.sh, which gives each"
+    echo "  directory a neutral name."
+    status=1
+else
+    echo "no-private-paths: no binary file names a private path"
+fi
+
 if [ -f "$DENYLIST" ]; then
     NAMES=$(grep -vE '^\s*(#|$)' "$DENYLIST")
     if [ -z "$NAMES" ]; then
         echo "no-private-paths: the deny-list is empty, so no name was checked"
     else
         HITS=$(files | xargs -0 grep -Ilf <(echo "$NAMES") 2>/dev/null)
+        # The binaries too, read as bytes, for the reason given above.
+        BIN_HITS=$(printf '%s\n' "$BINARIES" | grep . | tr '\n' '\0' \
+            | xargs -0 -r grep -alFf <(echo "$NAMES") 2>/dev/null)
+        HITS=$(printf '%s\n%s\n' "$HITS" "$BIN_HITS" | grep .)
         # The control for this half too: a name that is on the list has to be
         # found when it is present, or an empty result means nothing.
         probe=$(printf '%s\n' "$NAMES" | head -1)
