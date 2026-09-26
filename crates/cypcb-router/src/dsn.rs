@@ -351,6 +351,13 @@ fn write_library(
 }
 
 /// Format a padstack name based on pad properties.
+/// A pad's sides along its footprint's axes, its own turn taken up: a
+/// padstack is placed with its part's turn and carries no turn of its own.
+fn footprint_frame_size(pad: &cypcb_world::footprint::PadDef) -> (cypcb_core::Nm, cypcb_core::Nm) {
+    pad.outline(cypcb_core::Point::ORIGIN, cypcb_world::Rotation::ZERO)
+        .size
+}
+
 fn format_padstack_name(pad: &cypcb_world::footprint::PadDef) -> String {
     let shape_str = match pad.shape {
         cypcb_world::PadShape::Circle => "round",
@@ -359,8 +366,9 @@ fn format_padstack_name(pad: &cypcb_world::footprint::PadDef) -> String {
         cypcb_world::PadShape::Oblong => "oval",
     };
 
-    let width_mil = nm_to_mil(pad.size.0 .0) as i32;
-    let height_mil = nm_to_mil(pad.size.1 .0) as i32;
+    let (width, height) = footprint_frame_size(pad);
+    let width_mil = nm_to_mil(width.0) as i32;
+    let height_mil = nm_to_mil(height.0) as i32;
 
     if let Some(drill) = pad.drill {
         let drill_mil = nm_to_mil(drill.0) as i32;
@@ -376,8 +384,9 @@ fn write_padstack(
     pad: &cypcb_world::footprint::PadDef,
 ) -> Result<(), DsnExportError> {
     let padstack_name = format_padstack_name(pad);
-    let width_mil = nm_to_mil(pad.size.0 .0);
-    let height_mil = nm_to_mil(pad.size.1 .0);
+    let (width, height) = footprint_frame_size(pad);
+    let width_mil = nm_to_mil(width.0);
+    let height_mil = nm_to_mil(height.0);
 
     writeln!(output, "    (padstack {}", padstack_name)?;
 
@@ -741,5 +750,41 @@ mod tests {
 
         // Should only have the opening "(wiring" and nothing else significant
         assert!(!wiring_content.contains("(wire"));
+    }
+
+    /// A padstack carries no turn: a pad turned inside its footprint is
+    /// written with its sides along the footprint's axes, the padstack of the
+    /// same pad drawn standing.
+    #[test]
+    fn a_pad_turned_in_its_footprint_is_a_standing_padstack() {
+        use cypcb_world::components::{Layer, PadShape, Rotation};
+        use cypcb_world::footprint::PadDef;
+        let pad = |size: (f64, f64), turn: Rotation| PadDef {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            position: cypcb_core::Point::ORIGIN,
+            size: (
+                cypcb_core::Nm::from_mm(size.0),
+                cypcb_core::Nm::from_mm(size.1),
+            ),
+            drill: None,
+            slot: None,
+            layers: vec![Layer::TopCopper],
+            mask_margin: None,
+            rotation: turn,
+        };
+        let written = |pad: &PadDef| {
+            let mut out = Vec::new();
+            write_padstack(&mut out, pad).unwrap();
+            String::from_utf8(out).unwrap()
+        };
+        let turned = pad((1.0, 2.0), Rotation::DEG_90);
+        let standing = pad((2.0, 1.0), Rotation::ZERO);
+        assert_eq!(written(&turned), written(&standing));
+        assert_ne!(
+            written(&turned),
+            written(&pad((1.0, 2.0), Rotation::ZERO)),
+            "the control"
+        );
     }
 }

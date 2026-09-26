@@ -1137,8 +1137,11 @@ impl PcbEngine {
                                 Point::new(Nm(-pd.size.0 .0 / 2), Nm(-pd.size.1 .0 / 2)),
                                 Point::new(Nm(pd.size.0 .0 / 2), Nm(pd.size.1 .0 / 2)),
                             );
-                            let copper =
-                                cypcb_world::components::place_box(*pad_pos, half, rotation);
+                            let copper = cypcb_world::components::place_box(
+                                *pad_pos,
+                                half,
+                                Rotation(rotation.0 + pd.rotation.0),
+                            );
                             let layer_mask = if pd.layers.is_empty() {
                                 0xFFFFFFFF
                             } else {
@@ -1665,16 +1668,23 @@ impl PcbEngine {
                 for pad in &fp.pads {
                     let layer_mask: u32 = pad.copper_mask();
                     let drill_nm: Option<i64> = pad.drill.map(|d| d.0);
+                    // The viewer turns a pad with its part only, so it is
+                    // handed the pad's sides - and its slot's - along the
+                    // footprint's axes, its own turn already taken up.
+                    let (width, height) = pad.outline(Point::ORIGIN, Rotation::ZERO).size;
+                    let stood_up = width != pad.size.0 || height != pad.size.1;
                     pads.push(PadInfo {
                         number: pad.number.clone(),
                         x_nm: pad.position.x.0,
                         y_nm: pad.position.y.0,
-                        width_nm: pad.size.0 .0,
-                        height_nm: pad.size.1 .0,
+                        width_nm: width.0,
+                        height_nm: height.0,
                         shape: pad_shape_to_string(&pad.shape),
                         layer_mask,
                         drill_nm,
-                        slot_nm: pad.slot.map(|(w, h)| (w.0, h.0)),
+                        slot_nm: pad
+                            .slot
+                            .map(|(w, h)| if stood_up { (h.0, w.0) } else { (w.0, h.0) }),
                     });
                 }
             }
