@@ -35,7 +35,11 @@ describe('the setup script installs what the build needs', () => {
   const setup = read('scripts/setup-dev.sh');
 
   it('names every tool the wasm build refuses to run without', () => {
-    const needed = requiredTools(read('viewer/build-wasm.sh'));
+    // The build asks `scripts/toolchain-check.sh` which tools it has and at
+    // which versions, so what it refuses to run without is written there.
+    const needed = requiredTools(
+      read('viewer/build-wasm.sh') + read('scripts/toolchain-check.sh'),
+    );
     expect(needed.length).toBeGreaterThan(1);
 
     // Whole words: `setup.includes('wasm-opt')` is also true of a script that

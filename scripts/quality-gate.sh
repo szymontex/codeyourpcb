@@ -184,9 +184,14 @@ echo "=== Quality Gate ==="
 echo ""
 
 # The gate grades a commit, and the browser module is the one thing it builds
-# from the working tree and then compares with what is committed. An edit to a
-# file the module is built from would make that comparison about a tree nobody
-# committed, so it is refused here, before anything is built.
+# from the working tree and then compares with what is committed, byte for
+# byte. That comparison is about the source only when the tools are the ones
+# the module is pinned to, and only when the tree is the commit in every file
+# the module is built from - an edit there would make it about a tree nobody
+# committed. Both are refused here, before anything is built.
+if ! ./scripts/toolchain-check.sh; then
+  exit 1
+fi
 if ! ./scripts/wasm-pkg-stale.sh --dirty-inputs; then
   exit 1
 fi
@@ -476,10 +481,8 @@ fi
 # by symbol. Bindings from one API against a module built from another fail in
 # the browser and nowhere else.
 #
-# These files can be compared where the `.wasm` cannot: wasm-bindgen writes
-# them and its version is pinned in `Cargo.lock`, while the module's bytes come
-# out of whichever rustc the channel resolves to and whichever binaryen is
-# installed.
+# wasm-bindgen writes these files, and `scripts/toolchain-check.sh` holds it to
+# the version `Cargo.lock` pins before the gate starts.
 GENERATED_BINDINGS=$(git ls-files viewer/pkg | grep -v '\.wasm$' || true)
 if [ -n "$GENERATED_BINDINGS" ]; then
   # shellcheck disable=SC2086
@@ -492,12 +495,10 @@ if [ -n "$GENERATED_BINDINGS" ]; then
     fail "stale viewer/pkg bindings"
   fi
 fi
-# The pair checked against each other rather than against the toolchain. The
-# module's bytes cannot be compared - `rust-toolchain.toml` pins `stable` and
-# binaryen comes from the operating system - but what the bindings ask of the
-# module can be: every `wasm.<symbol>` the glue calls has to be a symbol the
-# module exports. That holds whoever compiled it, and it is the failure a
-# mismatched pair actually produces - a call into a name that is not there.
+# The pair checked against each other as well. Every `wasm.<symbol>` the glue
+# calls has to be a symbol the module exports. That holds whoever compiled it,
+# and it is the failure a mismatched pair actually produces - a call into a
+# name that is not there.
 if command -v wasm-dis >/dev/null 2>&1; then
   MODULE_EXPORTS=$(wasm-dis viewer/pkg/cypcb_render_bg.wasm 2>/dev/null \
     | grep -oE '\(export "[^"]+"' | sed 's/(export "//; s/"$//' | sort -u)

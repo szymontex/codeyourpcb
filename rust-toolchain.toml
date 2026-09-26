@@ -1,6 +1,14 @@
 [toolchain]
-channel = "stable"
+# A version, not a channel. The browser module is committed, and the gate
+# rebuilds it and compares bytes, so the compiler is part of what the module
+# is: `stable` meant whichever release a machine last updated to, and a module
+# built on one machine read as stale on the next. `scripts/toolchain-check.sh`
+# holds the rest of the build to its version - wasm-bindgen and wasm-opt.
+channel = "1.92.0"
 # The browser module is built for wasm32, and `rustup target add` was left to
 # whoever read the error. Naming it here means a fresh clone has it before the
 # first build asks.
 targets = ["wasm32-unknown-unknown"]
+# What the gate runs besides the compiler: `cargo fmt --check` and
+# `cargo clippy`.
+components = ["rustfmt", "clippy"]
