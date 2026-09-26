@@ -6,7 +6,7 @@ use bevy_ecs::prelude::Resource;
 
 use cypcb_core::{Nm, Point, Rect};
 
-use crate::components::{place_pad, Layer, PadShape, Rotation};
+use crate::components::{place_pad, rotate_about_origin, Layer, PadShape, Rotation};
 
 /// A single pad definition within a footprint.
 ///
@@ -236,12 +236,13 @@ impl PadDef {
         }
     }
 
-    /// Half the distance the milling bit travels, in the pad's own frame.
+    /// Half the distance the milling bit travels, in the footprint's frame.
     ///
     /// A slot `(w, h)` is cut with a bit the width of its narrow dimension
     /// moving along the long one, so the bit's centre stops half a bit short
-    /// of each end and the travel is `long - narrow`. The two ends of the hole
-    /// are the pad's position plus and minus this.
+    /// of each end and the travel is `long - narrow`, along the pad's own
+    /// axes turned by the pad's own [`rotation`](Self::rotation). The two ends
+    /// of the hole are the pad's position plus and minus this.
     ///
     /// `None` for a round hole, whose two ends are the same point. It lives
     /// here rather than in the drill writer because the checker needs the same
@@ -253,11 +254,15 @@ impl PadDef {
         if width == height {
             return None;
         }
-        Some(if width > height {
+        let along_the_pad = if width > height {
             Point::new(Nm((width.0 - height.0) / 2), Nm(0))
         } else {
             Point::new(Nm(0), Nm((height.0 - width.0) / 2))
-        })
+        };
+        Some(rotate_about_origin(
+            along_the_pad,
+            self.rotation.to_degrees(),
+        ))
     }
 
     /// The hole as the path of the bit's centre, in the footprint's frame,

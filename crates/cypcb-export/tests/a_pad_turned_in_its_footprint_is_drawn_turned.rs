@@ -13,6 +13,7 @@
 
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_export::coords::CoordinateFormat;
+use cypcb_export::excellon::export_excellon;
 use cypcb_export::gerber::export_copper_layer;
 use cypcb_export::ipc2581::{export_ipc2581, HouseTolerances};
 use cypcb_export::ipc356::export_ipc356;
@@ -26,7 +27,7 @@ use cypcb_world::BoardWorld;
 const FORMAT: CoordinateFormat = CoordinateFormat::FORMAT_MM_2_6;
 
 /// One part at (10, 10) turned `part`, holding one 1.524 by 3.048 pad at its
-/// origin turned `pad`.
+/// origin turned `pad`, milled with a slot 1.0 by 2.4 along its length.
 fn board(part: Rotation, pad: Rotation) -> (BoardWorld, FootprintLibrary) {
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.048), Nm::from_mm(3.048)));
     let footprint = Footprint {
@@ -37,9 +38,9 @@ fn board(part: Rotation, pad: Rotation) -> (BoardWorld, FootprintLibrary) {
             shape: PadShape::Rect,
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.524), Nm::from_mm(3.048)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper, Layer::TopMask],
+            drill: Some(Nm::from_mm(1.0)),
+            slot: Some((Nm::from_mm(1.0), Nm::from_mm(2.4))),
+            layers: vec![Layer::TopCopper, Layer::BottomCopper, Layer::TopMask],
             mask_margin: None,
             rotation: pad,
         }],
@@ -76,6 +77,7 @@ fn files(part: Rotation, pad: Rotation) -> Vec<(&'static str, String)> {
     let dxf = dxf::plot_layer(&mut world, &library, Layer::TopCopper);
     let (ipc2581, _) = export_ipc2581(&mut world, &library, HouseTolerances::default(), "T");
     let (ipc356, _) = export_ipc356(&mut world, &library, "t");
+    let drill = export_excellon(&mut world, &library, &FORMAT, None).unwrap();
     vec![
         ("gerber copper", copper),
         ("svg", svg),
@@ -83,6 +85,7 @@ fn files(part: Rotation, pad: Rotation) -> Vec<(&'static str, String)> {
         ("dxf", dxf),
         ("ipc2581", ipc2581),
         ("ipc356", without_timestamp(&ipc356)),
+        ("drill", without_timestamp(&drill)),
     ]
 }
 
