@@ -24,34 +24,17 @@ cd "$(dirname "$0")/.."
 
 echo "Building WASM module..."
 
-# Both tools are checked before either failure is reported. Missing one used to
-# end the script, so a machine without either was told about `wasm-bindgen`,
-# installed it, ran the build again and was then told about `wasm-opt`. One run
-# should name everything it needs.
+# Every tool is checked, and at its version, before any failure is reported.
+# Missing one used to end the script, so a machine without either was told
+# about `wasm-bindgen`, installed it, ran the build again and was then told
+# about `wasm-opt`. One run should name everything it needs.
 #
 # wasm-opt is not optional and never was after 2026-08: the script used to warn
 # and carry on, which shipped an unoptimized module the moment binaryen was
-# missing from the machine, silently and a third larger.
-MISSING=""
-
-if ! command -v wasm-bindgen &> /dev/null; then
-    PINNED=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | grep '^version' | cut -d'"' -f2)
-    MISSING="${MISSING}
-  wasm-bindgen, at the version Cargo.lock pins:
-      cargo install wasm-bindgen-cli --version ${PINNED}
-      cargo binstall wasm-bindgen-cli --version ${PINNED}   # prebuilt, seconds"
-fi
-
-if ! command -v wasm-opt &> /dev/null; then
-    MISSING="${MISSING}
-  wasm-opt, from binaryen:
-      Debian/Ubuntu: apt-get install binaryen
-      macOS:         brew install binaryen"
-fi
-
-if [ -n "$MISSING" ]; then
-    echo "This build needs tools this machine does not have:"
-    echo "$MISSING"
+# missing from the machine, silently and a third larger. Present is not enough
+# either since 2026-09-26: the module is committed and compared byte for byte,
+# and nothing promises another version of any of the three the same bytes.
+if ! ./scripts/toolchain-check.sh; then
     echo ""
     echo "Or install everything at once: ./scripts/setup-dev.sh"
     exit 1

@@ -7,10 +7,10 @@
 # is not this branch's - on 2026-08-27 that was a module built against an older
 # dependency set, 5,241 bytes of difference nobody had looked at.
 #
-# The question is asked of the history rather than of the bytes on purpose.
-# `rust-toolchain.toml` pins the channel and not a version, and binaryen is not
-# pinned at all, so two machines build this module into different bytes and a
-# byte comparison would fail for the wrong reason.
+# The question is asked of the history before the bytes on purpose. The bytes
+# answer only for the tools that wrote them, and those are held to their pins
+# by `scripts/toolchain-check.sh`, which the gate runs first; the history says
+# which commit a change came in.
 #
 # What counts as a source is the part that was wrong. It used to be all of
 # `crates/*/src` and all of `Cargo.lock`, and both are wider than the module:
@@ -40,8 +40,7 @@
 # to say stale before this does. **Run this after `viewer/build-wasm.sh`**: the
 # second half is "did rebuilding this source change the committed module", read
 # from `git status` on `viewer/pkg`. That comparison is against this machine's
-# own rebuild rather than against another machine's bytes, which is the
-# comparison `rust-toolchain.toml` and an unpinned binaryen make meaningless.
+# own rebuild rather than against another machine's bytes.
 #
 # The question is asked of the committed state on purpose, so the commit that
 # moves an input would be graded by the *next* run: `315b227` shipped a module
@@ -64,7 +63,7 @@
 # rebuild that changes the module means the committed module was not built
 # from the committed source.
 #
-# `--print-inputs` prints the paths the first half asks about, one per line,
+# `--print-inputs` prints the paths both halves ask about, one per line,
 # and answers nothing else. `--lock-packages OLD NEW` prints the closure
 # packages whose `Cargo.lock` entries differ between two lock files.
 # `--verdict MOVED REBUILT` prints `stale`, `notice` or `current` for the two
@@ -111,6 +110,26 @@ if [ "$WIDE" -eq 1 ]; then
   done
 fi
 SOURCES+=("viewer/build-wasm.sh")
+
+# Every path the module is built from, as one list both halves read. They were
+# two until 2026-09-26: the working-tree half named the manifests, the build
+# scripts and the toolchain file, and the history half did not, so a commit
+# that changed the `wasm-release` profile in `Cargo.toml` and nothing else was
+# invisible to it. A crate's manifest and build script change the module as
+# surely as its source; so do the workspace manifest, where the profile lives,
+# and the two files that pin the tools. `build.rs` is listed whether or not the
+# crate has one - a new one is an edit.
+#
+# `Cargo.lock` is here for the working tree; the history reads it per package
+# below. `viewer/pkg` is the artifact, and the history cannot see it move:
+# its own last commit is where the history starts.
+INPUTS=("${SOURCES[@]}")
+for source in "${SOURCES[@]}"; do
+  case "$source" in
+    crates/*/src) INPUTS+=("${source%/src}/Cargo.toml" "${source%/src}/build.rs") ;;
+  esac
+done
+INPUTS+=(Cargo.toml Cargo.lock rust-toolchain.toml scripts/toolchain-check.sh viewer/pkg)
 
 # The lock file comparison, as its own step so it can be run against two files
 # that are not this repository's history.
@@ -179,7 +198,7 @@ case "${1:-}" in
     MODE=committed
     ;;
   --print-inputs)
-    printf '%s\n' "${SOURCES[@]}"
+    printf '%s\n' "${INPUTS[@]}"
     exit 0
     ;;
   --lock-packages)
@@ -222,19 +241,9 @@ fi
 # edited its rebuild answers for a tree nobody committed - and with none of
 # them edited, the rebuild IS the committed source's module, and comparing it
 # with the committed module needs no second build.
-#
-# Wider than the history half's inputs on purpose: a crate's manifest and its
-# build script change the module as surely as its source does, and so do the
-# workspace manifest, where the `wasm-release` profile lives, and the toolchain
-# file. Untracked files count too - a new module file is an edit.
+# Untracked files count too - a new module file is an edit.
 if [ "$MODE" = dirty ]; then
-  TREE_INPUTS=("${SOURCES[@]}" Cargo.toml Cargo.lock rust-toolchain.toml viewer/pkg)
-  for source in "${SOURCES[@]}"; do
-    case "$source" in
-      crates/*/src) TREE_INPUTS+=("${source%/src}/Cargo.toml" "${source%/src}/build.rs") ;;
-    esac
-  done
-  DIRTY=$(git status --porcelain --untracked-files=all -- "${TREE_INPUTS[@]}")
+  DIRTY=$(git status --porcelain --untracked-files=all -- "${INPUTS[@]}")
   if [ -n "$DIRTY" ]; then
     echo "wasm-pkg-stale: the working tree is not the commit in files the module"
     echo "  is built from, so a build here would grade a tree nobody committed:"
@@ -242,18 +251,18 @@ if [ "$MODE" = dirty ]; then
     echo "  commit or stash them, then run the gate again."
     exit 1
   fi
-  echo "wasm-pkg-stale: the working tree is the commit in all ${#TREE_INPUTS[@]} paths the module is built from"
+  echo "wasm-pkg-stale: the working tree is the commit in all ${#INPUTS[@]} paths the module is built from"
   exit 0
 fi
 
 PKG_COMMIT=$(git log -1 --format=%H -- viewer/pkg)
 if [ -z "$PKG_COMMIT" ]; then
   echo "wasm-pkg-stale: nothing is committed under viewer/pkg, so there is no"
-  echo "  artifact to be stale - ${#SOURCES[@]} inputs went unasked"
+  echo "  artifact to be stale - ${#INPUTS[@]} inputs went unasked"
   exit 0
 fi
 
-MOVED=$(git diff --name-only "$PKG_COMMIT" HEAD -- "${SOURCES[@]}")
+MOVED=$(git diff --name-only "$PKG_COMMIT" HEAD -- "${INPUTS[@]}" | grep -vx 'Cargo.lock' || true)
 
 LOCK_REASON=""
 if ! git diff --quiet "$PKG_COMMIT" HEAD -- Cargo.lock; then
@@ -280,7 +289,7 @@ REBUILT=$(git status --porcelain -- viewer/pkg)
 
 case "$(verdict "$MOVED$LOCK_REASON" "$REBUILT")" in
   current)
-    echo "wasm-pkg-stale: viewer/pkg is current against ${#SOURCES[@]} inputs (floor $INPUTS_FLOOR),"
+    echo "wasm-pkg-stale: viewer/pkg is current against ${#INPUTS[@]} inputs (${#SOURCES[@]} sources, floor $INPUTS_FLOOR),"
     echo "  committed by $(git log -1 --format='%h %s' "$PKG_COMMIT")"
     exit 0
     ;;
