@@ -415,14 +415,9 @@ fn place_artwork(
 ) -> Vec<cypcb_world::footprint::SilkShape> {
     use cypcb_world::footprint::SilkShape;
 
-    let (sin, cos) = rotation_deg.to_radians().sin_cos();
+    let rotation = cypcb_world::components::Rotation::from_degrees(rotation_deg);
     let place = |p: cypcb_core::Point| -> cypcb_core::Point {
-        let x = p.x.0 as f64;
-        let y = p.y.0 as f64;
-        cypcb_core::Point::new(
-            Nm(position.x.0 + (x * cos - y * sin).round() as i64),
-            Nm(position.y.0 + (x * sin + y * cos).round() as i64),
-        )
+        cypcb_world::components::place_pad(position, p, rotation)
     };
 
     shapes
@@ -460,13 +455,9 @@ fn courtyard_outline(
 ) -> Vec<cypcb_world::footprint::SilkShape> {
     use cypcb_world::footprint::SilkShape;
 
-    let (sin, cos) = rotation_deg.to_radians().sin_cos();
+    let rotation = cypcb_world::components::Rotation::from_degrees(rotation_deg);
     let place = |x: Nm, y: Nm| -> cypcb_core::Point {
-        let (x, y) = (x.0 as f64, y.0 as f64);
-        cypcb_core::Point::new(
-            Nm(position.x.0 + (x * cos - y * sin).round() as i64),
-            Nm(position.y.0 + (x * sin + y * cos).round() as i64),
-        )
+        cypcb_world::components::place_pad(position, cypcb_core::Point::new(x, y), rotation)
     };
 
     let corners = [

@@ -185,11 +185,11 @@ impl DrcRule for ClearanceRule {
             // A component is looked for from as far as its pads reach, not
             // only its box in the index. That box is the courtyard, turned and
             // moved with the part, and a courtyard is what the footprint says
-            // it is: `PINHDR_1X12` on `esp32_starter` states one centred on
-            // pad 1 while its pads run down from pad 1 in one direction, so
-            // the lower pads stand outside it. A trace over pad 8 of J3 was
-            // only ever measured from here. The pair is found from this side;
-            // the other side's query may still miss the box.
+            // it is. A footprint whose pads reach past it gets a
+            // `land-outside-courtyard` row, and its copper is still measured
+            // from here, so a short over those pads is reported rather than
+            // lost. The pair is found from this side; the other side's query
+            // may still miss the box.
             let mut reach = entry.envelope;
             for pad in pad_map.get(&entry.entity.index()).into_iter().flatten() {
                 reach.merge(&pad.copper.bounds());
@@ -838,20 +838,11 @@ pub(crate) fn pad_copper(
     position: Point,
     degrees: f64,
 ) -> Copper {
-    use cypcb_world::components::PadShape;
+    use cypcb_world::components::{place_box, place_pad, PadShape, Rotation};
 
-    let (sin, cos) = degrees.to_radians().sin_cos();
-    let px = pad.position.x.0 as f64;
-    let py = pad.position.y.0 as f64;
-    let cx = position.x.0 + (px * cos - py * sin).round() as i64;
-    let cy = position.y.0 + (px * sin + py * cos).round() as i64;
-
-    let extent = |half_w: f64, half_h: f64| {
-        (
-            (half_w * cos.abs() + half_h * sin.abs()).round() as i64,
-            (half_w * sin.abs() + half_h * cos.abs()).round() as i64,
-        )
-    };
+    let rotation = Rotation::from_degrees(degrees);
+    let centre = place_pad(position, pad.position, rotation);
+    let [cx, cy] = [centre.x.0, centre.y.0];
     let (width, height) = (pad.size.0 .0, pad.size.1 .0);
     let radius = match pad.shape {
         PadShape::Circle => return Copper::circle([cx, cy], width / 2),
@@ -859,11 +850,16 @@ pub(crate) fn pad_copper(
         PadShape::Oblong => width.min(height) / 2,
         PadShape::RoundRect { corner_ratio } => width.min(height) * i64::from(corner_ratio) / 100,
     };
-    let (core_x, core_y) = extent(
-        (width - 2 * radius) as f64 / 2.0,
-        (height - 2 * radius) as f64 / 2.0,
+    let (half_w, half_h) = ((width - 2 * radius) / 2, (height - 2 * radius) / 2);
+    let core = place_box(
+        centre,
+        cypcb_core::Rect::new(
+            Point::new(Nm(-half_w), Nm(-half_h)),
+            Point::new(Nm(half_w), Nm(half_h)),
+        ),
+        rotation,
     );
-    let core = AABB::from_corners([cx - core_x, cy - core_y], [cx + core_x, cy + core_y]);
+    let core = AABB::from_corners([core.min.x.0, core.min.y.0], [core.max.x.0, core.max.y.0]);
     Copper { core, radius }
 }
 

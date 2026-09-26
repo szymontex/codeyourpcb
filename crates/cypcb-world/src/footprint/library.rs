@@ -368,6 +368,39 @@ impl Footprint {
         self
     }
 
+    /// Pads whose copper reaches past the courtyard, each with how far it
+    /// reaches, in pad order.
+    ///
+    /// The courtyard is everything the part occupies, and per IPC-7351 that
+    /// includes the land pattern. A pad outside it is copper that no reader of
+    /// the courtyard knows about: the spatial index, `courtyard-clearance` and
+    /// the placer all take the box at its word. A pad is measured as the
+    /// rectangle `size` wide and high about its centre. That holds a round or
+    /// oblong pad and is exact for a square one; a pad has no turn of its own
+    /// inside a footprint, so the rectangle needs no rotation.
+    pub fn pads_outside_courtyard(&self) -> Vec<(&PadDef, Nm)> {
+        let court = self.courtyard;
+        self.pads
+            .iter()
+            .filter_map(|pad| {
+                let half_w = pad.size.0.raw() / 2;
+                let half_h = pad.size.1.raw() / 2;
+                let x = pad.position.x.raw();
+                let y = pad.position.y.raw();
+                let reach = [
+                    court.min.x.raw() - (x - half_w),
+                    (x + half_w) - court.max.x.raw(),
+                    court.min.y.raw() - (y - half_h),
+                    (y + half_h) - court.max.y.raw(),
+                ]
+                .into_iter()
+                .max()
+                .unwrap_or(0);
+                (reach > 0).then_some((pad, Nm(reach)))
+            })
+            .collect()
+    }
+
     /// Get a pad by its number/name.
     pub fn get_pad(&self, number: &str) -> Option<&PadDef> {
         self.pads.iter().find(|p| p.number == number)

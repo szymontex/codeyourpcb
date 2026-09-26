@@ -87,9 +87,14 @@ struct Courtyard {
 /// footprint there is no courtyard to compare, and inventing one would report
 /// collisions that are an artefact of the guess.
 fn component_courtyards(world: &mut BoardWorld) -> Vec<Courtyard> {
-    use cypcb_world::components::{FootprintRef, Position, Rotation};
+    use cypcb_world::components::{place_box, FootprintRef, Position, Rotation};
 
-    let placements: Vec<(bevy_ecs::entity::Entity, cypcb_core::Point, f64, String)> = {
+    let placements: Vec<(
+        bevy_ecs::entity::Entity,
+        cypcb_core::Point,
+        Rotation,
+        String,
+    )> = {
         let ecs = world.ecs_mut();
         let mut query = ecs.query::<(
             bevy_ecs::entity::Entity,
@@ -103,7 +108,7 @@ fn component_courtyards(world: &mut BoardWorld) -> Vec<Courtyard> {
                 (
                     entity,
                     position.0,
-                    rotation.to_degrees(),
+                    *rotation,
                     footprint.as_str().to_string(),
                 )
             })
@@ -114,28 +119,18 @@ fn component_courtyards(world: &mut BoardWorld) -> Vec<Courtyard> {
 
     placements
         .into_iter()
-        .filter_map(|(entity, position, degrees, name)| {
+        .filter_map(|(entity, position, rotation, name)| {
             let courtyard = library.get(&name)?.courtyard;
 
             // A rotated part occupies the extent of its rotated courtyard.
             // Boxing that extent can only make the keepout larger, which is the
             // safe direction for a placement rule.
-            let radians = degrees.to_radians();
-            let (sin, cos) = radians.sin_cos();
-            let half_w = (courtyard.max.x.0 - courtyard.min.x.0) as f64 / 2.0;
-            let half_h = (courtyard.max.y.0 - courtyard.min.y.0) as f64 / 2.0;
-            let extent_x = (half_w * cos.abs() + half_h * sin.abs()).round() as i64;
-            let extent_y = (half_w * sin.abs() + half_h * cos.abs()).round() as i64;
-
-            let local_cx = (courtyard.min.x.0 + courtyard.max.x.0) / 2;
-            let local_cy = (courtyard.min.y.0 + courtyard.max.y.0) / 2;
-            let cx = position.x.0 + (local_cx as f64 * cos - local_cy as f64 * sin).round() as i64;
-            let cy = position.y.0 + (local_cx as f64 * sin + local_cy as f64 * cos).round() as i64;
+            let placed = place_box(position, courtyard, rotation);
 
             Some(Courtyard {
                 entity,
-                min: [cx - extent_x, cy - extent_y],
-                max: [cx + extent_x, cy + extent_y],
+                min: [placed.min.x.0, placed.min.y.0],
+                max: [placed.max.x.0, placed.max.y.0],
             })
         })
         .collect()

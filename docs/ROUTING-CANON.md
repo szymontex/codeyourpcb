@@ -484,7 +484,7 @@ where 45 belonged.
 
 In this repo: the angle is enforced and the teardrop is not. `PadEntryRule`
 is in the registry
-(`crates/cypcb-drc/src/lib.rs:168`) and reports through `entry_angle`
+(`crates/cypcb-drc/src/lib.rs:169`) and reports through `entry_angle`
 (`crates/cypcb-drc/src/rules/pad_entry.rs:211`) and `entry_angle_placed`
 (`:257`), the second of which is the change of frame and nothing else: it
 carries the trace's two points into a placed and rotated pad's own frame rather
@@ -1329,9 +1329,9 @@ this page is a counter-example to that sentence on the same page.
 | rule | what enforces it |
 |---|---|
 | R-01 width against current | `TraceCurrentRule` (`crates/cypcb-drc/src/lib.rs:148`), silent on a net that declares no `current` |
-| R-03 acute angles | `AcuteAngleRule` (`crates/cypcb-drc/src/lib.rs:205`), reporting `ViolationKind::AcidTrap` |
+| R-03 acute angles | `AcuteAngleRule` (`crates/cypcb-drc/src/lib.rs:206`), reporting `ViolationKind::AcidTrap` |
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
-| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:168`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
+| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:169`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
 | R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
 **Bucket 2 - checkable today, nobody wrote the check. Ten.** Checkable is
