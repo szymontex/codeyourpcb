@@ -183,7 +183,13 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
                 // A rounded corner is drawn as the rectangle it fits inside:
                 // on a printed page at board size the radius is a tenth of a
                 // millimetre, and the pad is being looked at rather than made.
-                _ => turned_rectangle(&mut stream, centre, width, height, rotation),
+                _ => turned_rectangle(
+                    &mut stream,
+                    centre,
+                    width,
+                    height,
+                    rotation + pad.rotation.0,
+                ),
             }
         }
     }
