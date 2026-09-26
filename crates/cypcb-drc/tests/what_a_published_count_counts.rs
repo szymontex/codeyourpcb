@@ -15,6 +15,11 @@
 //! and a per-contact count is the coarser number: it would mask a routing
 //! change that a per-segment count catches. What a reader outside this project
 //! needed was never a different count but a second one.
+//!
+//! Since 2026-09-26 the rule counts one row per place - one unbroken run of a
+//! trace too close to one pad, one via or one other net's trace - so a run
+//! along one pad is one row however many segments it takes. On the shipped
+//! benchmarks 319 rows for 152 contacts became 219 for the same 152.
 
 use cypcb_core::{Nm, Point};
 use cypcb_drc::{clearance_contacts, pair_of, DrcViolation};

@@ -158,6 +158,13 @@ pub fn pair_of(message: &str) -> &str {
 /// number - it would mask a routing change that a per-segment count catches.
 /// What a reader needed was never a different count but a second one, which is
 /// this.
+///
+/// Since 2026-09-26 the rule counts one row per place - one unbroken run of a
+/// trace too close to one pad, one via or one other net's trace - so a run
+/// along one pad is one row however many segments it takes. On the shipped
+/// benchmarks 319 rows for 152 contacts became 219 for the same 152. What stays
+/// true of the decision is its reason: a violation is a place, and two places
+/// on one pad are still two rows.
 pub fn clearance_contacts(violations: &[DrcViolation]) -> usize {
     let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
     for violation in violations {

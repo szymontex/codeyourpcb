@@ -54,8 +54,14 @@ pub struct RoutingScore {
     ///
     /// The clearance rule reports per pair of *segments*: two features that
     /// touch along a run report once for each segment that takes part, so one
-    /// contact can be two dozen rows. On the shipped benchmarks the ratio is
+    /// contact can be two dozen rows. On the shipped benchmarks the ratio was
     /// 759 rows to 484 contacts.
+    ///
+    /// Since 2026-09-26 the rule counts one row per place - one unbroken run of
+    /// a trace too close to one pad, one via or one other net's trace - so a
+    /// run along one pad is one row however many segments it takes. On the
+    /// shipped benchmarks 319 rows for 152 contacts became 219 for the same
+    /// 152.
     ///
     /// Published beside `drc_violations` rather than instead of it. The row
     /// count is the sensitive one and the ratchets are set against it; this is

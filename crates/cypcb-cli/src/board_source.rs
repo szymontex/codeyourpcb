@@ -130,7 +130,7 @@ pub fn load_kicad(path: &Path) -> Result<LoadedBoard> {
 /// `esp32_starter` - 44 shorts reported, 46 in the file - with the same
 /// segments on both sides, because the reader makes one trace entity per
 /// `path` where the router holds one per net and layer, and the clearance
-/// check counts contacts per pair of entities.
+/// check counted contacts per pair of entities until 2026-09-26.
 ///
 /// Every diagnostic is printed as it is found. `warnings` is off for a board
 /// whose warnings were printed already, when it was read the first time.

@@ -96,6 +96,10 @@ pub fn run_diagnostics(doc: &DocumentState) -> Vec<Diagnostic> {
     // declaration, so the editor stacked two dozen identical squiggles on one
     // line - and, worse, spent the diagnostic budget on them. The cap below is
     // 100, so duplicates of one contact push *different* faults off the end.
+    // Since 2026-09-26 the rule counts one row per place - one unbroken run of
+    // a trace too close to one pad, one via or one other net's trace - so a run
+    // along one pad is one row however many segments it takes. On the shipped
+    // benchmarks 319 rows for 152 contacts became 219 for the same 152.
     //
     // The marker kept is the worst of its group, not the first: keeping
     // whichever came first would show a 0.11mm near-miss and hide a 0.00mm

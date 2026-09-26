@@ -257,6 +257,12 @@ impl CheckCommand {
         // `qfp_fanout`. A designer reading that sees one problem two dozen
         // times.
         //
+        // Since 2026-09-26 the rule counts one row per place - one unbroken run
+        // of a trace too close to one pad, one via or one other net's trace -
+        // so a run along one pad is one row however many segments it takes. On
+        // the shipped benchmarks 319 rows for 152 contacts became 219 for the
+        // same 152. The grouping below still merges what is left per pair.
+        //
         // **The counts do not change.** The header, the per-kind summary and
         // the shorts line are row counts and stay row counts, because every
         // published number in this project - the ratchets, the noise bands,

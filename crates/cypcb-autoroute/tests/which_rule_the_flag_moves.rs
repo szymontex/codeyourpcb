@@ -276,7 +276,13 @@ fn the_flag_shorts_no_board_the_default_routes_clean() {
     // `multi_ic` goes 64 -> 51 with the flag while `qfp_fanout` goes 98 -> 101.
     // Across the six, 238 -> 204. The board the flag shorts more is now
     // `qfp_fanout`, named for the same reason `multi_ic` was.
-    const THE_FLAG_SHORTS_MORE: &[&str] = &["qfp_fanout.kicad_pcb"];
+    //
+    // It stopped on 2026-09-26, and neither the flag nor the router moved: the
+    // clearance rule started counting one row per place rather than one per
+    // pair of trace entities, and a run of copper across one pad that had
+    // been several rows became one. Counted that way `qfp_fanout` goes
+    // 67 -> 66 with the flag, and across the six 171 -> 143. No board is named.
+    const THE_FLAG_SHORTS_MORE: &[&str] = &[];
     let mut boards_the_flag_shorts_more = Vec::new();
     let mut off_total = 0;
     let mut on_total = 0;

@@ -128,7 +128,7 @@ fn nothing_the_logger_writes_lands_on_stdout() {
 #[test]
 fn the_ranked_line_says_how_many_contacts_the_violations_describe() {
     // A variant list ranked on violation counts is a list ranked on rows, and
-    // the clearance rule reports per pair of segments - so two of the lines
+    // the clearance rule reports per place - so two of the lines
     // below can differ by a violation and describe the same contact. Decided
     // 2026-08-23: the counts stay as they are and the contact count is printed
     // beside them, which is what makes the difference readable rather than

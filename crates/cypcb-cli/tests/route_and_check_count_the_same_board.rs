@@ -7,9 +7,10 @@
 //! shorts, `check` on the file it had just written 131 with 46. The segments
 //! were the same on both sides, every one of them. What differed was how they
 //! were grouped: the router holds one trace entity per net and layer, the
-//! reader makes one per `path`, and the clearance check counts contacts per
+//! reader makes one per `path`, and the clearance check counted contacts per
 //! pair of entities - so a contact against a net split in two was one row in
-//! memory and two in the file.
+//! memory and two in the file. It counts per place now, whatever the grouping;
+//! `a_contact_is_one_row` holds that.
 //!
 //! `route` now reads the text it writes through the checker's own reader and
 //! reports on that, so the two agree by construction. That leaves one way for

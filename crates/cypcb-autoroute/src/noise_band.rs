@@ -46,13 +46,33 @@ pub fn noise_band(filename: &str) -> (i64, i64) {
     // qfp_fanout       60 / 46       61 / 46    318 / 149     271 / 150
     // plane_board       0 /  0        0 /  0     28 /  13      26 /  13
     // led_blink         0 /  0        0 /  0      2 /   0       0 /   0
+    //
+    // Re-measured 2026-09-26, when the clearance rule started counting one row
+    // per place rather than one per pair of trace entities. The same sweep was
+    // run on the tree before that change and after it, so the two columns on
+    // the right separate what the rule moved from what had drifted since
+    // 2026-08-28: everything between the old band and the one before the
+    // change is the router having moved in the month between, and was already
+    // true of the tree this was measured on. The rule narrows the bands it
+    // moves because a run that re-routes a few segments along a pad no longer
+    // gains a row for each of them.
+    //
+    // board            band was      before the change   band is
+    // stm32_breakout   64 / 48       23 / 15             13 /  8
+    // multi_ic         35 / 15       25 / 20             12 / 11
+    // shift_driver     26 / 15        6 /  2              6 /  2
+    // qfp_fanout       61 / 46      111 / 81             84 / 50
+    // plane_board       0 /  0        1 /  1              1 /  1
+    //
+    // `plane_board` is no longer the board that routes the same at every
+    // price: at 0.22 it lays 34 vias and 5 shorts, at the other four 32 and 4.
     match filename {
         "led_blink.kicad_pcb" => (0, 0),
-        "stm32_breakout.kicad_pcb" => (64, 48),
-        "multi_ic.kicad_pcb" => (35, 15),
-        "shift_driver.kicad_pcb" => (26, 15),
-        "qfp_fanout.kicad_pcb" => (61, 46),
-        "plane_board.kicad_pcb" => (0, 0),
+        "stm32_breakout.kicad_pcb" => (13, 8),
+        "multi_ic.kicad_pcb" => (12, 11),
+        "shift_driver.kicad_pcb" => (6, 2),
+        "qfp_fanout.kicad_pcb" => (84, 50),
+        "plane_board.kicad_pcb" => (1, 1),
         _ => (0, 0),
     }
 }
@@ -76,12 +96,17 @@ pub fn stacked_hole_band(filename: &str) -> i64 {
     // Re-measured 2026-08-28 with the bands above. `qfp_fanout` is the one
     // that moved far - 24 to 8 - because the router now reaches the fine-pitch
     // fanout without stacking its way out of it.
+    //
+    // Re-measured 2026-09-26 with the bands above, before and after the
+    // clearance change, and the change moved none of them: a stacked hole is
+    // not a clearance row. What moved had moved before it - stm32_breakout
+    // 9 -> 8, multi_ic 5 -> 4, shift_driver 1 -> 2, qfp_fanout 8 -> 11.
     match filename {
         "led_blink.kicad_pcb" => 0,
-        "stm32_breakout.kicad_pcb" => 9,
-        "multi_ic.kicad_pcb" => 5,
-        "shift_driver.kicad_pcb" => 1,
-        "qfp_fanout.kicad_pcb" => 8,
+        "stm32_breakout.kicad_pcb" => 8,
+        "multi_ic.kicad_pcb" => 4,
+        "shift_driver.kicad_pcb" => 2,
+        "qfp_fanout.kicad_pcb" => 11,
         "plane_board.kicad_pcb" => 0,
         _ => 0,
     }
