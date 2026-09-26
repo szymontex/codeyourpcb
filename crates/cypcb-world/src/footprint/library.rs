@@ -368,6 +368,70 @@ impl Footprint {
         self
     }
 
+    /// The point a pick-and-place file gives for this part, in footprint
+    /// coordinates.
+    ///
+    /// The assembler asks for "the component centroid" and does not define
+    /// it; for KiCad files it points at the Fabrication Toolkit plugin
+    /// (guide read 2026-09-26), so this follows that plugin
+    /// (`plugins/process.py` at commit 642b069c, read 2026-09-26):
+    ///
+    /// - "if attributes & pcbnew.FP_SMD: origin_type = 'Anchor'" - a
+    ///   surface-mount part is placed by its origin. KLC F6.2 (read
+    ///   2026-09-26) puts that origin on the body: "For most standard
+    ///   components, the anchor should generally be located on the centroid
+    ///   of the component body."
+    /// - "else: origin_type = 'Center'", and the centre is the pads'
+    ///   bounding box: "get bounding box based on pads only to ignore
+    ///   non-copper layers" ... "position = bbox.GetCenter()". A
+    ///   through-hole part's origin sits on pin 1 (KLC F7.2), not in its
+    ///   middle.
+    /// - With no pads the plugin falls back to the origin.
+    ///
+    /// Which kind a part is comes from [`Footprint::is_surface_mount`], not
+    /// from a stored attribute. The box is every pad's `size` rectangle about
+    /// its centre, holes without copper included, as the plugin's `Pads()`
+    /// includes them.
+    pub fn placement_centre(&self) -> Point {
+        if self.is_surface_mount() || self.pads.is_empty() {
+            return Point::ORIGIN;
+        }
+        let mut min_x = i64::MAX;
+        let mut min_y = i64::MAX;
+        let mut max_x = i64::MIN;
+        let mut max_y = i64::MIN;
+        for pad in &self.pads {
+            let half_width = pad.size.0.raw() / 2;
+            let half_height = pad.size.1.raw() / 2;
+            min_x = min_x.min(pad.position.x.raw() - half_width);
+            min_y = min_y.min(pad.position.y.raw() - half_height);
+            max_x = max_x.max(pad.position.x.raw() + half_width);
+            max_y = max_y.max(pad.position.y.raw() + half_height);
+        }
+        Point::new(Nm((min_x + max_x) / 2), Nm((min_y + max_y) / 2))
+    }
+
+    /// Whether this part is surface-mount: it has a copper pad without a
+    /// hole and no plated hole.
+    ///
+    /// Read from the pads the way KiCad derives a footprint's likely type
+    /// (`FOOTPRINT::GetLikelyAttribute`, read 2026-09-26): a plated hole makes
+    /// the part through-hole even beside surface pads - "Footprints with
+    /// plated through-hole pads should usually be marked through hole even if
+    /// they also have SMD" - and a hole with no copper, a locating peg,
+    /// counts for neither.
+    pub fn is_surface_mount(&self) -> bool {
+        let plated_hole = self
+            .pads
+            .iter()
+            .any(|pad| pad.drill.is_some() && !pad.is_non_plated());
+        let surface_pad = self
+            .pads
+            .iter()
+            .any(|pad| pad.drill.is_none() && pad.layers.iter().any(|layer| layer.is_copper()));
+        surface_pad && !plated_hole
+    }
+
     /// Pads whose copper reaches past the courtyard, each with how far it
     /// reaches, in pad order.
     ///

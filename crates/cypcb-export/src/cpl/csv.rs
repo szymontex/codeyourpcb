@@ -4,7 +4,7 @@
 //! other pick-and-place services. Follows standard column naming conventions.
 
 use crate::cpl::{CplConfig, CplEntry};
-use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation};
+use cypcb_world::components::{place_pad, FootprintRef, Position, RefDes, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 use cypcb_world::Layer;
@@ -150,9 +150,16 @@ pub fn export_cpl(
             }
         };
 
+        // The machine is told the point `Footprint::placement_centre` gives:
+        // the origin of a surface-mount part, the middle of a through-hole
+        // part's pads. The offset turns with the part,
+        // as a pad's does, and a part on the bottom is already the mirrored
+        // footprint, so the middle lands under the copper on either side.
+        let centre = place_pad(position.0, footprint.placement_centre(), *rotation);
+
         // Convert coordinates from nanometers to millimeters
-        let x_mm = position.0.x.0 as f64 / 1_000_000.0;
-        let y_mm_raw = position.0.y.0 as f64 / 1_000_000.0;
+        let x_mm = centre.x.0 as f64 / 1_000_000.0;
+        let y_mm_raw = centre.y.0 as f64 / 1_000_000.0;
 
         // Some assembly houses take the origin at the top-left corner with y
         // running down the board, and this is where that is answered.
@@ -173,6 +180,10 @@ pub fn export_cpl(
             y_mm_raw
         };
 
+        // A part on the bottom is written with its turn as seen from above,
+        // like every other coordinate here. Whether an assembler wants that,
+        // the turn seen from beneath, or some other convention, no source read
+        // so far says: a bottom-side rotation in this file is unverified.
         // Convert rotation from millidegrees to degrees and apply offset
         let rotation_deg = {
             let rot = rotation.0 as f64 / 1000.0;
