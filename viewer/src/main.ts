@@ -57,7 +57,7 @@ import { fetchComponentFootprint } from './jlcpcb';
 import { registerDynamicFootprint, register3DModel, hasDynamicFootprint, fetchedFootprints } from './wasm';
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
 import { isWorkerResponse, type WorkerRequest } from './worker-protocol';
-import { loadDesignInto, type Design, type DesignKind } from './design-load';
+import { designKindOf, loadDesignInto, type Design, type DesignKind } from './design-load';
 import { reportLostTraces } from './trace-census';
 import { describeViolationKind } from './violation-kinds';
 import { renderStack } from './stack-panel';
@@ -1298,6 +1298,7 @@ async function init(): Promise<void> {
         if (errors) {
           console.warn('[Editor] Parse errors:', errors);
         }
+        const generation = designGeneration;
 
         // Update snapshot
         pullSnapshot();
@@ -1318,15 +1319,12 @@ async function init(): Promise<void> {
           updateErrorBadge(snapshot!.violations);
         }
 
-        // Track as loaded source
-        lastLoadedSource = content;
-
         // Mark as dirty for re-render
         dirty = true;
 
         // Auto-fetch LCSC footprints if any new lcsc attributes found
         autoFetchLcscFootprints(content).then((fetched) => {
-          if (fetched) reloadAfterLcscFetch(content);
+          if (fetched) reloadAfterLcscFetch(content, generation);
         });
 
         debounceTimer = null;
@@ -1539,7 +1537,13 @@ async function init(): Promise<void> {
     return `the board did not load cleanly: ${lines[0]}${more}`;
   }
 
-  function loadDesign(source: string, kind: DesignKind = 'cypcb'): string {
+  function loadDesign(source: string, kind: DesignKind): string {
+    // The only place either is written, and they are written together. Each
+    // loader used to set them itself, and New blank and the templates set the
+    // text and not the kind: after a KiCad board a new board went to the KiCad
+    // reader on its first edit and emptied, and routing refused it.
+    loadedKind = kind;
+    lastLoadedSource = source;
     const errors = loadDesignInto(engine, designOf(source, kind));
     if (kind === 'kicad_pcb') return errors;
 
@@ -1556,6 +1560,41 @@ async function init(): Promise<void> {
 
     void followImports(source);
     return errors;
+  }
+
+  /**
+   * Counts the designs this page has shown, so a fetch that finishes after
+   * the design it was for has gone can tell.
+   */
+  let designGeneration = 0;
+
+  /**
+   * Forget what belonged to the design on screen, before another replaces it.
+   *
+   * Every path that puts a different design on screen calls this. Each field
+   * here outlived its design and did harm: the file handle, so Ctrl+S on a new
+   * blank board wrote it over the file opened before; the routing run, whose
+   * copper was merged into the design that had replaced the one it routed;
+   * the selection and the undo stack, whose trace ids the next design reuses,
+   * so Delete removed a trace nobody had picked; and the imported files with
+   * the place they came from, so a dropped file was handed a template's
+   * library.
+   */
+  function beginNewDesign(): void {
+    designGeneration += 1;
+    undoStack.clear();
+    if (isRouting) cancelRouting();
+    tuningWorker?.terminate();
+    tuningWorker = null;
+    selectedRefdes = null;
+    selectedTraceId = null;
+    selectedTraceIds = new Set();
+    hoveredTraceId = null;
+    labelPosition = null;
+    interactionState.selectedTraceId = null;
+    currentFileHandle = null;
+    importReader = null;
+    for (const path of Object.keys(importedFiles)) delete importedFiles[path];
   }
 
   /**
@@ -1589,11 +1628,14 @@ async function init(): Promise<void> {
   async function followImports(source: string): Promise<void> {
     const reader = importReader;
     if (!reader || importedPaths(source).length === 0) return;
+    const generation = designGeneration;
 
     const fetched = await collectImportedFiles(source, async (path) => {
       const held = importedFiles[path];
       return held !== undefined ? held : reader(path);
     });
+    // Another design is on screen now, and this library is not its.
+    if (generation !== designGeneration) return;
 
     let changed = false;
     for (const [path, text] of Object.entries(fetched)) {
@@ -1620,9 +1662,12 @@ async function init(): Promise<void> {
   /**
    * Re-parse + re-render after LCSC footprint fetch, updating the thumbnail.
    */
-  function reloadAfterLcscFetch(source: string): void {
+  function reloadAfterLcscFetch(source: string, generation: number): void {
+    // The footprints stay in the library; the design they were fetched for
+    // is what may have gone, and reloading it would put it back on screen.
+    if (generation !== designGeneration) return;
     console.log('[LCSC] reloadAfterLcscFetch — re-parsing source with registered footprints');
-    const trouble = loadTrouble(loadDesign(source));
+    const trouble = loadTrouble(loadDesign(source, loadedKind));
     const updatedSnap = pullSnapshot();
     console.log('[LCSC] After re-parse: components =', updatedSnap.components?.length, 'pads on first =', updatedSnap.components?.[0]?.pads?.length);
     if (trouble) statusText.textContent = `Footprints fetched, but ${trouble}`;
@@ -1651,17 +1696,16 @@ async function init(): Promise<void> {
       handleWebFileOpen();
     },
     onLoadTemplate: (source, templateName) => {
-      // Clear undo stack
-      undoStack.clear();
+      beginNewDesign();
+      const generation = designGeneration;
 
       // A template is served from `/templates/`, so anything it imports is a
       // fetch away beside it.
       importReader = readerForBaseUrl('/templates/');
 
-      const errors = loadDesign(source);
+      const errors = loadDesign(source, 'cypcb');
       if (errors) console.warn('[Template] Parse warnings:', errors);
 
-      lastLoadedSource = source;
       const snap = pullSnapshot();
 
       // Update editor if initialized
@@ -1689,16 +1733,16 @@ async function init(): Promise<void> {
 
       // Auto-fetch LCSC footprints (async — re-parses after fetch)
       autoFetchLcscFootprints(source).then((fetched) => {
-        if (fetched) reloadAfterLcscFetch(source);
+        if (fetched) reloadAfterLcscFetch(source, generation);
       });
     },
     onLoadRecent: (source, name) => {
-      undoStack.clear();
-
-      // A recent file is the design's own text out of localStorage; where it
-      // came from is not stored, so there is nowhere to fetch its library
-      // from. The engine says which import it could not follow.
-      importReader = null;
+      // This also leaves no reader for imports: a recent file is the design's
+      // own text out of localStorage; where it came from is not stored, so
+      // there is nowhere to fetch its library from. The engine says which
+      // import it could not follow.
+      beginNewDesign();
+      const generation = designGeneration;
 
       console.log(`[TracePersist] onLoadRecent: name=${name}, source length=${source?.length}, has trace blocks=${source?.includes('trace ') && source?.includes('path ')}`);
 
@@ -1707,12 +1751,9 @@ async function init(): Promise<void> {
       // so reopening a `.kicad_pcb` from its own card fed `(kicad_pcb ...)` to
       // a parser that has never seen an s-expression. The file says which it
       // is in its first token; nothing else has to be stored to know.
-      const isKicad = source.trimStart().startsWith('(kicad_pcb');
-      loadedKind = isKicad ? 'kicad_pcb' : 'cypcb';
-      const errors = loadDesign(source, loadedKind);
+      const errors = loadDesign(source, designKindOf(name, source));
       if (errors) console.warn('[Recent] Parse warnings:', errors);
 
-      lastLoadedSource = source;
       const snap = pullSnapshot();
 
       if (editorReady && editorInstance) {
@@ -1738,13 +1779,12 @@ async function init(): Promise<void> {
 
       // Auto-fetch LCSC footprints (async — re-parses after fetch)
       autoFetchLcscFootprints(source).then((fetched) => {
-        if (fetched) reloadAfterLcscFetch(source);
+        if (fetched) reloadAfterLcscFetch(source, generation);
       });
     },
     onNewBlank: (source) => {
-      undoStack.clear();
-      const trouble = loadTrouble(loadDesign(source));
-      lastLoadedSource = source;
+      beginNewDesign();
+      const trouble = loadTrouble(loadDesign(source, 'cypcb'));
       const snap = pullSnapshot();
 
       if (editorReady && editorInstance) {
@@ -2013,10 +2053,8 @@ async function init(): Promise<void> {
   // `kind` lets a test drive the KiCad path, which the file input reaches by
   // extension and no test can otherwise get at.
   (window as any).__loadBoard = (source: string, kind?: string) => {
-    loadedKind = kind === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
-    // Every other loader keeps the text, and routing reads it from here.
-    lastLoadedSource = source;
-    const errors = loadDesign(source, loadedKind);
+    beginNewDesign();
+    const errors = loadDesign(source, kind === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb');
     const snap = pullSnapshot();
     if (snap.board) {
       viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
@@ -2297,9 +2335,6 @@ async function init(): Promise<void> {
    * Handle loading a file (.cypcb or .ses) from file picker or drag-drop
    */
   async function handleFileLoad(file: File): Promise<void> {
-    // Clear undo stack on new file load
-    undoStack.clear();
-
     const ext = file.name.toLowerCase().split('.').pop();
 
     try {
@@ -2310,14 +2345,11 @@ async function init(): Promise<void> {
         // The command line learned to read, check, route and write these; the
         // viewer could open the project's own format and nothing else, so
         // somebody with a `.kicad_pcb` had no way to look at it here.
-        loadedKind = ext === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
-        const errors = loadDesign(content, loadedKind);
+        beginNewDesign();
+        const errors = loadDesign(content, designKindOf(file.name, content));
         if (errors) {
           console.warn('Parse errors:', errors);
         }
-
-        // Track loaded source for save operations
-        lastLoadedSource = content;
 
         // Get new snapshot and fit board
         const snap = pullSnapshot();
@@ -2413,25 +2445,22 @@ async function init(): Promise<void> {
     const result = await openFile();
     if (!result) return;
 
-    // Clear undo stack on new file load
-    undoStack.clear();
-    // Store handle for save-in-place
-    currentFileHandle = result.handle;
-    currentFilePath = result.name;
-
     const ext = result.name.toLowerCase().split('.').pop();
 
     if (ext === 'cypcb' || ext === 'kicad_pcb') {
+      beginNewDesign();
+      // Store handle for save-in-place
+      currentFileHandle = result.handle;
+      currentFilePath = result.name;
+
       // A KiCad board arrives here too, and used to fall past every branch to
       // `Unknown file type: .kicad_pcb` - written to a status bar the project
       // manager overlay was covering, so the button appeared to do nothing at
       // all. Two code paths load a file, drag-and-drop and this one; the other
       // learned to read a KiCad board and this one did not.
-      loadedKind = ext === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
-      const errors = loadDesign(result.content, loadedKind);
+      const errors = loadDesign(result.content, designKindOf(result.name, result.content));
       if (errors) console.warn('Parse errors:', errors);
 
-      lastLoadedSource = result.content;
       const snap2 = pullSnapshot();
 
       if (editorReady && editorInstance) {
@@ -2860,13 +2889,10 @@ async function init(): Promise<void> {
     const savedSelection = selectedRefdes;
 
     // Parse new content
-    const errors = loadDesign(content);
+    const errors = loadDesign(content, designKindOf(_file, content));
     if (errors) {
       console.warn('[HotReload] Parse warnings:', errors);
     }
-
-    // Track loaded source for save operations
-    lastLoadedSource = content;
 
     const reloadSnap = pullSnapshot();
 
@@ -3092,8 +3118,7 @@ async function init(): Promise<void> {
     let trouble = '';
     if (lastLoadedSource) {
       const merged = mergeTracesIntoDsl(lastLoadedSource, traces);
-      trouble = loadTrouble(loadDesign(merged));
-      lastLoadedSource = merged;
+      trouble = loadTrouble(loadDesign(merged, 'cypcb'));
       pullSnapshot();
       syncEditorTraces();
       markTracesUnsaved();
@@ -3196,8 +3221,7 @@ async function init(): Promise<void> {
     }
 
     const merged = mergeTracesIntoDsl(lastLoadedSource, traces);
-    const trouble = loadTrouble(loadDesign(merged));
-    lastLoadedSource = merged;
+    const trouble = loadTrouble(loadDesign(merged, 'cypcb'));
     pullSnapshot();
     syncEditorTraces();
     markTracesUnsaved();
@@ -4016,6 +4040,10 @@ async function init(): Promise<void> {
           return;
         }
 
+        // Another file is another design; the same file saved again is the
+        // one on screen, and keeps its selection and view.
+        if (file !== currentFilePath) beginNewDesign();
+
         // Track current file for routing
         currentFilePath = file;
 
@@ -4068,14 +4096,13 @@ async function init(): Promise<void> {
 
       console.log('[Desktop] Opening file:', path);
 
-      // Load the content into the engine
-      const errors = loadDesign(content);
+      // Load the content into the engine, with the reader its name asks for.
+      // This handed every file to the `.cypcb` reader, a KiCad board included.
+      beginNewDesign();
+      const errors = loadDesign(content, designKindOf(path, content));
       if (errors) {
         console.warn('[Desktop] Parse warnings:', errors);
       }
-
-      // Track loaded source for save operations
-      lastLoadedSource = content;
 
       // Update snapshot
       const desktopSnap = pullSnapshot();
@@ -4192,7 +4219,8 @@ async function init(): Promise<void> {
       console.log('[Desktop] New file');
 
       // Clear the design
-      const trouble = loadTrouble(loadDesign(''));
+      beginNewDesign();
+      const trouble = loadTrouble(loadDesign('', 'cypcb'));
       pullSnapshot();
 
       // Clear editor content if initialized

@@ -29,6 +29,17 @@ export interface Design {
   footprints: FetchedFootprint[];
 }
 
+/**
+ * Which reader a design needs: by its file name, or by its first token when
+ * the name does not say - a recent file keeps its name but a KiCad board's
+ * text opens with `(kicad_pcb` whatever it is called.
+ */
+export function designKindOf(name: string, source: string): DesignKind {
+  return name.toLowerCase().endsWith('.kicad_pcb') || source.trimStart().startsWith('(kicad_pcb')
+    ? 'kicad_pcb'
+    : 'cypcb';
+}
+
 /** The part of an engine that loading a design uses. */
 export interface DesignLoader {
   register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string;
