@@ -51,6 +51,7 @@ fn board(through_hole: bool) -> (BoardWorld, FootprintLibrary) {
                 vec![Layer::TopCopper]
             },
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         bounds: Rect::from_center_size(Point::ORIGIN, (size, size)),
         courtyard: Rect::from_center_size(Point::ORIGIN, (size, size)),

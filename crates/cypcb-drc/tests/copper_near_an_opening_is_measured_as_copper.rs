@@ -235,6 +235,7 @@ fn board_with_a_slot() -> (BoardWorld, FootprintLibrary) {
             slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         ..base
     });
@@ -299,6 +300,7 @@ fn board_with_a_hole() -> (BoardWorld, FootprintLibrary) {
             slot: None,
             layers: Vec::new(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         bounds: Rect::from_center_size(Point::ORIGIN, (drill, drill)),
         courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(7.2), Nm::from_mm(7.2))),

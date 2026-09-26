@@ -7,6 +7,7 @@
 //! cleanly to JavaScript numbers and strings.
 
 use cypcb_drc::DrcViolation;
+use cypcb_world::components::Rotation;
 
 /// The violation type this module converts, re-exported so a doc example can
 /// name it without naming its crate.
@@ -479,6 +480,7 @@ impl PadInfo {
             slot: pad.slot_nm.map(|(w, h)| (Nm(w), Nm(h))),
             layers,
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }
     }
 }

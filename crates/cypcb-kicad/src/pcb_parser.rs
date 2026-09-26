@@ -1347,6 +1347,7 @@ fn parse_footprint(
             slot: p.slot,
             layers: p.layers.clone(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         })
         .collect();
 

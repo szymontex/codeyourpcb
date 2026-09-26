@@ -38,7 +38,7 @@
 use cypcb_core::{Nm, Point, Rect};
 
 use super::library::{Footprint, PadDef};
-use crate::components::{Layer, PadShape};
+use crate::components::{Layer, PadShape, Rotation};
 
 /// Standard SMD pad layers for gull-wing packages.
 fn smd_layers() -> Vec<Layer> {
@@ -120,6 +120,7 @@ pub fn gullwing_footprint(
             slot: None,
             layers: layers.clone(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         });
     }
 
@@ -137,6 +138,7 @@ pub fn gullwing_footprint(
             slot: None,
             layers: layers.clone(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         });
     }
 
@@ -272,6 +274,7 @@ pub fn sot23() -> Footprint {
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             // Pin 2: left side, bottom
             PadDef {
@@ -283,6 +286,7 @@ pub fn sot23() -> Footprint {
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             // Pin 3: right side, centre
             PadDef {
@@ -294,6 +298,7 @@ pub fn sot23() -> Footprint {
                 slot: None,
                 layers,
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.5), Nm::from_mm(3.0))),
@@ -357,6 +362,7 @@ pub fn sot23_5() -> Footprint {
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             PadDef {
                 number: "2".into(),
@@ -367,6 +373,7 @@ pub fn sot23_5() -> Footprint {
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             PadDef {
                 number: "3".into(),
@@ -377,6 +384,7 @@ pub fn sot23_5() -> Footprint {
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             // Pins 4-5: right side, bottom to top
             PadDef {
@@ -388,6 +396,7 @@ pub fn sot23_5() -> Footprint {
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             PadDef {
                 number: "5".into(),
@@ -398,6 +407,7 @@ pub fn sot23_5() -> Footprint {
                 slot: None,
                 layers,
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(3.0))),
@@ -472,6 +482,7 @@ pub fn tqfp32() -> Footprint {
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             });
             pin_num += 1;
         }

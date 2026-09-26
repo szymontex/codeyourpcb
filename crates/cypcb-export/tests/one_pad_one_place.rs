@@ -54,6 +54,7 @@ fn board() -> (BoardWorld, FootprintLibrary) {
             slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         ..base
     });

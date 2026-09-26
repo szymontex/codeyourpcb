@@ -46,6 +46,7 @@ fn board(
             slot: None,
             layers,
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library.clone());

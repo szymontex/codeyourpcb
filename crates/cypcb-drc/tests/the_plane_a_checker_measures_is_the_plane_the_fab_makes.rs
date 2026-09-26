@@ -44,6 +44,7 @@ fn board() -> BoardWorld {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library);

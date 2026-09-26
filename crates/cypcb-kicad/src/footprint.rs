@@ -24,6 +24,7 @@ use std::fs;
 use std::path::Path;
 
 use cypcb_core::{Nm, Point, Rect};
+use cypcb_world::components::Rotation;
 use cypcb_world::footprint::{Footprint, PadDef};
 use symbolic_expressions::Sexp;
 use thiserror::Error;
@@ -217,6 +218,7 @@ fn read_pad(pad: &Sexp) -> Result<Option<PadDef>, KicadImportError> {
         slot: parsed.slot,
         layers: parsed.layers,
         mask_margin: parsed.mask_margin,
+        rotation: Rotation::ZERO,
     }))
 }
 

@@ -49,6 +49,7 @@ fn pad(shape: PadShape, width_mm: f64, height_mm: f64) -> PadDef {
         slot: None,
         layers: vec![Layer::TopCopper],
         mask_margin: None,
+        rotation: Rotation::ZERO,
     }
 }
 

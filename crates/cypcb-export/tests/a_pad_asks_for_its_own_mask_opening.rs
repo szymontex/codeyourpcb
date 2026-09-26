@@ -47,6 +47,7 @@ fn mask_of(margin: Option<Nm>) -> String {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: margin,
+            rotation: Rotation::ZERO,
         }],
     });
 

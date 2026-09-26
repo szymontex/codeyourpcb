@@ -38,6 +38,7 @@ fn board(locked: bool) -> (BoardWorld, cypcb_world::footprint::FootprintLibrary)
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library.clone());
@@ -141,6 +142,7 @@ fn a_net_a_hand_trace_already_joins_is_not_routed_again() {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library.clone());
@@ -209,6 +211,7 @@ fn copper_on_another_layer_does_not_count_as_a_connection() {
             // Top only: a surface-mount pad.
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library.clone());
@@ -277,6 +280,7 @@ fn a_via_joins_two_traces_into_one_piece_of_copper() {
             slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library.clone());
@@ -365,6 +369,7 @@ fn a_ground_plane_connects_the_pins_that_sit_in_it() {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library.clone());
@@ -439,6 +444,7 @@ fn a_net_crosses_its_own_hand_trace_to_reach_its_pad() {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     world.set_footprints(library.clone());
@@ -538,6 +544,7 @@ fn strip_board(layer_count: u8) -> (BoardWorld, cypcb_world::footprint::Footprin
                 slot: None,
                 layers: vec![layer],
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             }],
         });
     }

@@ -50,6 +50,7 @@ fn board_with_hole(
             slot,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         ..base
     });

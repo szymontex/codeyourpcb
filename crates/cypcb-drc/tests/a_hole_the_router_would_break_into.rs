@@ -65,6 +65,7 @@ fn board_with_mounting_hole(x_mm: f64) -> BoardWorld {
             slot: None,
             layers: Vec::new(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         ..base
     });

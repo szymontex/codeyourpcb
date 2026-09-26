@@ -49,6 +49,7 @@ fn pad(through_hole: bool) -> PadDef {
             vec![Layer::TopCopper, Layer::TopMask]
         },
         mask_margin: None,
+        rotation: Rotation::ZERO,
     }
 }
 

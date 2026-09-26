@@ -17,7 +17,7 @@
 use cypcb_core::{Nm, Point, Rect};
 
 use super::library::{Footprint, PadDef};
-use crate::components::PadShape;
+use crate::components::{PadShape, Rotation};
 
 /// How much wider than the hole the courtyard is drawn.
 ///
@@ -49,6 +49,7 @@ fn mounting_hole(name: &str, screw: &str, drill: Nm) -> Footprint {
             // file splits on it, and the router blocks the hole because of it.
             layers: Vec::new(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
         bounds: Rect::from_center_size(Point::ORIGIN, (drill, drill)),
         courtyard: Rect::from_center_size(Point::ORIGIN, (outer, outer)),

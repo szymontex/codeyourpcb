@@ -18,7 +18,7 @@ use crate::components::{place_pad, Layer, PadShape, Rotation};
 ///
 /// ```
 /// use cypcb_world::footprint::PadDef;
-/// use cypcb_world::components::{PadShape, Layer};
+/// use cypcb_world::components::{PadShape, Layer, Rotation};
 /// use cypcb_core::{Nm, Point};
 ///
 /// // SMD pad (no drill)
@@ -31,6 +31,7 @@ use crate::components::{place_pad, Layer, PadShape, Rotation};
 ///     slot: None,
 ///     layers: vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask],
 ///     mask_margin: None,
+///     rotation: Rotation::ZERO,
 /// };
 ///
 /// // Through-hole pad (with drill)
@@ -43,6 +44,7 @@ use crate::components::{place_pad, Layer, PadShape, Rotation};
 ///     slot: None,
 ///     layers: vec![Layer::TopCopper, Layer::BottomCopper],
 ///     mask_margin: None,
+///     rotation: Rotation::ZERO,
 /// };
 /// ```
 #[derive(Debug, Clone)]
@@ -91,6 +93,17 @@ pub struct PadDef {
     /// `viewer/svg-pcb/kicad-components`. Dropped until now, so those pads
     /// were exported with the board's figure instead of their own.
     pub mask_margin: Option<Nm>,
+    /// How far this pad is turned inside its footprint, before the part is
+    /// turned on the board.
+    ///
+    /// `ZERO` is nearly every pad. A pad states one when the part holds a pad
+    /// across its own axes: a pin header drawn with its pads long in y, a
+    /// module whose castellations run down one edge. KiCad writes it as the
+    /// third number of the pad's `(at x y angle)`, and dropping it lays the
+    /// pad down across its neighbours - `fab-1X04` imported without it put
+    /// four 1.524 by 3.048 pads 2.54 apart lying long in x, each one running
+    /// 0.508 into the next (measured 2026-09-26).
+    pub rotation: Rotation,
 }
 
 /// One pad as it lands on the board: where, what shape, and how big along the
@@ -200,14 +213,16 @@ impl PadDef {
 
     /// This pad as it lands on the board, for a part at `at` turned `rotation`.
     ///
-    /// The one place a pad is turned: the position through [`place_pad`],
-    /// the sides swapped for every odd quarter turn. A turn between quarter
-    /// turns stands the pad at an angle a width and a height cannot state;
-    /// this takes the quarter turn below it, and no board in this repository
-    /// places a part that way (every `rotate` in its designs is 90, 180 or
-    /// 270, measured 2026-09-26).
+    /// The one place a pad is turned: the position through [`place_pad`] by
+    /// the part's turn alone, since the pad turns about its own centre; the
+    /// sides swapped for every odd quarter turn of the part's turn and the
+    /// pad's own [`rotation`](Self::rotation) added together. A turn between
+    /// quarter turns stands the pad at an angle a width and a height cannot
+    /// state; this takes the quarter turn below it, and no board in this
+    /// repository places a part or a pad that way (every `rotate` in its
+    /// designs is 90, 180 or 270, measured 2026-09-26).
     pub fn outline(&self, at: Point, rotation: Rotation) -> PadOutline {
-        let turn = rotation.0.rem_euclid(360_000);
+        let turn = (rotation.0 + self.rotation.0).rem_euclid(360_000);
         let (width, height) = self.size;
         let size = if (turn / 90_000) % 2 == 1 {
             (height, width)
@@ -734,6 +749,7 @@ pub fn mirrored_to_bottom(footprint: &Footprint) -> Footprint {
                 slot: None,
                 layers: pad.layers.iter().map(|layer| flip(*layer)).collect(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             })
             .collect(),
         bounds: mirror_rect(footprint.bounds),
@@ -947,6 +963,7 @@ mod tests {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
         assert!(smd.is_smd());
         assert!(!smd.is_through_hole());
@@ -960,6 +977,7 @@ mod tests {
             slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
         assert!(!tht.is_smd());
         assert!(tht.is_through_hole());
@@ -1030,5 +1048,39 @@ mod tests {
         assert!(fp.get_pad("17").is_some()); // Start of top side
         assert!(fp.get_pad("24").is_some()); // End of top side
         assert!(fp.get_pad("25").is_some()); // Start of left side
+    }
+
+    /// A header pad drawn long in y and turned a quarter inside its
+    /// footprint, the way `fab-1X04` states its pads.
+    fn header_pad(rotation: Rotation) -> PadDef {
+        PadDef {
+            number: "1".into(),
+            shape: PadShape::Oblong,
+            position: Point::from_mm(2.54, 0.0),
+            size: (Nm::from_mm(1.524), Nm::from_mm(3.048)),
+            drill: Some(Nm::from_mm(1.0)),
+            slot: None,
+            layers: vec![Layer::TopCopper, Layer::BottomCopper],
+            mask_margin: None,
+            rotation,
+        }
+    }
+
+    #[test]
+    fn a_pad_turned_in_its_footprint_lands_turned() {
+        let pad = header_pad(Rotation::DEG_90);
+        let outline = pad.outline(Point::from_mm(10.0, 10.0), Rotation::ZERO);
+        assert_eq!(outline.size, (Nm::from_mm(3.048), Nm::from_mm(1.524)));
+        assert_eq!(outline.centre, Point::from_mm(12.54, 10.0));
+    }
+
+    #[test]
+    fn a_turned_pad_on_a_turned_part_adds_the_two_turns() {
+        let pad = header_pad(Rotation::DEG_90);
+        let outline = pad.outline(Point::from_mm(10.0, 10.0), Rotation::DEG_90);
+        assert_eq!(outline.size, (Nm::from_mm(1.524), Nm::from_mm(3.048)));
+        let unturned =
+            header_pad(Rotation::ZERO).outline(Point::from_mm(10.0, 10.0), Rotation::DEG_90);
+        assert_eq!(outline.centre, unturned.centre);
     }
 }

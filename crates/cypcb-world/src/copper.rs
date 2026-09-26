@@ -302,6 +302,7 @@ mod tests {
                 slot: None,
                 layers: vec![Layer::TopCopper],
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             }],
         });
 

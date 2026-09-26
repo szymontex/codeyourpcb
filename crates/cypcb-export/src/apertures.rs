@@ -215,6 +215,7 @@ impl ApertureManager {
 ///     slot: None,
 ///     layers: vec![Layer::TopCopper],
 ///     mask_margin: None,
+///     rotation: Rotation::ZERO,
 /// };
 ///
 /// let turned = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::DEG_90));
@@ -464,6 +465,7 @@ mod tests {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
 
         let aperture = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::ZERO));
@@ -486,6 +488,7 @@ mod tests {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
 
         let aperture = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::ZERO));
@@ -509,6 +512,7 @@ mod tests {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
 
         let aperture = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::ZERO));
@@ -532,6 +536,7 @@ mod tests {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
 
         let aperture = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::ZERO));

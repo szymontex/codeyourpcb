@@ -1038,6 +1038,7 @@ mod tests {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         };
         let courtyard = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(7.0), Nm::from_mm(1.0)));
         let mut library = FootprintLibrary::new();

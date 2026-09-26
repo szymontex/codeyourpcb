@@ -29,7 +29,7 @@
 use cypcb_core::{Nm, Point, Rect};
 
 use super::library::{Footprint, PadDef};
-use crate::components::{Layer, PadShape};
+use crate::components::{Layer, PadShape, Rotation};
 
 /// Standard through-hole pad layers (top and bottom copper).
 fn tht_layers() -> Vec<Layer> {
@@ -66,6 +66,7 @@ pub fn axial_300mil() -> Footprint {
                 slot: None,
                 layers: tht_layers(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             PadDef {
                 number: "2".into(),
@@ -76,6 +77,7 @@ pub fn axial_300mil() -> Footprint {
                 slot: None,
                 layers: tht_layers(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (lead_spacing + pad_size, Nm::from_mm(2.5))),
@@ -130,6 +132,7 @@ pub fn dip8() -> Footprint {
             slot: None,
             layers: tht_layers(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         });
     }
 
@@ -146,6 +149,7 @@ pub fn dip8() -> Footprint {
             slot: None,
             layers: tht_layers(),
             mask_margin: None,
+            rotation: Rotation::ZERO,
         });
     }
 
@@ -190,6 +194,7 @@ pub fn pin_header_1x2() -> Footprint {
                 slot: None,
                 layers: tht_layers(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
             PadDef {
                 number: "2".into(),
@@ -200,6 +205,7 @@ pub fn pin_header_1x2() -> Footprint {
                 slot: None,
                 layers: tht_layers(),
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (pin_pitch + pad_size, Nm::from_mm(2.54))),

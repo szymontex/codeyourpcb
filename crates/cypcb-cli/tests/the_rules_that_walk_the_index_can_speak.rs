@@ -132,6 +132,7 @@ fn the_slot_rule_speaks_when_foreign_copper_is_beside_a_slot() {
             slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
     library.register(Footprint {
@@ -149,6 +150,7 @@ fn the_slot_rule_speaks_when_foreign_copper_is_beside_a_slot() {
             slot: None,
             layers: vec![Layer::TopCopper],
             mask_margin: None,
+            rotation: Rotation::ZERO,
         }],
     });
 

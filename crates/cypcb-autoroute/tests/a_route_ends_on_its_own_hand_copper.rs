@@ -50,6 +50,7 @@ fn board_with_j2_on(
                 slot: None,
                 layers: vec![layer],
                 mask_margin: None,
+                rotation: Rotation::ZERO,
             }],
         });
     }
