@@ -160,7 +160,7 @@ fn the_gate_asks_the_script_rather_than_its_own_list() {
         .expect("the quality gate is a script in this repository");
 
     let ask = gate
-        .find("./scripts/wasm-pkg-stale.sh")
+        .find("./scripts/wasm-pkg-stale.sh --committed")
         .expect("stage 7 no longer asks the script whether the committed module is current");
     // The list it used to carry. Two places answering the same question is how
     // one of them stays wrong.
@@ -179,6 +179,20 @@ fn the_gate_asks_the_script_rather_than_its_own_list() {
         rebuild < ask,
         "the gate asks whether the committed module is stale before rebuilding, \
          so the answer is the history's alone"
+    );
+
+    // The rebuild is from the working tree, so it answers for the commit only
+    // when the tree is the commit in every file the module is built from.
+    // `cfcb8a1c` committed a module built from an edit it did not commit, and
+    // the check let it through. The tree is held to the commit before the
+    // first stage builds anything.
+    let held = gate
+        .find("./scripts/wasm-pkg-stale.sh --dirty-inputs")
+        .expect("the gate no longer holds the working tree to the commit");
+    let first_stage = gate.find("\nstage \"").expect("the gate has no stages");
+    assert!(
+        held < first_stage,
+        "the gate builds before it checks the working tree is the commit"
     );
 }
 
