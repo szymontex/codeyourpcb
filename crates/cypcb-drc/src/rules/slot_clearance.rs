@@ -18,6 +18,7 @@
 //! copper against the slot.** A slot's own component is skipped, and so is
 //! anything on a net that component connects to.
 
+use cypcb_world::in_build_order;
 use std::collections::HashMap;
 
 use cypcb_core::{Nm, Point};
@@ -58,14 +59,15 @@ impl DrcRule for SlotClearanceRule {
         // component a slot belongs to has as many as it has pins.
         let net_map: HashMap<u32, NetId> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetId)>();
-            query.iter(ecs).map(|(e, n)| (e.index(), *n)).collect()
+            in_build_order::<(bevy_ecs::entity::Entity, &NetId)>(ecs)
+                .into_iter()
+                .map(|(e, n)| (e.index(), *n))
+                .collect()
         };
         let net_connections_map: HashMap<u32, Vec<NetId>> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetConnections)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &NetConnections)>(ecs)
+                .into_iter()
                 .map(|(e, nc)| (e.index(), nc.iter().map(|pc| pc.net).collect()))
                 .collect()
         };

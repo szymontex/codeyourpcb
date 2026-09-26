@@ -35,6 +35,7 @@
 //! stored as the chords of the arc it draws, so every one of its interior
 //! junctions is an angle nobody drew. Those traces are skipped whole.
 
+use cypcb_world::in_build_order;
 use std::collections::{BTreeMap, BTreeSet};
 
 use bevy_ecs::entity::Entity;
@@ -124,9 +125,8 @@ impl DrcRule for AcuteAngleRule {
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let traces: Vec<(Entity, Trace)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(Entity, &Trace, Option<&Curve>)>();
-            query
-                .iter(ecs)
+            in_build_order::<(Entity, &Trace, Option<&Curve>)>(ecs)
+                .into_iter()
                 .filter(|(_, _, curve)| curve.is_none())
                 .map(|(entity, trace, _)| (entity, trace.clone()))
                 .collect()

@@ -39,6 +39,7 @@
 //! }
 //! ```
 
+use crate::in_build_order;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -955,10 +956,9 @@ fn match_diff_pair_lengths(
         };
 
         let lengths: Vec<(crate::components::NetId, cypcb_core::Nm)> = {
-            let mut query = world.ecs_mut().query::<&Trace>();
             let mut positive_length = 0i64;
             let mut negative_length = 0i64;
-            for trace in query.iter(world.ecs()) {
+            for trace in in_build_order::<&Trace>(world.ecs_mut()) {
                 if trace.net_id == positive_id {
                     positive_length += trace.total_length().0;
                 } else if trace.net_id == negative_id {
@@ -985,9 +985,8 @@ fn match_diff_pair_lengths(
         // The longest straight run on the short half is where a meander has
         // room; a short segment between two pads has none.
         let target = {
-            let mut query = world.ecs_mut().query::<(Entity, &Trace)>();
-            query
-                .iter(world.ecs())
+            in_build_order::<(Entity, &Trace)>(world.ecs_mut())
+                .into_iter()
                 .filter(|(_, trace)| trace.net_id == short_net)
                 .flat_map(|(entity, trace)| {
                     trace
@@ -1720,9 +1719,8 @@ fn place_stitching_vias(world: &mut BoardWorld, footprint_lib: &FootprintLibrary
     use crate::components::{StitchPitch, Zone};
 
     let stitched: Vec<(Zone, cypcb_core::Nm)> = {
-        let mut query = world.ecs_mut().query::<(&Zone, &StitchPitch)>();
-        query
-            .iter(world.ecs())
+        in_build_order::<(&Zone, &StitchPitch)>(world.ecs_mut())
+            .into_iter()
             .map(|(zone, pitch)| (zone.clone(), pitch.0))
             .collect()
     };

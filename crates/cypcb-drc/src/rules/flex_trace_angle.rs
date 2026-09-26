@@ -24,6 +24,7 @@
 use cypcb_core::Point;
 use cypcb_world::components::trace::Trace;
 use cypcb_world::components::{BoardSize, Zone};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -80,9 +81,8 @@ impl DrcRule for FlexTraceAngleRule {
 
         let traces: Vec<(bevy_ecs::entity::Entity, Trace)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
+                .into_iter()
                 .map(|(entity, trace)| (entity, trace.clone()))
                 .collect()
         };

@@ -17,6 +17,7 @@
 //! What it still does **not** do is decide whether the neck is thermally safe.
 //! That needs a current and a temperature rise this model does not carry.
 
+use cypcb_world::in_build_order;
 use std::collections::HashMap;
 
 use cypcb_core::{Nm, Point};
@@ -59,9 +60,8 @@ impl DrcRule for NeckDownRule {
 
         let necked: Vec<Measured> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace, Option<&TraceNeck>)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Trace, Option<&TraceNeck>)>(ecs)
+                .into_iter()
                 .filter_map(|(entity, trace, own)| {
                     let neck = own
                         .copied()

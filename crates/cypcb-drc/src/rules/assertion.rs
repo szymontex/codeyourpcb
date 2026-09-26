@@ -11,6 +11,7 @@
 use cypcb_core::physical_units::PhysicalUnit;
 use cypcb_parser::ast::{AssertExpression, AssertOperand, ComparisonOp};
 use cypcb_world::components::{RefDes, TypedValue};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -47,9 +48,8 @@ impl DrcRule for AssertionRule {
         // Values the design wrote as quantities, by reference designator.
         let values: std::collections::HashMap<String, TypedValue> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(&RefDes, &TypedValue)>();
-            query
-                .iter(ecs)
+            in_build_order::<(&RefDes, &TypedValue)>(ecs)
+                .into_iter()
                 .map(|(refdes, value)| (refdes.as_str().to_string(), *value))
                 .collect()
         };
@@ -57,9 +57,8 @@ impl DrcRule for AssertionRule {
         // it: `U1.output`.
         let specs: std::collections::HashMap<String, TypedValue> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(&RefDes, &cypcb_world::components::PartSpec)>();
-            query
-                .iter(ecs)
+            in_build_order::<(&RefDes, &cypcb_world::components::PartSpec)>(ecs)
+                .into_iter()
                 .flat_map(|(refdes, spec)| {
                     spec.entries
                         .iter()

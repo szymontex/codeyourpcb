@@ -23,6 +23,7 @@
 //! off when the via goes through, which is what a via with no stated pair
 //! means.
 
+use crate::in_build_order;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
@@ -251,18 +252,17 @@ fn traces_as_dsl_filtered(world: &mut BoardWorld, only_routed: bool) -> String {
     );
     let trace_data: Vec<WrittenTrace> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(
+        in_build_order::<(
             &Trace,
             Option<&crate::components::trace::TraceNeck>,
             Option<&crate::components::trace::Curve>,
-        )>();
-        query
-            .iter(ecs)
-            .filter(|(trace, _, _)| {
-                !only_routed || trace.source == crate::components::trace::TraceSource::Autorouted
-            })
-            .map(|(trace, neck, curve)| (trace.clone(), neck.copied(), curve.copied()))
-            .collect()
+        )>(ecs)
+        .into_iter()
+        .filter(|(trace, _, _)| {
+            !only_routed || trace.source == crate::components::trace::TraceSource::Autorouted
+        })
+        .map(|(trace, neck, curve)| (trace.clone(), neck.copied(), curve.copied()))
+        .collect()
     };
 
     // Collect all vias grouped by net name, except the ones a stitched pour
@@ -271,20 +271,22 @@ fn traces_as_dsl_filtered(world: &mut BoardWorld, only_routed: bool) -> String {
     // stitching on the next trip through.
     let via_data: Vec<Via> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query_filtered::<
-            (&Via, Option<&crate::components::trace::RouterPlaced>),
-            bevy_ecs::prelude::Without<crate::components::Stitched>,
-        >();
         // A via without the mark is one the source declared, locked or not,
         // and it is already in the copy of the source this run appends to.
         // This asked `!via.locked`, which held only while every clear deleted
         // unlocked vias; once the clears kept a declared via, `cypcb route`
         // on `blind-via` wrote its two vias a second time.
-        query
-            .iter(ecs)
-            .filter(|(_, placed)| !only_routed || placed.is_some())
-            .map(|(via, _)| *via)
-            .collect()
+        in_build_order::<(
+            &Via,
+            Option<&crate::components::trace::RouterPlaced>,
+            bevy_ecs::query::Has<crate::components::Stitched>,
+        )>(ecs)
+        .into_iter()
+        .filter(|(_, _, stitched)| !stitched)
+        .map(|(via, placed, _)| (via, placed))
+        .filter(|(_, placed)| !only_routed || placed.is_some())
+        .map(|(via, _)| *via)
+        .collect()
     };
 
     if trace_data.is_empty() && via_data.is_empty() {
@@ -631,12 +633,17 @@ fn zone_as_dsl(
 fn copper_nets(world: &mut BoardWorld) -> Vec<u32> {
     let mut ids: Vec<u32> = {
         let ecs = world.ecs_mut();
-        let mut traces = ecs.query::<&Trace>();
-        traces.iter(ecs).map(|trace| trace.net_id.0).collect()
+        in_build_order::<&Trace>(ecs)
+            .into_iter()
+            .map(|trace| trace.net_id.0)
+            .collect()
     };
     let ecs = world.ecs_mut();
-    let mut vias = ecs.query::<&Via>();
-    ids.extend(vias.iter(ecs).map(|via| via.net_id.0));
+    ids.extend(
+        in_build_order::<&Via>(ecs)
+            .into_iter()
+            .map(|via| via.net_id.0),
+    );
     ids.sort_unstable();
     ids.dedup();
     ids
@@ -917,7 +924,7 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     }
     let mut parts: Vec<Part> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(
+        in_build_order::<(
             &RefDes,
             &Position,
             &Rotation,
@@ -927,25 +934,22 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
             Option<&Side>,
             Option<&crate::components::LcscPart>,
             Option<&crate::components::PartSpec>,
-        )>();
-        query
-            .iter(ecs)
-            .map(
-                |(refdes, position, rotation, footprint, value, connections, side, lcsc, spec)| {
-                    Part {
-                        refdes: refdes.0.clone(),
-                        footprint: footprint.0.clone(),
-                        value: value.map(|v| v.0.clone()).unwrap_or_default(),
-                        position: position.0,
-                        rotation: rotation.0,
-                        on_bottom: matches!(side, Some(Side::Bottom)),
-                        connections: connections.cloned(),
-                        lcsc: lcsc.map(|part| part.0.clone()),
-                        spec: spec.cloned(),
-                    }
-                },
-            )
-            .collect()
+        )>(ecs)
+        .into_iter()
+        .map(
+            |(refdes, position, rotation, footprint, value, connections, side, lcsc, spec)| Part {
+                refdes: refdes.0.clone(),
+                footprint: footprint.0.clone(),
+                value: value.map(|v| v.0.clone()).unwrap_or_default(),
+                position: position.0,
+                rotation: rotation.0,
+                on_bottom: matches!(side, Some(Side::Bottom)),
+                connections: connections.cloned(),
+                lcsc: lcsc.map(|part| part.0.clone()),
+                spec: spec.cloned(),
+            },
+        )
+        .collect()
     };
     // Written in the order a person reads them, not in whatever order the ECS
     // happens to hold: a diff between two imports of the same board should be
@@ -962,23 +966,22 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     );
     let zones: Vec<WrittenZone> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(
+        in_build_order::<(
             &crate::components::zone::Zone,
             Option<&crate::components::StitchPitch>,
             Option<&crate::components::BendRadius>,
             Option<&crate::components::Hatch>,
-        )>();
-        query
-            .iter(ecs)
-            .map(|(zone, pitch, radius, hatch)| {
-                (
-                    zone.clone(),
-                    pitch.map(|p| p.0),
-                    radius.map(|r| r.0),
-                    hatch.copied(),
-                )
-            })
-            .collect()
+        )>(ecs)
+        .into_iter()
+        .map(|(zone, pitch, radius, hatch)| {
+            (
+                zone.clone(),
+                pitch.map(|p| p.0),
+                radius.map(|r| r.0),
+                hatch.copied(),
+            )
+        })
+        .collect()
     };
 
     let outline: Option<Vec<cypcb_core::Point>> = world
@@ -1452,8 +1455,10 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     // before its labels. Documentation either way - neither reaches copper.
     let dimensions: Vec<crate::components::BoardDimension> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&crate::components::BoardDimension>();
-        query.iter(ecs).copied().collect()
+        in_build_order::<&crate::components::BoardDimension>(ecs)
+            .into_iter()
+            .copied()
+            .collect()
     };
     for dimension in &dimensions {
         let _ = writeln!(out, "dimension {{");
@@ -1479,8 +1484,10 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     // then what is written on top.
     let texts: Vec<crate::components::BoardText> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&crate::components::BoardText>();
-        query.iter(ecs).cloned().collect()
+        in_build_order::<&crate::components::BoardText>(ecs)
+            .into_iter()
+            .cloned()
+            .collect()
     };
     for text in &texts {
         let layer = if text.layer == crate::Layer::BottomSilk {
@@ -1515,14 +1522,12 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     // One that had another ring comes back a different via.
     let (own_ring, autorouted) = {
         let ecs = world.ecs_mut();
-        let mut vias = ecs.query::<&Via>();
-        let own_ring = vias
-            .iter(ecs)
+        let own_ring = in_build_order::<&Via>(ecs)
+            .into_iter()
             .filter(|via| via.outer_diameter.0 != via.drill.0 * 2)
             .count();
-        let mut traces = ecs.query::<&Trace>();
-        let autorouted = traces
-            .iter(ecs)
+        let autorouted = in_build_order::<&Trace>(ecs)
+            .into_iter()
             .filter(|trace| trace.source == crate::components::trace::TraceSource::Autorouted)
             .count();
         (own_ring, autorouted)

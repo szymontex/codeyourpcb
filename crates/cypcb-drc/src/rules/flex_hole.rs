@@ -18,6 +18,7 @@
 //! the copper.
 
 use cypcb_world::components::zone::Zone;
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -36,9 +37,8 @@ impl DrcRule for FlexHoleRule {
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let regions: Vec<Zone> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<&Zone>();
-            query
-                .iter(ecs)
+            in_build_order::<&Zone>(ecs)
+                .into_iter()
                 .filter(|zone| zone.is_flex())
                 .cloned()
                 .collect()

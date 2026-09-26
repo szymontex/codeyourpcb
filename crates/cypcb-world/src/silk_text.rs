@@ -19,6 +19,7 @@
 //! the exporter printed designators the checker had never heard of. Both read
 //! [`designator_strokes`] now, so what is checked is what is printed.
 
+use crate::in_build_order;
 use cypcb_core::{Nm, Point};
 
 use crate::footprint::{Footprint, SilkShape};
@@ -75,9 +76,8 @@ pub fn pad_keepouts(
 
     let placed: Vec<(Point, String, f64)> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(&Position, &FootprintRef, &Rotation)>();
-        query
-            .iter(ecs)
+        in_build_order::<(&Position, &FootprintRef, &Rotation)>(ecs)
+            .into_iter()
             .map(|(position, footprint, rotation)| {
                 (position.0, footprint.0.clone(), rotation.to_degrees())
             })

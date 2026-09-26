@@ -27,6 +27,7 @@ use cypcb_core::Point;
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes, Rotation};
+use cypcb_world::in_build_order;
 use cypcb_world::{BoardWorld, Entity};
 use hashbrown::HashMap;
 use rstar::AABB;
@@ -81,13 +82,11 @@ impl DrcRule for NetSplitRule {
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let traces: Vec<Trace> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<&Trace>();
-            query.iter(ecs).cloned().collect()
+            in_build_order::<&Trace>(ecs).into_iter().cloned().collect()
         };
         let vias: Vec<Via> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<&Via>();
-            query.iter(ecs).copied().collect()
+            in_build_order::<&Via>(ecs).into_iter().copied().collect()
         };
         let pours: Vec<Zone> = world
             .zones()
@@ -97,18 +96,17 @@ impl DrcRule for NetSplitRule {
             .collect();
         let components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(
+            in_build_order::<(
                 Entity,
                 &RefDes,
                 &FootprintRef,
                 &NetConnections,
                 &Position,
                 &Rotation,
-            )>();
-            query
-                .iter(ecs)
-                .map(|(e, r, f, n, p, rot)| (e, r.clone(), f.clone(), n.clone(), *p, *rot))
-                .collect()
+            )>(ecs)
+            .into_iter()
+            .map(|(e, r, f, n, p, rot)| (e, r.clone(), f.clone(), n.clone(), *p, *rot))
+            .collect()
         };
         let pad_boxes = component_pads(world);
         let names: HashMap<u32, String> = world

@@ -12,6 +12,7 @@
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Trace;
 use cypcb_world::components::NetId;
+use cypcb_world::in_build_order;
 use cypcb_world::{BoardWorld, Layer};
 
 use crate::presets::DesignRules;
@@ -32,9 +33,8 @@ impl DrcRule for TraceCurrentRule {
         // the query holds it mutably.
         let traces: Vec<(bevy_ecs::entity::Entity, NetId, Layer, Nm, Point)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
+                .into_iter()
                 .filter_map(|(entity, trace)| {
                     Some((
                         entity,

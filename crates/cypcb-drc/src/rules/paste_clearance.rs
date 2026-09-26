@@ -18,6 +18,7 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Layer, NetConnections, NetId, Position, Rotation};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use super::{rotate_point, DrcRule};
@@ -49,17 +50,16 @@ impl DrcRule for PasteClearanceRule {
 
         let components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(
+            in_build_order::<(
                 bevy_ecs::entity::Entity,
                 &FootprintRef,
                 &Position,
                 &Rotation,
                 Option<&NetConnections>,
-            )>();
-            query
-                .iter(ecs)
-                .map(|(e, f, p, r, n)| (e, f.clone(), *p, *r, n.cloned()))
-                .collect()
+            )>(ecs)
+            .into_iter()
+            .map(|(e, f, p, r, n)| (e, f.clone(), *p, *r, n.cloned()))
+            .collect()
         };
 
         let lib = world.footprints();

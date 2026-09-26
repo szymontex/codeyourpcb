@@ -484,8 +484,8 @@ where 45 belonged.
 
 In this repo: the angle is enforced and the teardrop is not. `PadEntryRule`
 is in the registry
-(`crates/cypcb-drc/src/lib.rs:169`) and reports through `entry_angle`
-(`crates/cypcb-drc/src/rules/pad_entry.rs:211`) and `entry_angle_placed`
+(`crates/cypcb-drc/src/lib.rs:170`) and reports through `entry_angle`
+(`crates/cypcb-drc/src/rules/pad_entry.rs:212`) and `entry_angle_placed`
 (`:257`), the second of which is the change of frame and nothing else: it
 carries the trace's two points into a placed and rotated pad's own frame rather
 than carrying the outline out of it. `measure_entries` (`:486`) walks the
@@ -1131,7 +1131,7 @@ the pour is present on both sides and nothing foreign is in the way on either
 outer layer. The via itself is fixed at a 0.3 mm hole in a 0.6 mm pad with
 0.3 mm clearance (`StitchSpec::at`, `crates/cypcb-world/src/stitch.rs:32-42`).
 Generated vias are marked `Stitched` so the writer does not emit them back as
-hand-placed copper (`crates/cypcb-world/src/dsl.rs:276`).
+hand-placed copper (`crates/cypcb-world/src/dsl.rs:282`).
 
 *The finding.* Because the generator drops every grid point that is blocked,
 **the declared pitch is not the spacing the board gets.** Where routing is
@@ -1328,10 +1328,10 @@ this page is a counter-example to that sentence on the same page.
 
 | rule | what enforces it |
 |---|---|
-| R-01 width against current | `TraceCurrentRule` (`crates/cypcb-drc/src/lib.rs:148`), silent on a net that declares no `current` |
-| R-03 acute angles | `AcuteAngleRule` (`crates/cypcb-drc/src/lib.rs:206`), reporting `ViolationKind::AcidTrap` |
+| R-01 width against current | `TraceCurrentRule` (`crates/cypcb-drc/src/lib.rs:149`), silent on a net that declares no `current` |
+| R-03 acute angles | `AcuteAngleRule` (`crates/cypcb-drc/src/lib.rs:207`), reporting `ViolationKind::AcidTrap` |
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
-| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:169`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
+| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:170`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
 | R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
 **Bucket 2 - checkable today, nobody wrote the check. Ten.** Checkable is
@@ -1823,7 +1823,7 @@ of copper on one net is outside R-19's scope by definition, and any rule that
 needs to see one has to measure geometry rather than clearance.**
 
 **In this repo:** enforced. `ClearanceRule` is the first entry in the registry
-(`crates/cypcb-drc/src/lib.rs:134`). Measured on one board rather than claimed
+(`crates/cypcb-drc/src/lib.rs:135`). Measured on one board rather than claimed
 for all six: on `shift_driver` with `stop_at_own_copper` on, **0 of 10 rows**
 carry the `Clearance` kind. That figure is held rather than quoted:
 `the_board_that_got_worse_was_paying_for_the_via_optimizer` asserts the 0

@@ -9,6 +9,7 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Position, RefDes};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -48,10 +49,8 @@ impl DrcRule for AnnularRingRule {
         // Collect components first to avoid borrow issues with ECS
         let components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query =
-                ecs.query::<(bevy_ecs::entity::Entity, &RefDes, &FootprintRef, &Position)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &RefDes, &FootprintRef, &Position)>(ecs)
+                .into_iter()
                 .map(|(e, r, f, p)| (e, r.clone(), f.clone(), *p))
                 .collect()
         };

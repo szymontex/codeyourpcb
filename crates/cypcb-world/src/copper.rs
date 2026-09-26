@@ -176,10 +176,8 @@ pub fn copper_on_layer(
 
     let placements: Vec<Placement> = {
         let ecs = world.ecs_mut();
-        let mut query =
-            ecs.query::<(&Position, &Rotation, &FootprintRef, Option<&NetConnections>)>();
-        query
-            .iter(ecs)
+        crate::in_build_order::<(&Position, &Rotation, &FootprintRef, Option<&NetConnections>)>(ecs)
+            .into_iter()
             .map(|(position, rotation, footprint, nets)| {
                 let pins = nets
                     .map(|n| n.iter().map(|p| (p.pin.clone(), p.net)).collect())
@@ -230,8 +228,10 @@ pub fn copper_on_layer(
     // Traces and vias.
     let traces: Vec<Trace> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&Trace>();
-        query.iter(ecs).cloned().collect()
+        crate::in_build_order::<&Trace>(ecs)
+            .into_iter()
+            .cloned()
+            .collect()
     };
     for trace in traces {
         if trace.layer != layer || Some(trace.net_id) == pour_net {
@@ -254,8 +254,10 @@ pub fn copper_on_layer(
 
     let vias: Vec<Via> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&Via>();
-        query.iter(ecs).copied().collect()
+        crate::in_build_order::<&Via>(ecs)
+            .into_iter()
+            .copied()
+            .collect()
     };
     for via in vias {
         if Some(via.net_id) == pour_net {

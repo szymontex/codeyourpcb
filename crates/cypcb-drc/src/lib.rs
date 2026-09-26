@@ -55,6 +55,7 @@ pub use rules::impedance::width_for as impedance_width_for;
 pub use rules::DrcRule;
 pub use violation::{clearance_contacts, pair_of, shortfall, shorts, DrcViolation, ViolationKind};
 
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use hashbrown::HashMap;
@@ -261,9 +262,8 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
     // Entity index → refdes string
     let refdes_map: HashMap<u32, String> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &RefDes)>();
-        query
-            .iter(ecs)
+        in_build_order::<(bevy_ecs::entity::Entity, &RefDes)>(ecs)
+            .into_iter()
             .map(|(e, r)| (e.index(), r.as_str().to_string()))
             .collect()
     };
@@ -271,8 +271,10 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
     // Entity index → net name (for traces/vias with NetId)
     let net_name_map: HashMap<u32, String> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetId)>();
-        let pairs: Vec<_> = query.iter(ecs).map(|(e, n)| (e.index(), *n)).collect();
+        let pairs: Vec<_> = in_build_order::<(bevy_ecs::entity::Entity, &NetId)>(ecs)
+            .into_iter()
+            .map(|(e, n)| (e.index(), *n))
+            .collect();
 
         pairs
             .into_iter()
@@ -283,9 +285,8 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
     // Entity index → parent refdes (for PadInstance entities)
     let pad_parent_map: HashMap<u32, String> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &PadInstance)>();
-        let pads: Vec<_> = query
-            .iter(ecs)
+        let pads: Vec<_> = in_build_order::<(bevy_ecs::entity::Entity, &PadInstance)>(ecs)
+            .into_iter()
             .map(|(e, pi)| (e.index(), pi.parent.index()))
             .collect();
         pads.into_iter()
@@ -296,9 +297,8 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
     // Entity index → "trace on <net>" or "via on <net>"
     let trace_label_map: HashMap<u32, String> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
-        query
-            .iter(ecs)
+        in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
+            .into_iter()
             .map(|(e, _)| {
                 let net = net_name_map
                     .get(&e.index())
@@ -311,9 +311,8 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
 
     let via_label_map: HashMap<u32, String> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
-        query
-            .iter(ecs)
+        in_build_order::<(bevy_ecs::entity::Entity, &Via)>(ecs)
+            .into_iter()
             .map(|(e, _)| {
                 let net = net_name_map
                     .get(&e.index())

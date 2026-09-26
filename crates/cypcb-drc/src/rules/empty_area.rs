@@ -18,6 +18,7 @@
 //! a rectangle that is not there.
 
 use cypcb_world::components::zone::Zone;
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -36,9 +37,8 @@ impl DrcRule for EmptyAreaRule {
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let areas: Vec<(bevy_ecs::entity::Entity, Zone)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Zone)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Zone)>(ecs)
+                .into_iter()
                 .map(|(entity, zone)| (entity, zone.clone()))
                 .collect()
         };

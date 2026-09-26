@@ -13,6 +13,7 @@ use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::{FootprintRef, NetConnections, NetId, Position, RefDes, Rotation};
 use cypcb_world::footprint::{FootprintLibrary, PadDef};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -32,13 +33,11 @@ impl DrcRule for UnroutedPinRule {
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let traces: Vec<Trace> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<&Trace>();
-            query.iter(ecs).cloned().collect()
+            in_build_order::<&Trace>(ecs).into_iter().cloned().collect()
         };
         let vias: Vec<Via> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<&Via>();
-            query.iter(ecs).copied().collect()
+            in_build_order::<&Via>(ecs).into_iter().copied().collect()
         };
         let pours: Vec<Zone> = world
             .zones()
@@ -52,18 +51,17 @@ impl DrcRule for UnroutedPinRule {
         // than the board.
         let components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(
+            in_build_order::<(
                 bevy_ecs::entity::Entity,
                 &RefDes,
                 &FootprintRef,
                 &NetConnections,
                 &Position,
                 &cypcb_world::components::Rotation,
-            )>();
-            query
-                .iter(ecs)
-                .map(|(e, r, f, n, p, rot)| (e, r.clone(), f.clone(), n.clone(), *p, *rot))
-                .collect()
+            )>(ecs)
+            .into_iter()
+            .map(|(e, r, f, n, p, rot)| (e, r.clone(), f.clone(), n.clone(), *p, *rot))
+            .collect()
         };
 
         let library = world.footprints().clone();
@@ -143,9 +141,10 @@ impl NetPad {
 /// Every pad of `world` that is on a net, with its copper.
 pub fn net_pads(world: &mut BoardWorld, library: &FootprintLibrary) -> Vec<NetPad> {
     let ecs = world.ecs_mut();
-    let mut query = ecs.query::<(&FootprintRef, &NetConnections, &Position, &Rotation)>();
     let mut pads = Vec::new();
-    for (footprint_ref, nets, position, rotation) in query.iter(ecs) {
+    for (footprint_ref, nets, position, rotation) in
+        in_build_order::<(&FootprintRef, &NetConnections, &Position, &Rotation)>(ecs)
+    {
         let Some(footprint) = library.get(footprint_ref.as_str()) else {
             continue;
         };
