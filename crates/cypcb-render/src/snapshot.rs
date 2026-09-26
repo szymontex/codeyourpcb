@@ -431,6 +431,58 @@ pub struct PadInfo {
     pub slot_nm: Option<(i64, i64)>,
 }
 
+impl PadInfo {
+    /// Convert to the board model's pad.
+    ///
+    /// A footprint the host fetched arrives as these, so this is where a pad
+    /// from outside becomes copper and a hole.
+    pub fn to_pad_def(&self) -> cypcb_world::footprint::PadDef {
+        use cypcb_core::{Nm, Point};
+        use cypcb_world::footprint::PadDef;
+        use cypcb_world::{Layer, PadShape};
+        let pad = self;
+
+        // Convert shape string to PadShape
+        let shape = match pad.shape.as_str() {
+            "circle" => PadShape::Circle,
+            "roundrect" => PadShape::RoundRect { corner_ratio: 25 },
+            "oblong" => PadShape::Oblong,
+            _ => PadShape::Rect, // default to rect
+        };
+
+        // Convert layer_mask to Vec<Layer>
+        let mut layers: Vec<Layer> = Vec::new();
+        if pad.layer_mask & 1 != 0 {
+            layers.push(Layer::TopCopper);
+        }
+        if pad.layer_mask & 2 != 0 {
+            layers.push(Layer::BottomCopper);
+        }
+        for i in 0..30 {
+            if pad.layer_mask & (1 << (2 + i)) != 0 {
+                layers.push(Layer::Inner(i));
+            }
+        }
+        // No layers is top copper for a pad with no hole. With a hole it is
+        // a hole with no copper round it, which is how `copper_mask` sends
+        // a non-plated hole out: reading it back as top copper plated it.
+        if layers.is_empty() && pad.drill_nm.is_none() {
+            layers.push(Layer::TopCopper);
+        }
+
+        PadDef {
+            number: pad.number.clone(),
+            shape,
+            position: Point::new(Nm(pad.x_nm), Nm(pad.y_nm)),
+            size: (Nm(pad.width_nm), Nm(pad.height_nm)),
+            drill: pad.drill_nm.map(Nm),
+            slot: pad.slot_nm.map(|(w, h)| (Nm(w), Nm(h))),
+            layers,
+            mask_margin: None,
+        }
+    }
+}
+
 /// Net information.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NetInfo {
@@ -822,13 +874,18 @@ mod tests {
 
 /// A piece of silkscreen artwork as the host describes it.
 ///
-/// Mirrors the viewer's `SilkShape`: tagged by `type`, coordinates in
-/// nanometres, relative to the footprint's origin. Arcs are accepted and
-/// dropped rather than refused - the board model has no arc, and rejecting a
-/// whole footprint over a rounded corner would be worse than printing it
-/// without one. That trade is recorded in the tracker rather than hidden here.
+/// Mirrors the viewer's `SilkShape` in `viewer/src/types.ts`, field for field
+/// and unit for unit: tagged by `type`, coordinates in nanometres relative to
+/// the footprint's origin, angles in radians.
+///
+/// A field this type does not name is refused, not skipped. Until 2026-09-26
+/// the arc's angles were `start_angle`/`end_angle` in degrees here and
+/// `startAngle`/`endAngle` in radians in the viewer; serde skipped the
+/// viewer's names, defaulted the missing ones, and every arc the viewer sent
+/// became a full circle on the board and in the Gerber. A renamed field is
+/// now an error at the boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
 pub enum SilkInfo {
     /// A straight line.
     Segment {
@@ -842,6 +899,9 @@ pub enum SilkInfo {
         y2: i64,
         /// Stroke width.
         width: i64,
+        /// Which side's legend the viewer drew it on.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        layer: Option<SilkSide>,
     },
     /// A circle outline.
     Circle {
@@ -853,6 +913,9 @@ pub enum SilkInfo {
         radius: i64,
         /// Stroke width.
         width: i64,
+        /// Which side's legend the viewer drew it on.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        layer: Option<SilkSide>,
     },
     /// An arc, approximated as segments on the way into the board model.
     ///
@@ -869,21 +932,33 @@ pub enum SilkInfo {
         radius: i64,
         /// Stroke width.
         width: i64,
-        /// Where the arc starts, in degrees, counter-clockwise from +X.
+        /// Where the arc starts, in radians, counter-clockwise from +X.
         ///
-        /// Defaulted so a payload written before arcs carried angles still
-        /// deserialises - as a full circle, which is what it meant.
-        #[serde(default)]
+        /// Required: an arc with no angles is a payload that lost them, and
+        /// reading it as a full circle is what hid the rename above.
+        #[serde(rename = "startAngle")]
         start_angle: f64,
-        /// Where it ends. Equal to the start means a full turn.
-        #[serde(default = "full_turn")]
+        /// Where it ends, in radians. Equal to the start means a full turn.
+        #[serde(rename = "endAngle")]
         end_angle: f64,
+        /// Which side's legend the viewer drew it on.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        layer: Option<SilkSide>,
     },
 }
 
-/// The end angle of an arc that says nothing: all the way round.
-fn full_turn() -> f64 {
-    360.0
+/// The side of the board a legend shape is printed on, as the viewer names it.
+///
+/// Named so the boundary can refuse a field it does not know. The footprint
+/// model keeps one legend per footprint and prints it on the side the part
+/// sits on, so the engine does not act on this yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SilkSide {
+    /// The component side.
+    Top,
+    /// The solder side.
+    Bottom,
 }
 
 impl SilkInfo {
@@ -909,22 +984,23 @@ impl SilkInfo {
             width,
             start_angle,
             end_angle,
+            ..
         } = self
         {
+            use std::f64::consts::TAU;
             let sweep = {
                 let raw = end_angle - start_angle;
                 // A full turn is what an arc means when both angles agree.
                 if raw.abs() < f64::EPSILON {
-                    360.0
+                    TAU
                 } else {
                     raw
                 }
             };
-            let steps = ((sweep.abs() / 360.0) * Self::SEGMENTS_PER_TURN as f64).ceil() as usize;
+            let steps = ((sweep.abs() / TAU) * Self::SEGMENTS_PER_TURN as f64).ceil() as usize;
             let steps = steps.max(1);
 
-            let point_at = |degrees: f64| {
-                let radians = degrees.to_radians();
+            let point_at = |radians: f64| {
                 Point::new(
                     Nm(cx + (*radius as f64 * radians.cos()).round() as i64),
                     Nm(cy + (*radius as f64 * radians.sin()).round() as i64),
@@ -960,6 +1036,7 @@ impl SilkInfo {
                 x2: end.x.0,
                 y2: end.y.0,
                 width: width.0,
+                layer: None,
             },
             SilkShape::Circle {
                 centre,
@@ -970,6 +1047,7 @@ impl SilkInfo {
                 cy: centre.y.0,
                 radius: radius.0,
                 width: width.0,
+                layer: None,
             },
         }
     }
@@ -985,6 +1063,7 @@ impl SilkInfo {
                 x2,
                 y2,
                 width,
+                ..
             } => Some(SilkShape::Segment {
                 start: Point::new(Nm(*x1), Nm(*y1)),
                 end: Point::new(Nm(*x2), Nm(*y2)),
@@ -995,6 +1074,7 @@ impl SilkInfo {
                 cy,
                 radius,
                 width,
+                ..
             } => Some(SilkShape::Circle {
                 centre: Point::new(Nm(*cx), Nm(*cy)),
                 radius: Nm(*radius),

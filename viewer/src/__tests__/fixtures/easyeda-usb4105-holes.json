@@ -1,0 +1,23 @@
+{
+  "_source": "Hand-written 2026-09-26 from GCT USB4105 drawing (revision B4, 18/12/23), Recommended PCB Layout: 2x Ø0.65 non-plated holes 5.78 apart, shell slots 0.60 x 1.70 in 1.00 x 2.10 pads and 0.60 x 1.40 in 1.00 x 1.80 pads. Positions are the ones tests/fixtures/benchmark/esp32_starter.cypcb gives the same part.",
+  "result": {
+    "title": "USB4105-GF-A",
+    "packageDetail": {
+      "title": "USB-C-SMD_USB4105",
+      "dataStr": {
+        "head": {
+          "x": "4000",
+          "y": "3000"
+        },
+        "shape": [
+          "HOLE~3988.622~2989.7441~1.2795~gge_hL~0",
+          "HOLE~4011.378~2989.7441~1.2795~gge_hR~0",
+          "PAD~OVAL~3982.9921~2987.7756~3.937~8.2677~11~~SH~1.1811~~0~gge_s0~6.6929~~Y~0~0~0.2~3982.9921,2987.7756",
+          "PAD~OVAL~4017.0079~2987.7756~3.937~8.2677~11~~SH~1.1811~~0~gge_s1~6.6929~~Y~0~0~0.2~4017.0079,2987.7756",
+          "PAD~OVAL~3982.9921~3004.2323~3.937~7.0866~11~~SH~1.1811~~0~gge_s2~5.5118~~Y~0~0~0.2~3982.9921,3004.2323",
+          "PAD~OVAL~4017.0079~3004.2323~3.937~7.0866~11~~SH~1.1811~~0~gge_s3~5.5118~~Y~0~0~0.2~4017.0079,3004.2323"
+        ]
+      }
+    }
+  }
+}
