@@ -1555,8 +1555,10 @@ impl PcbEngine {
         let mut max_y = i64::MIN;
 
         for pad in &pad_defs {
-            let half_w = pad.size.0 .0 / 2;
-            let half_h = pad.size.1 .0 / 2;
+            // Its sides along the footprint's axes, once its own turn is taken up.
+            let (width, height) = pad.outline(Point::ORIGIN, Rotation::ZERO).size;
+            let half_w = width.0 / 2;
+            let half_h = height.0 / 2;
             min_x = min_x.min(pad.position.x.0 - half_w);
             min_y = min_y.min(pad.position.y.0 - half_h);
             max_x = max_x.max(pad.position.x.0 + half_w);

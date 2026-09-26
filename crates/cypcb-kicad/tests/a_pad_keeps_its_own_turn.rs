@@ -215,3 +215,26 @@ fn one_footprint_name_with_two_pad_turns_is_two_footprints() {
     turns.sort_by_key(|r| r.0);
     assert_eq!(turns, vec![Rotation::ZERO, Rotation::DEG_270]);
 }
+
+/// The rectangle a footprint's pads span, in mm: `(min x, min y, max x, max y)`.
+fn span(footprint: &Footprint) -> (f64, f64, f64, f64) {
+    let b = footprint.bounds;
+    (
+        b.min.x.to_mm(),
+        b.min.y.to_mm(),
+        b.max.x.to_mm(),
+        b.max.y.to_mm(),
+    )
+}
+
+#[test]
+fn a_footprint_spans_its_pads_as_they_stand() {
+    let footprint = import_footprint_from_str(&fixture("fab-1X04.kicad_mod")).expect("reads");
+    // Four pads 1.524 wide from -3.81 to 3.81, each 3.048 tall.
+    assert_eq!(span(&footprint), (-4.572, -1.524, 4.572, 1.524));
+
+    let imported = parse_kicad_pcb_str(BOARD).expect("the board reads");
+    let square = imported.library.get("T:SQUARE").expect("U2's footprint");
+    // One pad 1 by 2 turned 90: 2 wide and 1 tall.
+    assert_eq!(span(square), (-1.0, -0.5, 1.0, 0.5));
+}

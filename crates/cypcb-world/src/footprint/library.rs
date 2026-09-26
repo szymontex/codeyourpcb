@@ -503,15 +503,16 @@ impl Footprint {
     /// the courtyard knows about: the spatial index, `courtyard-clearance` and
     /// the placer all take the box at its word. A pad is measured as the
     /// rectangle `size` wide and high about its centre. That holds a round or
-    /// oblong pad and is exact for a square one; a pad has no turn of its own
-    /// inside a footprint, so the rectangle needs no rotation.
+    /// oblong pad and is exact for a square one, with its sides taken along
+    /// the footprint's axes once the pad's own turn is taken up.
     pub fn pads_outside_courtyard(&self) -> Vec<(&PadDef, Nm)> {
         let court = self.courtyard;
         self.pads
             .iter()
             .filter_map(|pad| {
-                let half_w = pad.size.0.raw() / 2;
-                let half_h = pad.size.1.raw() / 2;
+                let (width, height) = pad.outline(Point::ORIGIN, Rotation::ZERO).size;
+                let half_w = width.raw() / 2;
+                let half_h = height.raw() / 2;
                 let x = pad.position.x.raw();
                 let y = pad.position.y.raw();
                 let reach = [
