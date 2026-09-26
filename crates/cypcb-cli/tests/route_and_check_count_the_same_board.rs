@@ -18,6 +18,11 @@
 //! something on the way out - and the second test here is for that: the
 //! copper read back from the text is the copper the router laid, segment for
 //! segment and via for via.
+//!
+//! `--variants` prints a third count before either: the ranking, which scores
+//! each variant in memory and picks the winner on it. Its first line is held
+//! to the file as well, so a variant cannot win on a count the file would not
+//! give it.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -53,6 +58,23 @@ fn what_route_said(log: &str) -> Option<Counted> {
     } else {
         line.split(", ").nth(1)?.split(' ').next()?.parse().ok()?
     };
+    Some((total, shorts))
+}
+
+/// The winner's line of the `--variants` ranking: `  1. <name> composite <n>,
+/// <total> DRC violations (<shorts> shorts, ...`. The ranking is scored in
+/// memory before anything is written, so it is a third count of the same board.
+fn what_the_ranking_said(log: &str) -> Option<Counted> {
+    let line = log.lines().find(|line| line.starts_with("  1. "))?;
+    let after = line.split(" composite ").nth(1)?;
+    let total = after.split(", ").nth(1)?.split(' ').next()?.parse().ok()?;
+    let shorts = after
+        .split(" DRC violations (")
+        .nth(1)?
+        .split(' ')
+        .next()?
+        .parse()
+        .ok()?;
     Some((total, shorts))
 }
 
@@ -118,6 +140,15 @@ fn agree(name: &str, mode: &str) {
         "{name} {mode}: route said (violations, shorts) {said:?}, check on the file it wrote \
          found {found:?}"
     );
+    if mode == "--variants" {
+        let ranked = what_the_ranking_said(&route_log)
+            .unwrap_or_else(|| panic!("{name}: route printed no ranking:\n{route_log}"));
+        assert_eq!(
+            ranked, found,
+            "{name}: the ranking's winner scored (violations, shorts) {ranked:?}, check on the \
+             file it wrote found {found:?}"
+        );
+    }
 }
 
 #[test]
