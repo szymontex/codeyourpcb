@@ -188,11 +188,11 @@ fn export_pads(
                 continue;
             }
 
-            // Calculate absolute position (component position + rotated pad offset)
-            let abs_pos = place_pad_millideg(position.0, pad.position, rotation.0);
-
-            // Get or create aperture for this pad
-            let aperture_shape = aperture_for_pad(pad);
+            // The pad turned with its part - where it lands and the aperture it
+            // is flashed with, from the one place a pad is turned.
+            let outline = pad.outline(position.0, *rotation);
+            let abs_pos = outline.centre;
+            let aperture_shape = aperture_for_pad(&outline);
             let dcode = apertures.get_or_create(aperture_shape);
 
             // Select aperture

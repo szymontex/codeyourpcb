@@ -69,6 +69,6 @@ mod smd;
 mod tht;
 
 pub use library::{
-    base_name, bottom_name, mirrored_to_bottom, Footprint, FootprintLibrary, PadDef, SilkShape,
-    IPC_COURTYARD_EXCESS,
+    base_name, bottom_name, mirrored_to_bottom, Footprint, FootprintLibrary, PadDef, PadOutline,
+    SilkShape, IPC_COURTYARD_EXCESS,
 };
