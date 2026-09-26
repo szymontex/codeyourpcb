@@ -14,7 +14,7 @@ use cypcb_render::PcbEngine;
 ///
 /// Turned a quarter inside the footprint the pads are 3mm across and leave a
 /// 0.1mm gap, under the 0.127mm the board asks for; standing square they are
-/// 0.4mm across and leave 2.7mm.
+/// 0.4mm across and well clear of each other.
 fn board(turn: &str) -> String {
     format!(
         r#"version 1
@@ -85,12 +85,12 @@ fn the_checker_in_the_browser_measures_the_pad_as_it_stands() {
     assert_eq!(
         clearance_violations(&square),
         0,
-        "2.7mm apart is clear: {}",
+        "the square pads leave room: {}",
         square.get_violations_json()
     );
     assert!(
         clearance_violations(&turned) > 0,
-        "0.1mm apart is not clear: {}",
+        "the turned pads come too close: {}",
         turned.get_violations_json()
     );
 }
