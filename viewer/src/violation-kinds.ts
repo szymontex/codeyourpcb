@@ -43,6 +43,7 @@ export const VIOLATION_KIND_META: Record<string, ViolationKindMeta> = {
   'drill-aspect-ratio':  { icon: '🕳️', label: 'Hole too deep to plate' },
   'slot-clearance':      { icon: '🪚', label: 'Copper too close to a milled slot' },
   'pad-land':            { icon: '⭕', label: 'Land around a hole too small to image' },
+  'land-outside-courtyard': { icon: '⬚', label: 'Pads reach outside the footprint courtyard' },
   'pad-entry':           { icon: '📐', label: 'Trace meets a land too sharply' },
   'via-span':            { icon: '🕳️', label: 'Via span this build does not drill' },
   'flex-hole':           { icon: '📐', label: 'Hole where the board bends' },

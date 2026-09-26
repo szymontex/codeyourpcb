@@ -2145,17 +2145,11 @@ fn get_pin_position(
         return Some(position);
     };
 
-    let degrees = world
+    let rotation = world
         .get::<crate::components::Rotation>(entity)
-        .map(|rotation| rotation.to_degrees())
-        .unwrap_or(0.0);
-    let (sin, cos) = degrees.to_radians().sin_cos();
-    let (px, py) = (offset.x.0 as f64, offset.y.0 as f64);
-
-    Some(Point::new(
-        Nm(position.x.0 + (px * cos - py * sin).round() as i64),
-        Nm(position.y.0 + (px * sin + py * cos).round() as i64),
-    ))
+        .copied()
+        .unwrap_or(crate::components::Rotation::ZERO);
+    Some(crate::components::place_pad(position, offset, rotation))
 }
 
 /// Parse a layer name string to a Layer enum.
@@ -4064,14 +4058,12 @@ impl Frame {
     /// has to be turned by the parent's angle before being added, and the
     /// angles accumulate.
     fn compose(&self, child: Frame) -> Frame {
-        let (sin, cos) = self.angle_deg.to_radians().sin_cos();
-        let x = child.origin.0 as f64;
-        let y = child.origin.1 as f64;
+        let turned = crate::components::rotate_about_origin(
+            Point::new(Nm(child.origin.0), Nm(child.origin.1)),
+            self.angle_deg,
+        );
         Frame {
-            origin: (
-                self.origin.0 + (x * cos - y * sin).round() as i64,
-                self.origin.1 + (x * sin + y * cos).round() as i64,
-            ),
+            origin: (self.origin.0 + turned.x.0, self.origin.1 + turned.y.0),
             angle_deg: self.angle_deg + child.angle_deg,
         }
     }
@@ -4232,11 +4224,11 @@ fn place_in_instance(component: &mut ComponentDef, origin: (i64, i64), angle_deg
     use cypcb_parser::ast::{Dimension as AstDimension, RotationExpr};
 
     if let Some(position) = &mut component.position {
-        let x = position.x.to_nm().raw() as f64;
-        let y = position.y.to_nm().raw() as f64;
-        let (sin, cos) = angle_deg.to_radians().sin_cos();
-        let rotated_x = x * cos - y * sin;
-        let rotated_y = x * sin + y * cos;
+        let turned = crate::components::rotate_about_origin(
+            Point::new(position.x.to_nm(), position.y.to_nm()),
+            angle_deg,
+        );
+        let (rotated_x, rotated_y) = (turned.x.0 as f64, turned.y.0 as f64);
 
         // A placement this code computed, not one the source wrote - so the
         // unit is stated rather than assumed, and nothing warns about it.

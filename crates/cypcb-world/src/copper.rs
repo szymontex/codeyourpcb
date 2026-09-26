@@ -163,7 +163,9 @@ pub fn copper_on_layer(
     layer: Layer,
     pour_net: Option<NetId>,
 ) -> (Vec<Rect>, Vec<Rect>) {
-    use crate::components::{FootprintRef, NetConnections, Position, Rotation};
+    use crate::components::{
+        place_box, place_pad, FootprintRef, NetConnections, Position, Rotation,
+    };
 
     let mut boxes = Vec::new();
     let mut own = Vec::new();
@@ -196,8 +198,7 @@ pub fn copper_on_layer(
         let Some(footprint) = library.get(&name) else {
             continue;
         };
-        let radians = degrees.to_radians();
-        let (sin, cos) = radians.sin_cos();
+        let rotation = Rotation::from_degrees(degrees);
 
         for pad in &footprint.pads {
             if !pad.is_on(layer) {
@@ -209,19 +210,15 @@ pub fn copper_on_layer(
                 .map(|(_, net)| *net);
             let is_own = pad_net.is_some() && pad_net == pour_net;
 
-            let px = pad.position.x.0 as f64;
-            let py = pad.position.y.0 as f64;
-            let cx = position.x.0 + (px * cos - py * sin).round() as i64;
-            let cy = position.y.0 + (px * sin + py * cos).round() as i64;
-            let half_w = pad.size.0 .0 as f64 / 2.0;
-            let half_h = pad.size.1 .0 as f64 / 2.0;
-            let ex = (half_w * cos.abs() + half_h * sin.abs()).round() as i64;
-            let ey = (half_w * sin.abs() + half_h * cos.abs()).round() as i64;
-
-            let box_ = Rect {
-                min: Point::new(Nm(cx - ex), Nm(cy - ey)),
-                max: Point::new(Nm(cx + ex), Nm(cy + ey)),
-            };
+            let (half_w, half_h) = (pad.size.0 .0 / 2, pad.size.1 .0 / 2);
+            let box_ = place_box(
+                place_pad(position, pad.position, rotation),
+                Rect {
+                    min: Point::new(Nm(-half_w), Nm(-half_h)),
+                    max: Point::new(Nm(half_w), Nm(half_h)),
+                },
+                rotation,
+            );
             if is_own {
                 own.push(box_);
             } else {

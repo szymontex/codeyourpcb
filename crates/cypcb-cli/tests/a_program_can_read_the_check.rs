@@ -54,7 +54,7 @@ const RANKED: &str = r#"version 1
 
 footprint TINY_DRILL {
     description "two holes narrower than the house drills"
-    courtyard 4mm x 4mm
+    courtyard 5mm x 4mm at 1.27mm, 0mm
     pad 1 circle at 0mm, 0mm size 1.6mm x 1.6mm drill 0.05mm
     pad 2 circle at 2.54mm, 0mm size 1.6mm x 1.6mm drill 0.05mm
 }

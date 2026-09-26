@@ -126,7 +126,7 @@ footprint SW_TL3342 {
 
 footprint PINHDR_1X12 {
     description "Pin header 1x12, 2.54mm, vertical"
-    courtyard 3.54mm x 31.48mm
+    courtyard 3.54mm x 31.48mm at 0mm, -13.97mm
 
     pad 1 rect at 0mm, 0mm size 1.7mm x 1.7mm drill 1mm
     pad 2 circle at 0mm, -2.54mm size 1.7mm x 1.7mm drill 1mm

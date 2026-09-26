@@ -54,6 +54,19 @@ fn bar() -> Footprint {
     }
 }
 
+/// The bar with a courtyard around pad 1 alone, the way a footprint centred on
+/// its first pin states one: pad 2 stands outside the box the index holds.
+fn short_bar() -> Footprint {
+    Footprint {
+        name: "SHORT-BAR".to_string(),
+        courtyard: Rect::from_center_size(
+            Point::from_mm(-3.0, 0.0),
+            (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+        ),
+        ..bar()
+    }
+}
+
 /// An M3 mounting hole: 3.2mm drilled, no copper.
 fn mounting_hole() -> Footprint {
     let drill = Nm::from_mm(3.2);
@@ -103,6 +116,7 @@ fn board() -> BoardWorld {
     world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
     let mut library = FootprintLibrary::new();
     library.register(bar());
+    library.register(short_bar());
     library.register(mounting_hole());
     let latch = latch(&library);
     library.register(latch);
@@ -118,6 +132,17 @@ fn along(degrees: f64) -> (f64, f64) {
 
 /// Put the bar down turned by `degrees`, with pad 2 centred on `(x, y)`.
 fn bar_with_pad_2_at(world: &mut BoardWorld, degrees: f64, x: f64, y: f64) -> Entity {
+    footprint_with_pad_2_at(world, "BAR", degrees, x, y)
+}
+
+/// Put down a two-pad footprint laid out like the bar.
+fn footprint_with_pad_2_at(
+    world: &mut BoardWorld,
+    footprint: &str,
+    degrees: f64,
+    x: f64,
+    y: f64,
+) -> Entity {
     let (ux, uy) = along(degrees);
     let mut nets = NetConnections::new();
     nets.add(PinConnection::new("1".to_string(), NetId::new(1)));
@@ -127,7 +152,7 @@ fn bar_with_pad_2_at(world: &mut BoardWorld, degrees: f64, x: f64, y: f64) -> En
         Value::new("bar"),
         Position::from_mm(x - 3.0 * ux, y - 3.0 * uy),
         Rotation::from_degrees(degrees),
-        FootprintRef::new("BAR"),
+        FootprintRef::new(footprint),
         nets,
     )
 }
@@ -186,36 +211,49 @@ fn the_index_finds_the_part_at_each_of_its_pads() {
     );
 }
 
+/// Clearance rows for a trace beside pad 2 of `footprint`, turned by `degrees`.
+///
+/// A 0.1mm trace on net 3 runs straight out from pad 2 along the bar, its
+/// round end 0.45mm from the pad's centre: 0.45 - 0.05 - 0.3 = 0.10mm of gap
+/// against 0.127mm asked.
+fn clearance_rows_beside_pad_2(footprint: &str, degrees: f64) -> usize {
+    let mut world = board();
+    footprint_with_pad_2_at(&mut world, footprint, degrees, 10.0, 10.0);
+    let (ux, uy) = along(degrees);
+    let from = Point::from_mm(10.0 + 0.45 * ux, 10.0 + 0.45 * uy);
+    let to = Point::from_mm(10.0 + 2.0 * ux, 10.0 + 2.0 * uy);
+    world.spawn_entity((
+        Trace {
+            segments: vec![TraceSegment::new(from, to)],
+            width: Nm::from_mm(0.1),
+            layer: Layer::TopCopper,
+            net_id: NetId::new(3),
+            locked: false,
+            source: TraceSource::Autorouted,
+        },
+        NetId::new(3),
+    ));
+    index(&mut world);
+    let rules = DesignRules {
+        min_clearance: Nm::from_mm(0.127),
+        ..rules()
+    };
+    ClearanceRule.check(&mut world, &rules).len()
+}
+
 #[test]
 fn clearance_finds_a_trace_beside_a_turned_pad() {
-    // A 0.1mm trace on net 3 runs straight out from pad 2 along the bar, its
-    // round end 0.45mm from the pad's centre: 0.45 - 0.05 - 0.3 = 0.10mm of
-    // gap against 0.127mm asked. Its box is nowhere near the unturned
-    // courtyard once the bar is turned.
-    one_row_at_every_angle(|degrees| {
-        let mut world = board();
-        bar_with_pad_2_at(&mut world, degrees, 10.0, 10.0);
-        let (ux, uy) = along(degrees);
-        let from = Point::from_mm(10.0 + 0.45 * ux, 10.0 + 0.45 * uy);
-        let to = Point::from_mm(10.0 + 2.0 * ux, 10.0 + 2.0 * uy);
-        world.spawn_entity((
-            Trace {
-                segments: vec![TraceSegment::new(from, to)],
-                width: Nm::from_mm(0.1),
-                layer: Layer::TopCopper,
-                net_id: NetId::new(3),
-                locked: false,
-                source: TraceSource::Autorouted,
-            },
-            NetId::new(3),
-        ));
-        index(&mut world);
-        let rules = DesignRules {
-            min_clearance: Nm::from_mm(0.127),
-            ..rules()
-        };
-        ClearanceRule.check(&mut world, &rules).len()
-    });
+    // The trace's box is nowhere near the unturned courtyard once the bar is
+    // turned.
+    one_row_at_every_angle(|degrees| clearance_rows_beside_pad_2("BAR", degrees));
+}
+
+#[test]
+fn clearance_finds_a_trace_beside_a_pad_outside_the_courtyard() {
+    // The index holds only the box around pad 1, so a query from the trace
+    // finds no part. The pair is found from the part's side, which looks as
+    // far as its pads reach.
+    one_row_at_every_angle(|degrees| clearance_rows_beside_pad_2("SHORT-BAR", degrees));
 }
 
 #[test]

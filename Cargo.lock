@@ -1114,6 +1114,7 @@ version = "0.1.0-beta"
 dependencies = [
  "cypcb-autoroute",
  "cypcb-core",
+ "cypcb-parser",
  "cypcb-router",
  "cypcb-world",
  "kicad_parse_gen",

@@ -1115,18 +1115,15 @@ impl PcbEngine {
                         let mut best_pad: Option<&cypcb_world::footprint::PadDef> = None;
                         let mut best_dist = i64::MAX;
 
-                        let radians = (_rotation as f64 / 1000.0) * std::f64::consts::PI / 180.0;
-                        let cos_r = radians.cos();
-                        let sin_r = radians.sin();
+                        let rotation = Rotation(_rotation);
 
                         for pd in &fp.pads {
-                            let px = pd.position.x.0 as f64;
-                            let py = pd.position.y.0 as f64;
-                            let rx = (px * cos_r - py * sin_r) as i64;
-                            let ry = (px * sin_r + py * cos_r) as i64;
-                            let wx = _comp_pos.x.0 + rx;
-                            let wy = _comp_pos.y.0 + ry;
-                            let dist = (wx - pad_pos.x.0).abs() + (wy - pad_pos.y.0).abs();
+                            let at = cypcb_world::components::place_pad(
+                                _comp_pos,
+                                pd.position,
+                                rotation,
+                            );
+                            let dist = (at.x.0 - pad_pos.x.0).abs() + (at.y.0 - pad_pos.y.0).abs();
                             if dist < best_dist {
                                 best_dist = dist;
                                 best_pad = Some(pd);
@@ -1134,14 +1131,14 @@ impl PcbEngine {
                         }
 
                         if let Some(pd) = best_pad {
-                            let hw = pd.size.0 .0 / 2; // half width
-                            let hh = pd.size.1 .0 / 2; // half height
-                                                       // Compute tight AABB for rotated rectangle.
-                                                       // |cos|*hw + |sin|*hh gives the axis-aligned half-extent.
-                            let abs_cos = cos_r.abs();
-                            let abs_sin = sin_r.abs();
-                            let half_x = (abs_cos * hw as f64 + abs_sin * hh as f64) as i64;
-                            let half_y = (abs_sin * hw as f64 + abs_cos * hh as f64) as i64;
+                            // The pad's own rectangle about its centre, turned
+                            // with the part and boxed.
+                            let half = cypcb_core::Rect::new(
+                                Point::new(Nm(-pd.size.0 .0 / 2), Nm(-pd.size.1 .0 / 2)),
+                                Point::new(Nm(pd.size.0 .0 / 2), Nm(pd.size.1 .0 / 2)),
+                            );
+                            let copper =
+                                cypcb_world::components::place_box(*pad_pos, half, rotation);
                             let layer_mask = if pd.layers.is_empty() {
                                 0xFFFFFFFF
                             } else {
@@ -1149,10 +1146,10 @@ impl PcbEngine {
                             };
                             entries.push(SpatialEntry::from_raw(
                                 *entity,
-                                pad_pos.x.0 - half_x,
-                                pad_pos.y.0 - half_y,
-                                pad_pos.x.0 + half_x,
-                                pad_pos.y.0 + half_y,
+                                copper.min.x.0,
+                                copper.min.y.0,
+                                copper.max.x.0,
+                                copper.max.y.0,
                                 layer_mask,
                             ));
                         }
@@ -1498,25 +1495,17 @@ impl PcbEngine {
             // clearance checker can do precise same-net exemption per pad, not per
             // component (which would incorrectly exempt all nets on the component).
             if let Some(fp) = self.footprint_lib.get(&comp.footprint) {
-                let radians = (comp.rotation_mdeg as f64 / 1000.0) * std::f64::consts::PI / 180.0;
-                let cos_r = radians.cos();
-                let sin_r = radians.sin();
-
                 for pad_def in &fp.pads {
                     // Look up which net this specific pad is on
                     let pad_key = format!("{}.{}", comp.refdes, pad_def.number);
                     if let Some(&net_id) = pin_to_net.get(&pad_key) {
-                        // Compute world position (rotate pad around component origin)
-                        let px = pad_def.position.x.0 as f64;
-                        let py = pad_def.position.y.0 as f64;
-                        let rx = (px * cos_r - py * sin_r) as i64;
-                        let ry = (px * sin_r + py * cos_r) as i64;
-                        let wx = comp.x_nm + rx;
-                        let wy = comp.y_nm + ry;
-
                         // Spawn pad entity with NetId for per-pad DRC
                         let pad_marker = PadInstance::new(comp_entity);
-                        let pad_pos = Position(Point::new(Nm(wx), Nm(wy)));
+                        let pad_pos = Position(cypcb_world::components::place_pad(
+                            Point::new(Nm(comp.x_nm), Nm(comp.y_nm)),
+                            pad_def.position,
+                            rotation,
+                        ));
                         self.world.spawn_entity((pad_marker, net_id, pad_pos));
                     }
                 }
@@ -2231,20 +2220,14 @@ impl PcbEngine {
                             .unwrap_or_default();
 
                         let pad_offset = self.get_pad_offset(&footprint_name, &conn.pin);
-                        let rotation = self.world.get::<Rotation>(entity).map(|r| r.0).unwrap_or(0);
+                        let rotation = self
+                            .world
+                            .get::<Rotation>(entity)
+                            .copied()
+                            .unwrap_or(Rotation::ZERO);
+                        let pin = cypcb_world::components::place_pad(pos.0, pad_offset, rotation);
 
-                        // Apply rotation to pad offset
-                        let radians = (rotation as f64 / 1000.0) * (std::f64::consts::PI / 180.0);
-                        let cos = radians.cos();
-                        let sin = radians.sin();
-
-                        let rotated_x = pad_offset.0 * cos - pad_offset.1 * sin;
-                        let rotated_y = pad_offset.0 * sin + pad_offset.1 * cos;
-
-                        let pin_x = pos.0.x.0 as f64 + rotated_x;
-                        let pin_y = pos.0.y.0 as f64 + rotated_y;
-
-                        pin_positions.push((pin_x, pin_y));
+                        pin_positions.push((pin.x.0 as f64, pin.y.0 as f64));
                     }
                 }
             }
@@ -2268,16 +2251,16 @@ impl PcbEngine {
     }
 
     /// Get pad offset from component origin for a given footprint and pin.
-    fn get_pad_offset(&self, footprint_name: &str, pin: &str) -> (f64, f64) {
+    fn get_pad_offset(&self, footprint_name: &str, pin: &str) -> Point {
         if let Some(fp) = self.footprint_lib.get(footprint_name) {
             for pad in &fp.pads {
                 if pad.number == pin {
-                    return (pad.position.x.0 as f64, pad.position.y.0 as f64);
+                    return pad.position;
                 }
             }
         }
         // Default to origin if pad not found
-        (0.0, 0.0)
+        Point::ORIGIN
     }
 }
 
