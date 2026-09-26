@@ -1524,6 +1524,21 @@ async function init(): Promise<void> {
    * gets its blocks whether it arrived from a template, the editor, a reload
    * or the undo stack.
    */
+  /**
+   * What a load said, as the end of a status line, or '' when it said nothing.
+   *
+   * Six places loaded a design and dropped the answer, so the status line read
+   * "Routed 6 segments" over copper that had not loaded. Parse errors reach
+   * the editor on their own, with a line; a footprint the engine refused has
+   * no line, and reaches a person only through here.
+   */
+  function loadTrouble(errors: string): string {
+    if (!errors) return '';
+    const lines = errors.split('\n');
+    const more = lines.length > 1 ? ` (and ${lines.length - 1} more)` : '';
+    return `the board did not load cleanly: ${lines[0]}${more}`;
+  }
+
   function loadDesign(source: string, kind: DesignKind = 'cypcb'): string {
     const errors = loadDesignInto(engine, designOf(source, kind));
     if (kind === 'kicad_pcb') return errors;
@@ -1607,9 +1622,16 @@ async function init(): Promise<void> {
    */
   function reloadAfterLcscFetch(source: string): void {
     console.log('[LCSC] reloadAfterLcscFetch — re-parsing source with registered footprints');
-    loadDesign(source);
+    const trouble = loadTrouble(loadDesign(source));
     const updatedSnap = pullSnapshot();
     console.log('[LCSC] After re-parse: components =', updatedSnap.components?.length, 'pads on first =', updatedSnap.components?.[0]?.pads?.length);
+    if (trouble) statusText.textContent = `Footprints fetched, but ${trouble}`;
+    // The part the fetch filled in was underlined as an unknown footprint by
+    // the load before it, and stayed underlined over a board that had it.
+    const monaco = getMonacoModule();
+    if (monaco && editorInstance) {
+      updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), updatedSnap.violations || []);
+    }
     forceRender2D();
     // Re-generate thumbnail now that footprints are loaded
     if (currentFilePath) {
@@ -1721,7 +1743,7 @@ async function init(): Promise<void> {
     },
     onNewBlank: (source) => {
       undoStack.clear();
-      loadDesign(source);
+      const trouble = loadTrouble(loadDesign(source));
       lastLoadedSource = source;
       const snap = pullSnapshot();
 
@@ -1740,7 +1762,7 @@ async function init(): Promise<void> {
       if (is3DActive && renderer3d) renderer3d.updateBoard(snap, layers);
 
       currentFilePath = null;
-      statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      statusText.textContent = trouble ? `New board: ${trouble}` : usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
       hideProjectManager();
       dirty = true;
     },
@@ -1994,7 +2016,7 @@ async function init(): Promise<void> {
     loadedKind = kind === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
     // Every other loader keeps the text, and routing reads it from here.
     lastLoadedSource = source;
-    loadDesign(source, loadedKind);
+    const errors = loadDesign(source, loadedKind);
     const snap = pullSnapshot();
     if (snap.board) {
       viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
@@ -2010,6 +2032,8 @@ async function init(): Promise<void> {
     hideProjectManager();
     dirty = true;
     statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+    // The caller is a test, and a test cannot read what it is not handed.
+    return errors;
   };
 
   // Expose debug routing for console: __debugRoute()
@@ -3065,9 +3089,10 @@ async function init(): Promise<void> {
       return;
     }
 
+    let trouble = '';
     if (lastLoadedSource) {
       const merged = mergeTracesIntoDsl(lastLoadedSource, traces);
-      loadDesign(merged);
+      trouble = loadTrouble(loadDesign(merged));
       lastLoadedSource = merged;
       pullSnapshot();
       syncEditorTraces();
@@ -3081,7 +3106,7 @@ async function init(): Promise<void> {
       ? `Routed ${routed} segments (${unrouted} unrouted) in ${elapsed}s`
       : `Routed ${routed} segments in ${elapsed}s`;
     console.log(`[Routing] ${message}`);
-    finishRouting(message);
+    finishRouting(trouble ? `${message}, but ${trouble}` : message);
   }
 
   /**
@@ -3171,7 +3196,7 @@ async function init(): Promise<void> {
     }
 
     const merged = mergeTracesIntoDsl(lastLoadedSource, traces);
-    loadDesign(merged);
+    const trouble = loadTrouble(loadDesign(merged));
     lastLoadedSource = merged;
     pullSnapshot();
     syncEditorTraces();
@@ -3180,9 +3205,9 @@ async function init(): Promise<void> {
 
     const routed = typeof parsed.routed === 'number' ? parsed.routed : 0;
     const unrouted = typeof parsed.unrouted === 'number' ? parsed.unrouted : 0;
-    statusText.textContent = unrouted > 0
+    statusText.textContent = (unrouted > 0
       ? `Tuned: ${routed} segments (${unrouted} unrouted)`
-      : `Tuned: ${routed} segments`;
+      : `Tuned: ${routed} segments`) + (trouble ? `, but ${trouble}` : '');
   }
 
   function triggerRouting(): void {
@@ -4167,7 +4192,7 @@ async function init(): Promise<void> {
       console.log('[Desktop] New file');
 
       // Clear the design
-      loadDesign('');
+      const trouble = loadTrouble(loadDesign(''));
       pullSnapshot();
 
       // Clear editor content if initialized
@@ -4188,7 +4213,9 @@ async function init(): Promise<void> {
       lastLoadedSource = null;
 
       // Update status
-      statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
+      statusText.textContent = trouble
+        ? `New file: ${trouble}`
+        : usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
 
       hideSearchPanel();
       showProjectManager();
