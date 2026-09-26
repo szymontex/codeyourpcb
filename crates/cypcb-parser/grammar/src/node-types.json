@@ -1244,6 +1244,16 @@
           }
         ]
       },
+      "rotation": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "rotation_property",
+            "named": true
+          }
+        ]
+      },
       "shape": {
         "multiple": false,
         "required": true,

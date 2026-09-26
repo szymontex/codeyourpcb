@@ -2245,7 +2245,11 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
                         // SMD pads on top copper with paste and mask
                         vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask]
                     },
-                    rotation: Rotation::ZERO,
+                    rotation: p
+                        .rotation
+                        .as_ref()
+                        .map(|r| Rotation::from_degrees(r.angle))
+                        .unwrap_or(Rotation::ZERO),
                 }
             })
             .collect();

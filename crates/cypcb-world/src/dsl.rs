@@ -1167,10 +1167,19 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
             };
             let _ = write!(
                 out,
-                "    pad {} {shape} at {}mm, {}mm size {}mm x {}mm",
+                "    pad {} {shape} at {}mm, {}mm",
                 pad_name_as_written(&pad.number),
                 format_mm(pad.position.x.0 as f64 / 1e6),
-                format_mm(pad.position.y.0 as f64 / 1e6),
+                format_mm(pad.position.y.0 as f64 / 1e6)
+            );
+            // The pad's turn inside its footprint. Written only when it has
+            // one, so a design whose pads stand square reads as it always has.
+            if pad.rotation != Rotation::ZERO {
+                let _ = write!(out, " rotate {}", pad.rotation.0 as f64 / 1000.0);
+            }
+            let _ = write!(
+                out,
+                " size {}mm x {}mm",
                 format_mm(pad.size.0 .0 as f64 / 1e6),
                 format_mm(pad.size.1 .0 as f64 / 1e6)
             );
