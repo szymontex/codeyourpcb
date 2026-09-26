@@ -123,7 +123,8 @@ fn a_fetched_arc_becomes_ink_instead_of_being_dropped() {
         radius: 1_000_000,
         width: 150_000,
         start_angle: 0.0,
-        end_angle: 90.0,
+        end_angle: std::f64::consts::FRAC_PI_2,
+        layer: None,
     };
 
     let shapes = quarter.to_shapes();
@@ -158,6 +159,7 @@ fn a_fetched_arc_becomes_ink_instead_of_being_dropped() {
         width: 150_000,
         start_angle: 0.0,
         end_angle: 0.0,
+        layer: None,
     };
     assert_eq!(whole.to_shapes().len(), 32, "a full turn is 32 segments");
 }
@@ -174,7 +176,7 @@ fn the_snapshot_carries_the_legend_the_engine_holds() {
         {"type":"segment","x1":-1000000,"y1":600000,"x2":1000000,"y2":600000,"width":150000},
         {"type":"circle","cx":-1200000,"cy":0,"radius":150000,"width":150000},
         {"type":"arc","cx":0,"cy":0,"radius":800000,"width":150000,
-         "start_angle":0.0,"end_angle":90.0}
+         "startAngle":0.0,"endAngle":1.5707963267948966}
     ]"#;
     assert!(engine.register_footprint("MARKED", PADS, legend).is_empty());
 

@@ -1,0 +1,78 @@
+[
+  {
+    "number": "",
+    "x_nm": -2890012,
+    "y_nm": 2604999,
+    "width_nm": 649986,
+    "height_nm": 649986,
+    "shape": "circle",
+    "layer_mask": 0,
+    "drill_nm": 649986
+  },
+  {
+    "number": "",
+    "x_nm": 2890012,
+    "y_nm": 2604999,
+    "width_nm": 649986,
+    "height_nm": 649986,
+    "shape": "circle",
+    "layer_mask": 0,
+    "drill_nm": 649986
+  },
+  {
+    "number": "SH",
+    "x_nm": -4320007,
+    "y_nm": 3104998,
+    "width_nm": 999998,
+    "height_nm": 2099996,
+    "shape": "oblong",
+    "layer_mask": 3,
+    "drill_nm": 599999,
+    "slot_nm": [
+      599999,
+      1699997
+    ]
+  },
+  {
+    "number": "SH",
+    "x_nm": 4320007,
+    "y_nm": 3104998,
+    "width_nm": 999998,
+    "height_nm": 2099996,
+    "shape": "oblong",
+    "layer_mask": 3,
+    "drill_nm": 599999,
+    "slot_nm": [
+      599999,
+      1699997
+    ]
+  },
+  {
+    "number": "SH",
+    "x_nm": -4320007,
+    "y_nm": -1075004,
+    "width_nm": 999998,
+    "height_nm": 1799996,
+    "shape": "oblong",
+    "layer_mask": 3,
+    "drill_nm": 599999,
+    "slot_nm": [
+      599999,
+      1399997
+    ]
+  },
+  {
+    "number": "SH",
+    "x_nm": 4320007,
+    "y_nm": -1075004,
+    "width_nm": 999998,
+    "height_nm": 1799996,
+    "shape": "oblong",
+    "layer_mask": 3,
+    "drill_nm": 599999,
+    "slot_nm": [
+      599999,
+      1399997
+    ]
+  }
+]

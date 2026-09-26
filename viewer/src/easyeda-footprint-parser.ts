@@ -140,6 +140,10 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
           const silk = parseSilkARC(shape, ox, oy);
           if (silk) allSilk.push(silk);
         }
+        if (shape.startsWith('HOLE~')) {
+          const hole = parseHOLEShape(shape, ox, oy);
+          if (hole) allPads.push(hole);
+        }
       }
 
       if (allPads.length > 0) {
@@ -197,6 +201,10 @@ function parseLIBBlock(
       const s = parseSilkARC(subShape, ox, oy);
       if (s) silk.push(s);
     }
+    if (subShape.startsWith('HOLE~')) {
+      const hole = parseHOLEShape(subShape, ox, oy);
+      if (hole) pads.push(hole);
+    }
   }
 
   return { pads, silk, ox, oy };
@@ -214,6 +222,18 @@ function parseLIBBlock(
  * SHAPE values: ELLIPSE, RECT, OVAL, POLYGON
  * LAYERID: 1=TopCopper, 2=BottomCopper, 11=MultiLayer(THT)
  * Coordinates are absolute in EasyEDA units; we subtract origin to get relative.
+ *
+ * HOLER is a radius. The format document names it `holeR` and describes it
+ * as 孔直径, a diameter; measured 2026-09-26 against GCT USB4105 (drawing B4,
+ * 18/12/23), the slot the drawing gives as 0.60 x 1.70mm arrives as HOLER
+ * 1.378 (0.35mm) and HOLELENGTH 6.6929 (1.70mm).
+ *
+ * ROTATION turns the pad about its centre. The format document
+ * (docs.easyeda.com EasyEDA-Format-Standard, read 2026-09-26) gives no
+ * direction for it, so only the quarter turns are read: a rectangle, an oval
+ * and a slot turned by 90 or 270 degrees are the same shapes with width and
+ * height swapped, whichever way they turned. Any other angle is read as no
+ * turn and named in `approximated`.
  */
 function parsePADShape(
   padStr: string,
@@ -233,16 +253,41 @@ function parsePADShape(
   // fields[7] = net (empty for footprint definitions)
   const number = fields[8];
   const holeR = parseFloat(fields[9]) || 0;
+  const rotation = parseFloat(fields[11]) || 0;
+  const holeLength = parseFloat(fields[13]) || 0;
 
   if (isNaN(absX) || isNaN(absY) || isNaN(width) || isNaN(height)) return null;
   if (!number) return null;
 
   const [relX, relY] = footprintPoint(absX, absY, originX, originY);
-  const widthNm = width * EEDA_TO_NM;
-  const heightNm = height * EEDA_TO_NM;
+  let widthNm = width * EEDA_TO_NM;
+  let heightNm = height * EEDA_TO_NM;
 
   // Hole radius → diameter in nm (holeR is radius in EasyEDA units)
   const drillNm = holeR > 0 ? Math.round(holeR * 2 * EEDA_TO_NM) : null;
+
+  // A HOLELENGTH longer than the hole is a slot. It runs along the side of
+  // the pad with room for it, before the pad turns - the reading
+  // easyeda2kicad's `drill_to_ki` makes (fff10a38, read 2026-09-26), and
+  // the one that puts USB4105's 1.70mm slots along its 2.10mm pads.
+  let slotNm: [number, number] | null = null;
+  if (drillNm && holeLength * EEDA_TO_NM > drillNm) {
+    const lengthNm = holeLength * EEDA_TO_NM;
+    slotNm = heightNm > widthNm
+      ? [drillNm, lengthNm]
+      : [lengthNm, drillNm];
+  }
+
+  const quarterTurns = ((Math.round(rotation / 90) % 4) + 4) % 4;
+  if (Math.abs(rotation - Math.round(rotation / 90) * 90) > 1e-6) {
+    // A round pad with a round hole is the same at every angle.
+    if (!(shapeType === 'ELLIPSE' && width === height && !slotNm)) {
+      approximated.push(`pad ${number} states rotation ${rotation}`);
+    }
+  } else if (quarterTurns % 2 === 1) {
+    [widthNm, heightNm] = [heightNm, widthNm];
+    if (slotNm) slotNm = [slotNm[1], slotNm[0]];
+  }
 
   // Map EasyEDA shape to our shape names
   // A shape this parser has no word for becomes a rectangle and says which
@@ -290,6 +335,47 @@ function parsePADShape(
     shape,
     layer_mask: layerMask,
     drill_nm: drillNm ? Math.round(drillNm) : null,
+    ...(slotNm ? { slot_nm: [Math.round(slotNm[0]), Math.round(slotNm[1])] as [number, number] } : {}),
+  };
+}
+
+/**
+ * Parse a HOLE shape: a drilled hole with no copper, which is what a
+ * connector's locating pegs sit in.
+ *
+ * Format: HOLE~X~Y~RADIUS~GID~LOCKED
+ *
+ * The third field is a radius, like a pad's HOLER. The format document calls
+ * it `holeR` and describes it as a diameter; measured 2026-09-26 on two
+ * parts against their drawings, it is half the hole: HRO TYPE-C-31-M-12
+ * writes 1.1811 (0.300mm) for Ø0.60, GCT USB4105 writes 1.2795 (0.325mm)
+ * for Ø0.65.
+ *
+ * It becomes a pad on no copper layer with a drill, which is how the engine
+ * knows a non-plated hole: the drill file lists it apart, and no copper file
+ * flashes it.
+ */
+function parseHOLEShape(holeStr: string, originX: number, originY: number): PadInfo | null {
+  const fields = holeStr.split('~');
+  if (fields.length < 4) return null;
+
+  const absX = parseFloat(fields[1]);
+  const absY = parseFloat(fields[2]);
+  const radius = parseFloat(fields[3]);
+  if (isNaN(absX) || isNaN(absY) || !(radius > 0)) return null;
+
+  const [relX, relY] = footprintPoint(absX, absY, originX, originY);
+  const diameterNm = Math.round(radius * 2 * EEDA_TO_NM);
+
+  return {
+    number: '',
+    x_nm: Math.round(relX),
+    y_nm: Math.round(relY),
+    width_nm: diameterNm,
+    height_nm: diameterNm,
+    shape: 'circle',
+    layer_mask: 0,
+    drill_nm: diameterNm,
   };
 }
 

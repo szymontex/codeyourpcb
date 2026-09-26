@@ -1546,46 +1546,7 @@ impl PcbEngine {
     ) -> cypcb_world::footprint::Footprint {
         use cypcb_world::footprint::{Footprint, PadDef};
 
-        let mut pad_defs: Vec<PadDef> = Vec::with_capacity(pads.len());
-
-        for pad in pads {
-            // Convert shape string to PadShape
-            let shape = match pad.shape.as_str() {
-                "circle" => PadShape::Circle,
-                "roundrect" => PadShape::RoundRect { corner_ratio: 25 },
-                "oblong" => PadShape::Oblong,
-                _ => PadShape::Rect, // default to rect
-            };
-
-            // Convert layer_mask to Vec<Layer>
-            let mut layers: Vec<Layer> = Vec::new();
-            if pad.layer_mask & 1 != 0 {
-                layers.push(Layer::TopCopper);
-            }
-            if pad.layer_mask & 2 != 0 {
-                layers.push(Layer::BottomCopper);
-            }
-            for i in 0..30 {
-                if pad.layer_mask & (1 << (2 + i)) != 0 {
-                    layers.push(Layer::Inner(i));
-                }
-            }
-            // If no layers specified, default to top copper
-            if layers.is_empty() {
-                layers.push(Layer::TopCopper);
-            }
-
-            pad_defs.push(PadDef {
-                number: pad.number.clone(),
-                shape,
-                position: Point::new(Nm(pad.x_nm), Nm(pad.y_nm)),
-                size: (Nm(pad.width_nm), Nm(pad.height_nm)),
-                drill: pad.drill_nm.map(Nm),
-                slot: pad.slot_nm.map(|(w, h)| (Nm(w), Nm(h))),
-                layers,
-                mask_margin: None,
-            });
-        }
+        let pad_defs: Vec<PadDef> = pads.iter().map(PadInfo::to_pad_def).collect();
 
         // Calculate bounds from pads
         let mut min_x = i64::MAX;
@@ -2738,7 +2699,8 @@ mod tests {
         let silk = r#"[
             {"type":"segment","x1":-500000,"y1":0,"x2":500000,"y2":0,"width":150000},
             {"type":"circle","cx":0,"cy":600000,"radius":100000,"width":150000},
-            {"type":"arc","cx":0,"cy":0,"radius":100000,"width":150000}
+            {"type":"arc","cx":0,"cy":0,"radius":100000,"width":150000,
+             "startAngle":0.0,"endAngle":0.0}
         ]"#;
 
         let mut engine = PcbEngine::new();
@@ -2753,7 +2715,7 @@ mod tests {
 
         // The segment and the circle survive as themselves. The arc has no
         // shape in the model, so it arrives as ink: 32 segments to the turn,
-        // and this one states no angles, which means all the way round.
+        // and this one ends where it starts, which means all the way round.
         assert_eq!(
             stored.len(),
             2 + 32,

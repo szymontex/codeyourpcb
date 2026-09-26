@@ -1,0 +1,12 @@
+[
+  {
+    "type": "arc",
+    "cx": 0,
+    "cy": 0,
+    "radius": 2540000,
+    "startAngle": 0,
+    "endAngle": 1.5707963267948966,
+    "width": 254000,
+    "layer": "top"
+  }
+]
