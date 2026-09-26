@@ -749,7 +749,8 @@ pub fn mirrored_to_bottom(footprint: &Footprint) -> Footprint {
                 slot: None,
                 layers: pad.layers.iter().map(|layer| flip(*layer)).collect(),
                 mask_margin: None,
-                rotation: Rotation::ZERO,
+                // A mirror runs a turn the other way.
+                rotation: Rotation((-pad.rotation.0).rem_euclid(360_000)),
             })
             .collect(),
         bounds: mirror_rect(footprint.bounds),
@@ -1082,5 +1083,19 @@ mod tests {
         let unturned =
             header_pad(Rotation::ZERO).outline(Point::from_mm(10.0, 10.0), Rotation::DEG_90);
         assert_eq!(outline.centre, unturned.centre);
+    }
+
+    #[test]
+    fn a_pad_turned_on_the_top_turns_the_other_way_on_the_bottom() {
+        let footprint = Footprint {
+            name: "HDR".into(),
+            description: String::new(),
+            pads: vec![header_pad(Rotation::DEG_90)],
+            bounds: Rect::from_points(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::from_points(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+        };
+        let bottom = mirrored_to_bottom(&footprint);
+        assert_eq!(bottom.pads[0].rotation, Rotation::DEG_270);
     }
 }
