@@ -2,9 +2,12 @@
 //!
 //! `cargo test --release -p cypcb-autoroute --test how_many_rows_one_contact_gets -- --ignored --nocapture`
 //!
-//! `ClearanceRule` reports per pair of *segments*, and a trace is a polyline:
-//! two traces running beside each other for 10mm are one contact and as many
-//! rows as they have segments in that stretch. Nothing had counted the
+//! `ClearanceRule` reported per pair of *segments* until 2026-09-26, and a
+//! trace is a polyline: two traces running beside each other for 10mm were one
+//! contact and as many rows as they had segments in that stretch. It reports
+//! per place now - one unbroken run against one pad, via or other net's trace -
+//! and what is left above one row per pair is a pair in fault at separate
+//! places: 219 rows for 152 contacts, where it was 319. Nothing had counted the
 //! difference until a neck experiment made it visible - necking cut two extra
 //! segments per run and the violation count rose by 171 on `multi_ic` while
 //! the set of feature pairs in fault did not change at all.
@@ -117,5 +120,5 @@ fn how_many_rows_one_contact_gets() {
     );
     eprintln!();
     eprintln!("Only `clearance` is counted. The other kinds report per feature");
-    eprintln!("rather than per pair of segments and do not multiply this way.");
+    eprintln!("rather than per place and do not multiply this way.");
 }

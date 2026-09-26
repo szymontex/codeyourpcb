@@ -125,16 +125,20 @@ already. Two of them are called "violations" by something that prints them:
   of the composite.
 
 - **Contacts**: how many pairs of features the clearance violations describe.
-  The clearance rule reports per pair of *segments*, and a trace is a chain of
-  them: two features that touch along a run report once for each segment that
-  takes part, so one contact can be two dozen rows. On a routed `multi_ic` the
-  scorer reads **454 violations and 86 contacts**.
+  The clearance rule reports one row per *place*: one unbroken run of a trace
+  too close to one pad, one via or one other net's trace. A pair of features
+  is several rows only where it is too close in several separate places.
 
   Every count in this document is the row count, and that is deliberate:
-  decided 2026-08-23, the rule keeps counting segment pairs because a violation
-  is a *place* - two segments of one trace touching a pad at two points are two
-  places an etch can fail - and because these numbers are regression ratchets
-  before they are a report, where the finer count is the sensitive one.
+  decided 2026-08-23, a violation is a *place* - a trace touching a pad at two
+  points is two places an etch can fail - and these numbers are regression
+  ratchets before they are a report, where the finer count is the sensitive
+  one. Until 2026-09-26 the rule counted a place once per pair of segments and
+  once per pair of trace entities that met there, so a run along one pad was
+  as many rows as it had segments, and the same board counted differently as
+  the router held it and as its file read it back. On the shipped benchmarks
+  that was 319 rows for 152 contacts; counted per place it is 219 for the same
+  152. Tables dated before then were counted the old way.
   `RoutingScore::clearance_contacts` is published beside it, and `cypcb check`
   prints both when they differ, so a reader who wants "how many places on this
   board are in fault" has that number without any table here moving.
@@ -316,16 +320,16 @@ pad blocks its own rectangle with two cells of reach now, rather than a disc of
 its longer half-side, and every board routes differently for it. The sweep was
 re-run that day and only the spreads are carried into
 `cypcb_autoroute::noise_band`, which is where anything reading a band should
-read it: **stm32_breakout 64 / 48, multi_ic 35 / 15, shift_driver 26 / 15,
-qfp_fanout 61 / 46, plane_board 0 / 0**. The per-price cells above are not
+read it; the last re-run is dated there. The per-price cells above are not
 re-run here - re-run
 `cargo test --release -p cypcb-autoroute --test via_price_sweep how_much_of_the_price_is_noise -- --ignored --nocapture`
 before quoting one.
 
-`plane_board` is the exception that sharpens the rule: it routes identically at
-every price in the range, to the violation. A board with a ground plane has far
-fewer nets competing for the same cells, so the rip-up order it produces does
-not change when the price does. Every board that wobbles is a board where the
+`plane_board` was the exception that sharpened the rule: until 2026-09-26 it
+routed identically at every price in the range, to the violation, and it is one
+violation apart at one price now. A board with a ground plane has far
+fewer nets competing for the same cells, so the rip-up order it produces barely
+changes when the price does. Every board that wobbles is a board where the
 negotiation has room to go differently.
 
 **The bands moved when the fixtures were repaired, and three of them widened.**

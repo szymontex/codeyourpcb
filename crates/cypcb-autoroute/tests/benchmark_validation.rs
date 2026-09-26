@@ -574,18 +574,44 @@ const DRC_RATCHETS: &[Ratchet] = &[
     //
     // board            routed        band      ratchet was   ratchet is
     // multi_ic         505 /  63    35 / 15    541 /  81     540 /  78
+    //
+    // Re-baselined 2026-09-26, and the router did not move: every board routes
+    // to the same number of routes before and after, 27 / 913 / 1115 / 672 /
+    // 1430 / 208. The clearance rule counts one row per place where a trace
+    // comes too close to another net's copper - one run of copper against one
+    // pad, via or other net's trace - rather than one per pair of trace
+    // entities, one per segment, or one per part; see `one_row_per_place` in
+    // `cypcb-drc`. The routed values moved by that alone: stm32_breakout
+    // 149 / 71 -> 120 / 50, multi_ic 493 / 64 -> 479 / 51, qfp_fanout
+    // 225 / 98 -> 170 / 67, plane_board 22 / 4 -> 20 / 2, led_blink and
+    // shift_driver not at all. `multi_ic`'s recorded 499 had already drifted to
+    // 493 before the change.
+    //
+    // The bands were measured again the same day, on the tree before the
+    // change and after it; see `noise_band`. Every one of them had drifted
+    // since 2026-08-28. Every ratchet tightens or holds, by the same
+    // arithmetic as every row here: routed plus band.
+    //
+    // board            routed        band       ratchet was   ratchet is
+    // led_blink          1 /   0     0 /  0       1 /   0       1 /   0
+    // stm32_breakout   120 /  50    13 /  8     213 / 119     133 /  58
+    // multi_ic         479 /  51    12 / 11     534 /  79     491 /  62
+    // shift_driver      16 /   1     6 /  2      42 /  16      22 /   3
+    // qfp_fanout       170 /  67    84 / 50     286 / 144     254 / 117
+    // plane_board       20 /   2     1 /  1      22 /   4      21 /   3
     ("led_blink.kicad_pcb", "led_blink", 1, 0, 1, 0),
     // Until 2026-09-25 this row was 202 / 104 over a routed 138 / 56, measured
     // on a mirror image of the board: the KiCad reader kept the file's
-    // downward Y. Read the right way up it routes 149 / 71; the band is the
-    // one measured on the mirrored board, and has not been measured again.
+    // downward Y. Read the right way up it routes 149 / 71; the band was the
+    // one measured on the mirrored board until it was measured again on
+    // 2026-09-26 - see the table above `led_blink`.
     (
         "stm32_breakout.kicad_pcb",
         "stm32_breakout",
-        213,
-        119,
-        149,
-        71,
+        133,
+        58,
+        120,
+        50,
     ),
     // Re-baselined 2026-08-23 for `ViaSpanRule`, and the router did not move:
     // measured with the rule unregistered, `multi_ic` routes to **381**
@@ -639,13 +665,14 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // became 534 / 79 over 499 / 64, shift_driver 41 / 15 over 15 / 0 became
     // 42 / 16 over 16 / 1, qfp_fanout 357 / 158 over 296 / 112 became 286 / 144
     // over 225 / 98.
-    ("multi_ic.kicad_pcb", "multi_ic", 534, 79, 499, 64),
-    ("shift_driver.kicad_pcb", "shift_driver", 42, 16, 16, 1),
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 286, 144, 225, 98),
-    // A band of zero is not a rounding: this board routes identically at every
-    // via price from 0.22 to 0.28, 28 violations and 13 shorts each time. Its
-    // ratchet is the measured value exactly, so any movement at all is a real
-    // change rather than weather.
+    ("multi_ic.kicad_pcb", "multi_ic", 491, 62, 479, 51),
+    ("shift_driver.kicad_pcb", "shift_driver", 22, 3, 16, 1),
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 254, 117, 170, 67),
+    // Until 2026-09-26 this board had a band of zero: it routed identically at
+    // every via price from 0.22 to 0.28, 28 violations and 13 shorts each
+    // time, and its ratchet was the measured value exactly. Measured again that
+    // day it routes one violation and one short apart at 0.22, so its band is
+    // 1 / 1 and its ratchet the routed value plus that.
     //
     // 34 to 37 on 2026-09-12, and the router did not get worse: `PadEntryRule`
     // was registered and started counting something nothing counted before.
@@ -688,7 +715,7 @@ const DRC_RATCHETS: &[Ratchet] = &[
     //
     // 20 / 3 -> 22 / 4 on 2026-09-25: the board read the right way up rather
     // than as a mirror image of the file.
-    ("plane_board.kicad_pcb", "plane_board", 22, 4, 22, 4),
+    ("plane_board.kicad_pcb", "plane_board", 21, 3, 20, 2),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

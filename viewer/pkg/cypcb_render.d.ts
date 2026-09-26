@@ -135,9 +135,10 @@ export class PcbEngine {
     /**
      * Get the last check's DRC violations as JSON.
      *
-     * This is the rule's own report: one entry per pair of features the
-     * clearance rule put in fault, which is one entry per pair of segments
-     * where two features touch along a run. The reading is grouped by contact
+     * This is the rule's own report: one entry per place the clearance rule
+     * put in fault - one unbroken run of a trace too close to one pad, via or
+     * other net's trace - so a pair of features in fault at two separate
+     * places is two entries. The reading is grouped by contact
      * where it is shown - `cypcb check`, the language server and the viewer's
      * error panel all do that - and the count here stays as the rule made it.
      *

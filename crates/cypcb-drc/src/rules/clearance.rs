@@ -8,7 +8,7 @@ use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::{NetConnections, NetId};
 use cypcb_world::BoardWorld;
 use hashbrown::{HashMap, HashSet};
-use rstar::AABB;
+use rstar::{Envelope, AABB};
 
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
@@ -58,6 +58,8 @@ impl DrcRule for ClearanceRule {
 
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
         let mut violations = Vec::new();
+        // Every contact on the board, before they are counted into places.
+        let mut found: Vec<Contact> = Vec::new();
         let min_clearance = rules.min_clearance;
 
         // Build entity -> NetId lookup for same-net exemption.
@@ -180,13 +182,26 @@ impl DrcRule for ClearanceRule {
             .fold(min_clearance, |acc, stated| acc.max(stated));
 
         for entry in &entries {
+            // A component is looked for from as far as its pads reach, not
+            // only its box in the index. That box is the courtyard moved to
+            // the part's position and never turned with it, so on a part
+            // rotated 90 degrees the pads stand outside it: C3 on
+            // `esp32_starter` has copper a trace overlaps, and the pair was
+            // only ever measured because another segment of the same trace
+            // entity reached the courtyard. Cut into one entity per segment,
+            // that trace lost the short. The pair is found from this side;
+            // the other side's query may still miss the box.
+            let mut reach = entry.envelope;
+            for pad in pad_map.get(&entry.entity.index()).into_iter().flatten() {
+                reach.merge(&pad.copper.bounds());
+            }
             let query_min = Point::new(
-                Nm(entry.envelope.lower()[0] - widest.0),
-                Nm(entry.envelope.lower()[1] - widest.0),
+                Nm(reach.lower()[0] - widest.0),
+                Nm(reach.lower()[1] - widest.0),
             );
             let query_max = Point::new(
-                Nm(entry.envelope.upper()[0] + widest.0),
-                Nm(entry.envelope.upper()[1] + widest.0),
+                Nm(reach.upper()[0] + widest.0),
+                Nm(reach.upper()[1] + widest.0),
             );
 
             // Phase 1: R*-tree query for candidates
@@ -283,8 +298,40 @@ impl DrcRule for ClearanceRule {
                         )
                     };
 
+                let side_a = side_of(a_idx, net_a, trace_a.is_some(), entry.layer_mask);
+                let side_b = side_of(b_idx, net_b, trace_b.is_some(), candidate.layer_mask);
+                // How far apart two contacts of these two sides can be and
+                // still be one place: the width of the trace copper that makes
+                // them. See `one_row_per_place`.
+                let reach =
+                    trace_a.map_or(0, |t| t.half_width) + trace_b.map_or(0, |t| t.half_width);
+
+                // The pair's requirement is the strictest thing either side
+                // asked for, never below the fab floor.
+                //
+                // A trace or via names one net. A component names several
+                // through its pins, and the spatial index boxes the whole
+                // component, so the strictest of its nets applies to all of it.
+                // That over-reports for a part with one high-voltage pin among
+                // many - and over-reporting a rule the design stated is the
+                // right way to be wrong, where staying silent is not.
+                let stated = |net: Option<&NetId>, connections: Option<&Vec<NetId>>| -> Nm {
+                    let single = net.and_then(|n| net_clearance.get(&n.id())).copied();
+                    let many = connections
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|n| net_clearance.get(&n.id()).copied());
+                    single
+                        .into_iter()
+                        .chain(many)
+                        .fold(Nm(0), |acc, s| acc.max(s))
+                };
+                let required = min_clearance
+                    .max(stated(net_a, nc_a))
+                    .max(stated(net_b, nc_b));
+
                 let mut no_copper_in_reach = false;
-                let contacts: Vec<(Point, i64)> = match (trace_a, trace_b) {
+                let contacts: Vec<Measured> = match (trace_a, trace_b) {
                     // Both are traces: segment-to-segment distance minus both
                     // half-widths, measured from both sides.
                     //
@@ -300,33 +347,41 @@ impl DrcRule for ClearanceRule {
                     // depended on which entity the spatial index happened to
                     // hand over first - so the same board scored 4 in memory
                     // and 5 after being written to a file and read back.
+                    //
+                    // Measured segment against segment, every pair of them,
+                    // because that is the one answer that does not depend on
+                    // how the copper is grouped into entities. Measuring a
+                    // segment against the other trace as a whole finds one
+                    // closest point per piece the other trace is cut into, so
+                    // the same net cut in two pieces gained a contact. Which
+                    // of these points are one place is decided once, over the
+                    // whole board, in `one_row_per_place`.
                     (Some(ta), Some(tb)) => {
-                        let mut both: Vec<(Point, i64)> = per_segment_to_trace(ta, tb)
+                        let (first, second) = if side_a <= side_b { (ta, tb) } else { (tb, ta) };
+                        let limit = required.0 + ta.half_width + tb.half_width;
+                        segment_pairs(first, second)
                             .into_iter()
-                            .chain(per_segment_to_trace(tb, ta))
-                            .map(|(at, seg_dist)| {
-                                (at, (seg_dist - ta.half_width - tb.half_width).max(0))
+                            .map(|(s, t, at, seg_dist)| {
+                                let pieces = if seg_dist < limit {
+                                    [
+                                        stretch(s, limit, |p| {
+                                            point_to_segment_distance(p, t.0, t.1)
+                                        }),
+                                        stretch(t, limit, |p| {
+                                            point_to_segment_distance(p, s.0, s.1)
+                                        }),
+                                    ]
+                                } else {
+                                    [(s.0, s.0); 2]
+                                };
+                                (
+                                    at,
+                                    (seg_dist - ta.half_width - tb.half_width).max(0),
+                                    pieces,
+                                    None,
+                                )
                             })
-                            .collect();
-                        // The two passes find the same contact from both ends
-                        // and each names the point on its own segment, so one
-                        // gap arrives as two points a few micrometres apart.
-                        // Two contacts closer to each other than the copper is
-                        // wide are the same contact - that is the scale the
-                        // measurement is made at, rather than a tolerance
-                        // chosen to make this case come out right.
-                        let same_contact = ta.half_width + tb.half_width;
-                        both.sort_by_key(|(at, distance)| (at.x.0, at.y.0, *distance));
-                        both.dedup_by(|(later, later_distance), (kept, kept_distance)| {
-                            let apart = (later.x.0 - kept.x.0).abs() + (later.y.0 - kept.y.0).abs();
-                            if apart <= same_contact {
-                                *kept_distance = (*kept_distance).min(*later_distance);
-                                true
-                            } else {
-                                false
-                            }
-                        });
-                        both
+                            .collect()
                     }
                     // One is a trace, the other is a via or a component
                     (Some(t), None) => {
@@ -335,14 +390,22 @@ impl DrcRule for ClearanceRule {
                                 no_copper_in_reach = true;
                                 Vec::new()
                             }
-                            Some(pads) => per_segment_to_copper(t, &copper_of_pads(&pads)),
-                            None => {
-                                per_segment_to_copper(t, &[&shape_of(b_idx, &candidate.envelope)])
-                            }
+                            Some(pads) => per_segment_to_copper(
+                                t,
+                                &copper_of_pads(&pads),
+                                required.0 + t.half_width,
+                            ),
+                            None => per_segment_to_copper(
+                                t,
+                                &[&shape_of(b_idx, &candidate.envelope)],
+                                required.0 + t.half_width,
+                            ),
                         };
                         measured
                             .into_iter()
-                            .map(|(at, seg_dist)| (at, (seg_dist - t.half_width).max(0)))
+                            .map(|(at, seg_dist, pieces, pad)| {
+                                (at, (seg_dist - t.half_width).max(0), pieces, pad)
+                            })
                             .collect()
                     }
                     (None, Some(t)) => {
@@ -351,12 +414,22 @@ impl DrcRule for ClearanceRule {
                                 no_copper_in_reach = true;
                                 Vec::new()
                             }
-                            Some(pads) => per_segment_to_copper(t, &copper_of_pads(&pads)),
-                            None => per_segment_to_copper(t, &[&shape_of(a_idx, &entry.envelope)]),
+                            Some(pads) => per_segment_to_copper(
+                                t,
+                                &copper_of_pads(&pads),
+                                required.0 + t.half_width,
+                            ),
+                            None => per_segment_to_copper(
+                                t,
+                                &[&shape_of(a_idx, &entry.envelope)],
+                                required.0 + t.half_width,
+                            ),
                         };
                         measured
                             .into_iter()
-                            .map(|(at, seg_dist)| (at, (seg_dist - t.half_width).max(0)))
+                            .map(|(at, seg_dist, pieces, pad)| {
+                                (at, (seg_dist - t.half_width).max(0), pieces, pad)
+                            })
                             .collect()
                     }
                     // Neither is a trace: vias and pads. A component stands for
@@ -364,7 +437,7 @@ impl DrcRule for ClearanceRule {
                     // box. A via leaves out the pads on its own net, as a trace
                     // does: a via dropped onto its own pin is a join, and
                     // measured against that pin it read as a short.
-                    (None, None) => vec![{
+                    (None, None) => vec![at_a_point({
                         let a_boxes = copper_of(a_idx, candidate.layer_mask, net_b);
                         let b_boxes = copper_of(b_idx, entry.layer_mask, net_a);
                         if a_boxes.as_ref().is_some_and(|p| p.is_empty())
@@ -401,90 +474,255 @@ impl DrcRule for ClearanceRule {
                                 ),
                             }
                         }
-                    }],
+                    })],
                 };
 
                 if no_copper_in_reach {
                     continue;
                 }
 
-                // The pair's requirement is the strictest thing either side
-                // asked for, never below the fab floor.
-                //
-                // A trace or via names one net. A component names several
-                // through its pins, and the spatial index boxes the whole
-                // component, so the strictest of its nets applies to all of it.
-                // That over-reports for a part with one high-voltage pin among
-                // many - and over-reporting a rule the design stated is the
-                // right way to be wrong, where staying silent is not.
-                let stated = |net: Option<&NetId>, connections: Option<&Vec<NetId>>| -> Nm {
-                    let single = net.and_then(|n| net_clearance.get(&n.id())).copied();
-                    let many = connections
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|n| net_clearance.get(&n.id()).copied());
-                    single
-                        .into_iter()
-                        .chain(many)
-                        .fold(Nm(0), |acc, s| acc.max(s))
-                };
-                let required = min_clearance
-                    .max(stated(net_a, nc_a))
-                    .max(stated(net_b, nc_b));
-
-                // One gap is one violation. Two segments of a trace meet at a
-                // corner, and when that corner is the nearest point to the
-                // other feature both report it - the same coordinate with the
-                // same message, twice. Per-segment reporting exists so a trace
-                // that violates in three places counts three; one place
-                // counted twice is not that, and every score in this project
-                // is charged per violation. Keyed by contact point, worst
-                // distance kept.
-                let mut worst_at: HashMap<(i64, i64), i64> = HashMap::new();
-                for (contact, distance) in contacts {
+                // Held the same way round however the loop reached the pair:
+                // the lower side first. The outer loop walks the spatial index,
+                // whose order is not guaranteed run to run, and a pair named in
+                // a different order is a different line of the report -
+                // measured on stm32_breakout, 308 violations both runs and 152
+                // printed lines different before pairs were ordered.
+                for (at, distance, stretch, pad) in contacts {
                     if distance >= required.0 {
                         continue;
                     }
-                    worst_at
-                        .entry((contact.x.0, contact.y.0))
-                        .and_modify(|held| *held = (*held).min(distance))
-                        .or_insert(distance);
-                }
-
-                // A map iterates in whatever order it likes, and a violation
-                // list that reshuffles run to run is one nobody can diff.
-                let mut gaps: Vec<((i64, i64), i64)> = worst_at.into_iter().collect();
-                gaps.sort_unstable();
-
-                for ((x, y), distance) in gaps {
-                    let contact = Point::new(Nm(x), Nm(y));
-                    // Report the pair the same way round however the loop
-                    // reached it, and point at the gap between the two
-                    // features rather than at whichever one the outer loop
-                    // happened to be holding. The outer loop walks the spatial
-                    // index, whose order is not guaranteed run to run, so
-                    // without this the same board reports the same violation
-                    // with a different name order and a different coordinate
-                    // on every run. Measured on stm32_breakout: 308 violations
-                    // both runs, 152 of the printed lines different.
-                    let (primary, secondary) = if a_idx <= b_idx {
-                        (entry, candidate)
+                    let (side_a, side_b) = (side_a.at_pad(pad), side_b.at_pad(pad));
+                    let (sides, entities) = if side_a <= side_b {
+                        ((side_a, side_b), (entry.entity, candidate.entity))
                     } else {
-                        (candidate, entry)
+                        ((side_b, side_a), (candidate.entity, entry.entity))
                     };
-                    violations.push(DrcViolation::clearance(
-                        primary.entity,
-                        secondary.entity,
-                        Nm(distance),
+                    found.push(Contact {
+                        sides,
+                        entities,
+                        at,
+                        distance,
                         required,
-                        contact,
-                    ));
+                        reach,
+                        stretch,
+                    });
                 }
             }
         }
 
+        violations.extend(one_row_per_place(found));
         violations
     }
+}
+
+/// One side of a contact: which copper it is, as far as counting goes.
+///
+/// A trace is its net on its layers. The file decides how a net's copper is cut
+/// into trace entities - the router holds one per net and layer, the reader one
+/// per `path` line, a KiCad board one per net and layer again - and none of
+/// those cuts is copper. A via is one piece of copper however the board was
+/// written, so it stands for itself, and so does a pad: a trace measured
+/// against a part is measured against each of its pads, and each pad is on a
+/// net of its own. Held as the part, a trace running too close along a row of
+/// a QFP's pads was one place against five nets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Side {
+    Trace {
+        net: u32,
+        layers: u32,
+    },
+    Piece(u32),
+    /// One pad of a part, or the disc of a via, known by the part and the
+    /// lower corner of the copper's core.
+    Pad {
+        part: u32,
+        at: [i64; 2],
+    },
+}
+
+impl Side {
+    /// This side narrowed to the one piece of its copper a contact was
+    /// measured against, when there is one and this side is not a trace.
+    fn at_pad(self, pad: Option<[i64; 2]>) -> Side {
+        match (self, pad) {
+            (Side::Piece(part), Some(at)) => Side::Pad { part, at },
+            _ => self,
+        }
+    }
+}
+
+fn side_of(index: u32, net: Option<&NetId>, is_trace: bool, layers: u32) -> Side {
+    match (is_trace, net) {
+        (true, Some(net)) => Side::Trace {
+            net: net.id(),
+            layers,
+        },
+        _ => Side::Piece(index),
+    }
+}
+
+/// A point where two sides come closer than their rule allows.
+struct Contact {
+    sides: (Side, Side),
+    /// The entities that met there, the same way round as `sides`. They name
+    /// the row; which of a net's trace entities it is does not change the name.
+    entities: (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity),
+    at: Point,
+    distance: i64,
+    required: Nm,
+    reach: i64,
+    /// The copper that is too close: on each side that is a trace, the part
+    /// of the segment nearer the other side than the rule allows. A via or a
+    /// pad against another contributes the point it was measured at.
+    stretch: [Stretch; 2],
+}
+
+/// A piece of a centreline, from one end to the other.
+type Stretch = ([i64; 2], [i64; 2]);
+
+/// One contact as measured, before it is known to be a violation: where, how
+/// far, the stretch of copper that is too close, and the pad it was measured
+/// against when the other side is a part.
+type Measured = (Point, i64, [Stretch; 2], Option<[i64; 2]>);
+
+/// A contact measured between two pieces that are not traces, which has a
+/// point and nothing along it.
+fn at_a_point((at, distance): (Point, i64)) -> Measured {
+    let p = [at.x.0, at.y.0];
+    (at, distance, [(p, p); 2], None)
+}
+
+/// The part of `segment` where `distance` stays under `limit`.
+///
+/// Distance to a convex piece of copper - a pad, a disc, another segment -
+/// taken along a straight line falls and then rises, so the part under any
+/// limit is one unbroken stretch. It is found by walking to the lowest point
+/// and bisecting out to each end; a segment that never gets under the limit
+/// gives the lowest point alone.
+fn stretch(segment: Stretch, limit: i64, distance: impl Fn([i64; 2]) -> i64) -> Stretch {
+    let (a, b) = segment;
+    let at = |u: f64| {
+        [
+            (a[0] as f64 + u * (b[0] - a[0]) as f64).round() as i64,
+            (a[1] as f64 + u * (b[1] - a[1]) as f64).round() as i64,
+        ]
+    };
+    let f = |u: f64| distance(at(u));
+    let (mut lo, mut hi) = (0.0_f64, 1.0_f64);
+    for _ in 0..64 {
+        let (m1, m2) = (lo + (hi - lo) / 3.0, hi - (hi - lo) / 3.0);
+        if f(m1) <= f(m2) {
+            hi = m2;
+        } else {
+            lo = m1;
+        }
+    }
+    let best = (lo + hi) / 2.0;
+    if f(best) >= limit {
+        let p = at(best);
+        return (p, p);
+    }
+    let edge = |mut inside: f64, mut outside: f64| {
+        if f(outside) < limit {
+            return outside;
+        }
+        for _ in 0..64 {
+            let middle = (inside + outside) / 2.0;
+            if f(middle) < limit {
+                inside = middle;
+            } else {
+                outside = middle;
+            }
+        }
+        inside
+    };
+    (at(edge(best, 0.0)), at(edge(best, 1.0)))
+}
+
+/// Every contact the board has, one row per place.
+///
+/// **One place:** a contact is the stretch of copper that is too close - the
+/// part of a trace segment nearer the other side than the rule allows, or the
+/// point where two pads or vias were measured. Two contacts between the same
+/// two sides are one place when those stretches come no further apart than
+/// the trace copper that makes them is wide: the half-widths of the traces on
+/// either side added together, zero where neither side is a trace. Taken
+/// transitively, so a trace that runs too close along a pad's edge across three
+/// segments is one place, and a trace that crosses another net twice is two.
+///
+/// Stretches rather than points, because a point is where one segment
+/// happened to be measured from. A run along a pad edge cut by a vertex in the
+/// middle of the straight gave two closest points 0.34mm apart on
+/// `esp32_starter` - `IO6` against U1 - where the copper is one unbroken run.
+///
+/// A place is reported at its worst contact, at the lowest point when two are
+/// equally bad. Nothing here reads an entity, so the rows are the same for any
+/// cut of the same copper into entities.
+fn one_row_per_place(mut found: Vec<Contact>) -> Vec<DrcViolation> {
+    found.sort_by_key(|c| (c.sides, c.at.x.0, c.at.y.0, c.distance));
+
+    let mut rows = Vec::new();
+    let mut start = 0;
+    while start < found.len() {
+        let mut end = start;
+        while end < found.len() && found[end].sides == found[start].sides {
+            end += 1;
+        }
+        let group = &found[start..end];
+
+        // Union-find over the group.
+        let mut parent: Vec<usize> = (0..group.len()).collect();
+        fn root(parent: &mut [usize], mut i: usize) -> usize {
+            while parent[i] != i {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+            i
+        }
+        for i in 0..group.len() {
+            for j in (i + 1)..group.len() {
+                let reach = group[i].reach.max(group[j].reach);
+                let apart = group[i]
+                    .stretch
+                    .iter()
+                    .flat_map(|p| {
+                        group[j]
+                            .stretch
+                            .iter()
+                            .map(move |q| segment_distance(p.0, p.1, q.0, q.1))
+                    })
+                    .min()
+                    .unwrap_or(i64::MAX);
+                if apart <= reach {
+                    let (ri, rj) = (root(&mut parent, i), root(&mut parent, j));
+                    parent[ri.max(rj)] = ri.min(rj);
+                }
+            }
+        }
+
+        let mut worst: HashMap<usize, usize> = HashMap::new();
+        for i in 0..group.len() {
+            let r = root(&mut parent, i);
+            let held = worst.entry(r).or_insert(i);
+            let (h, c) = (&group[*held], &group[i]);
+            if (c.distance, c.at.x.0, c.at.y.0) < (h.distance, h.at.x.0, h.at.y.0) {
+                *held = i;
+            }
+        }
+        let mut places: Vec<&Contact> = worst.values().map(|&i| &group[i]).collect();
+        places.sort_by_key(|c| (c.at.x.0, c.at.y.0));
+        for c in places {
+            rows.push(DrcViolation::clearance(
+                c.entities.0,
+                c.entities.1,
+                Nm(c.distance),
+                c.required,
+                c.at,
+            ));
+        }
+        start = end;
+    }
+    rows
 }
 
 /// One pad's copper, in board coordinates, with the layers and the net it is
@@ -835,16 +1073,6 @@ fn nearest_pad_pair(a: &[&PadBox], b: &[&PadBox]) -> Option<(Point, i64)> {
         .min_by_key(|(_, distance)| *distance)
 }
 
-/// Closest approach between a trace and the nearest of several pieces of
-/// copper.
-fn trace_to_nearest(trace: &TraceData, copper: &[&Copper]) -> (Point, i64) {
-    copper
-        .iter()
-        .map(|c| trace_to_copper_distance(trace, c))
-        .min_by_key(|(_, distance)| *distance)
-        .unwrap_or((Point::ORIGIN, i64::MAX))
-}
-
 /// Closest approach between two sets of copper, and where it happens.
 fn nearest_pair(a: &[&Copper], b: &[&Copper]) -> (Point, i64) {
     a.iter()
@@ -1054,56 +1282,73 @@ pub(crate) fn point_to_segment_distance(p: [i64; 2], s1: [i64; 2], s2: [i64; 2])
     segment_distance(p, p, s1, s2)
 }
 
-/// Minimum distance between trace centerlines (segment-to-segment).
-fn trace_to_trace_distance(a: &TraceData, b: &TraceData) -> (Point, i64) {
-    let mut best = (Point::new(Nm(0), Nm(0)), i64::MAX);
-    for seg_a in &a.segments {
-        for seg_b in &b.segments {
-            let (at, distance) = segment_closest(seg_a.0, seg_a.1, seg_b.0, seg_b.1);
-            if distance < best.1 {
-                best = (at, distance);
-            }
+/// The closest approach of every segment of `a` to every segment of `b`.
+///
+/// Per pair of segments, because a pair of segments is the one unit that is
+/// the same however the copper is grouped into entities. The helper this
+/// replaced measured each segment against the other trace as a whole and
+/// claimed that made the count a property of the board; it did not. A segment
+/// finds one closest point per entity the other net is cut into, so the same
+/// board read back from its file, one entity per `path`, counted contacts the
+/// router's one entity per net and layer did not: 46 shorts on
+/// `esp32_starter` against 44, on the same segments.
+///
+/// `first` is the lower side. The pair is always measured that way round, and
+/// each segment from its lower end, so a gap between two
+/// parallel segments is reported at the same point whichever trace the loop
+/// happened to hold and whichever way the file wrote the segment.
+fn segment_pairs(first: &TraceData, second: &TraceData) -> Vec<(Stretch, Stretch, Point, i64)> {
+    let mut out = Vec::with_capacity(first.segments.len() * second.segments.len());
+    for s in &first.segments {
+        let s = lower_end_first(s);
+        for t in &second.segments {
+            let t = lower_end_first(t);
+            let (at, distance) = segment_closest(s.0, s.1, t.0, t.1);
+            out.push((s, t, at, distance));
         }
     }
-    best
+    out
 }
 
-/// One closest approach per segment of `trace`, against another trace.
+/// A segment from its lower end, so a file that wrote it the other way round
+/// measures the same point. Measured from its start, a segment lying along a
+/// pad's edge reported the gap at whichever end it was written from:
+/// `PA14` against U1 on `multi_ic` came out at one end of the pad's edge one
+/// way and at the other end the other way.
+fn lower_end_first(segment: &([i64; 2], [i64; 2])) -> ([i64; 2], [i64; 2]) {
+    if segment.0 <= segment.1 {
+        *segment
+    } else {
+        (segment.1, segment.0)
+    }
+}
+
+/// Every segment of `trace` against every piece of copper it comes nearer than
+/// `limit` to, with the stretch of the segment that is that near.
 ///
-/// The whole-trace helpers answer "how close does this trace get", which is
-/// the right question for a yes-or-no check and the wrong one for a report: a
-/// trace that runs too close to a part in two places is one answer and two
-/// faults. Reporting per segment also makes the count a property of the board
-/// rather than of how its copper happens to be grouped into entities - the
-/// same board, written out and read back, splits one net's segments across
-/// several entities and used to gain violations by doing so.
-fn per_segment_to_trace(a: &TraceData, b: &TraceData) -> Vec<(Point, i64)> {
-    a.segments
-        .iter()
-        .map(|seg| {
-            let one = TraceData {
-                half_width: a.half_width,
-                segments: vec![*seg],
-            };
-            trace_to_trace_distance(&one, b)
-        })
-        .collect()
-}
-
-/// One closest approach per segment of `trace`, against the nearest of several
-/// pieces of copper.
-fn per_segment_to_copper(trace: &TraceData, copper: &[&Copper]) -> Vec<(Point, i64)> {
-    trace
-        .segments
-        .iter()
-        .map(|seg| {
-            let one = TraceData {
-                half_width: trace.half_width,
-                segments: vec![*seg],
-            };
-            trace_to_nearest(&one, copper)
-        })
-        .collect()
+/// Every piece, not the nearest one. A segment running past two pads of a
+/// connector too close to both is two gaps, and measured against its nearest
+/// pad only it reported one - until a vertex in the middle of it split the
+/// segment in two, and each half found its own pad: `CC1` against J1 on
+/// `esp32_starter`, one row whole and two in halves.
+fn per_segment_to_copper(trace: &TraceData, copper: &[&Copper], limit: i64) -> Vec<Measured> {
+    let mut out = Vec::new();
+    for seg in &trace.segments {
+        let s = lower_end_first(seg);
+        let one = TraceData {
+            half_width: trace.half_width,
+            segments: vec![s],
+        };
+        for piece in copper {
+            let (at, distance) = trace_to_copper_distance(&one, piece);
+            if distance >= limit {
+                continue;
+            }
+            let run = stretch(s, limit, |p| copper_distance(&Copper::circle(p, 0), piece));
+            out.push((at, distance, [run; 2], Some(piece.core.lower())));
+        }
+    }
+    out
 }
 
 /// Minimum distance from trace centerlines to an AABB.
@@ -1750,10 +1995,10 @@ mod tests {
 
     #[test]
     fn two_traces_meeting_corner_to_corner_are_one_violation() {
-        // The pad case is only half the shape. `per_segment_to_trace` pairs
+        // The pad case is only half the shape. `segment_pairs` measures
         // every segment of one trace against every segment of the other, so
-        // two bends facing each other can report the same gap up to four
-        // times - once per pair of segments that finds the corner nearest.
+        // two bends facing each other find the same gap up to four times -
+        // once per pair of segments that meets at the corner nearest.
         let mut world = BoardWorld::new();
 
         let lower = Trace {

@@ -262,8 +262,8 @@ fn score_json_serialization() {
         // spec, and the ranking has to be able to tell them apart.
         "shorts",
         // Published beside the violation count, not instead of it: the
-        // clearance rule reports per pair of segments, so one contact can be
-        // two dozen rows. Decided 2026-08-23 - the row count stays the
+        // clearance rule reports per place, so one contact in fault at several
+        // places is several rows. Decided 2026-08-23 - the row count stays the
         // sensitive number the ratchets are set against, and this one says how
         // many places on the board are actually in fault.
         "clearance_contacts",

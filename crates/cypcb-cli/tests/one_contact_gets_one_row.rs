@@ -16,6 +16,13 @@
 //! `cypcb_autoroute::noise_band` and in every table in `docs/routing.md` - a
 //! display change that quietly moved them would be a re-baseline pretending to
 //! be a tidy-up.
+//!
+//! Since 2026-09-26 the rule counts one row per place - one unbroken run of a
+//! trace too close to one pad, one via or one other net's trace - so a run
+//! along one pad is one row however many segments it takes. On the shipped
+//! benchmarks 319 rows for 152 contacts became 219 for the same 152. That was a
+//! re-baseline and says so, in the ratchets and the bands; this test still
+//! holds the listing to grouping and the counts to rows.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
