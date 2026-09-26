@@ -151,19 +151,20 @@ pub struct AutorouteConfig {
     /// How many DRC-driven repair passes to run per block radius.
     ///
     /// Each pass forbids the cells the checker complained about and routes
-    /// again, keeping the result only if the violation count drops and the
-    /// board stays complete. Zero disables repair, which is the default.
+    /// again, keeping the result only if the variant ranking puts it ahead and
+    /// the board stays complete. Zero disables repair, which is the default.
     ///
-    /// Off by default because it was measured and it does not pay. Every
-    /// attempt is a full re-route of the board, and with the default two radii
-    /// of two passes that is four of them: multi_ic takes 259.5s with repair
-    /// against 74.7s without, and lands on the same 1027 routes and the same
-    /// 109 violations. Across all three benchmark fixtures the routed board is
-    /// byte-for-byte the same count with the pass and without it. The
-    /// machinery is sound and stays available; what it needs before it earns a
-    /// place in the default path is an instrument that works in nanometres
-    /// rather than in whole grid cells - blocking a 0.254mm cell to fix a
-    /// 0.05mm overlap moves the route further than the problem.
+    /// Every attempt is a full re-route of the board, and with the default two
+    /// radii of two passes that is four of them: multi_ic took 259.5s with
+    /// repair against 74.7s without on 2026-08-06, for the same board. So one
+    /// run does not pay for it, and `generate_variants` spends it on the winner
+    /// alone - on 2026-09-26 that ranked three of the seven benchmark boards
+    /// higher at up to 1.46x the ranking's wall clock.
+    ///
+    /// From 2026-08-07 to 2026-09-26 every attempt routed nothing: it ran on a
+    /// board still carrying the copper it was repairing, and the router leaves
+    /// alone a net copper already joins. Nothing measured in that window says
+    /// anything about the pass.
     pub repair_passes: u32,
 
     /// What a cell costs the search for each via ring covering it.

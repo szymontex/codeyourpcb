@@ -884,7 +884,10 @@ impl RouteCommand {
                 entry.elapsed_ms as f64 / 1000.0,
             );
         }
-        eprintln!("Chose {}", best.name);
+        // The winner keeps its config's name; whether repair improved on it
+        // is said beside the name rather than folded into it.
+        let repaired = if best.repaired { ", repaired" } else { "" };
+        eprintln!("Chose {}{repaired}", best.name);
 
         // The winner's own count of what it gave up on. This used to be
         // `RoutingResult::complete` whatever the winner left, so the default
@@ -900,7 +903,11 @@ impl RouteCommand {
         };
         Ok((
             result,
-            format!("best of {} variants, `{}`", results.len(), best.name),
+            format!(
+                "best of {} variants, `{}`{repaired}",
+                results.len(),
+                best.name
+            ),
         ))
     }
 }
