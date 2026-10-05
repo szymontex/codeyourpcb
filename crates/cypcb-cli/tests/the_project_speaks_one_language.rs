@@ -97,6 +97,9 @@ fn no_shipped_file_is_written_in_polish() {
         };
         let Some(line) = text
             .lines()
+            // A copyright line names its holder, and a name is spelled as its
+            // owner spells it; it is not text written in Polish.
+            .filter(|line| !line.trim_start().starts_with("Copyright "))
             .find(|line| line.chars().any(|c| POLISH.contains(&c)))
         else {
             continue;
