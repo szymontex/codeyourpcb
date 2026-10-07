@@ -1137,6 +1137,7 @@ version = "0.1.0-beta"
 dependencies = [
  "async-trait",
  "chrono",
+ "cypcb-fixtures",
  "cypcb-kicad",
  "cypcb-parser",
  "cypcb-world",

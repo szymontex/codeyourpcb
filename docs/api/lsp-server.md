@@ -262,7 +262,7 @@ The desktop app could optionally run a stdio LSP sidecar process for advanced fe
 | Rename Symbol | ✓ stdio LSP | ✗ N/A |
 | Call Hierarchy | ✓ stdio LSP | ✗ N/A |
 
-**Why not now?** These features require AST traversal and symbol tables not currently tracked by the parser. WASM bridge provides 80% of value with 20% of complexity.
+**Why not now?** These features require AST traversal and symbol tables not currently tracked by the parser.
 
 ## Usage Examples
 
@@ -316,19 +316,21 @@ The stdio server `cypcb-lsp` does not wait. It parses the document and rebuilds 
 
 ### Parse and DRC time
 
-Measured 2026-09-27 on the build machine: release build, quiet host (load average 2.6), 50 runs per board after one warm-up. This is the native build of the engine, not the WASM build the browser runs. Times are in milliseconds, median / max. Parse is the reader alone; whole load is what the editor pays after the wait.
+Measured 2026-09-27 on the build machine: release build, quiet host (load average 2.6), 50 runs per board after one warm-up. Times are in milliseconds, median / max. Parse is the reader alone; whole load is what the editor pays after the wait.
 
-| Board | Lines | Components | Parse | DRC | Whole load |
-|-------|------:|-----------:|------:|----:|-----------:|
-| `examples/blink.cypcb` | 112 | 9 | 0.01 / 0.02 | 0.21 / 0.32 | 0.30 / 0.34 |
-| `examples/mains-sequencer.cypcb` | 404 | 33 | 0.08 / 0.11 | 1.23 / 1.36 | 1.55 / 1.97 |
-| `tests/fixtures/benchmark/esp32_starter.cypcb` | 436 | 18 | 0.09 / 0.11 | 1.44 / 1.59 | 1.85 / 2.14 |
-| `tests/fixtures/benchmark/led_blink.kicad_pcb` | 152 | 7 | 0.16 / 0.25 | 0.18 / 0.23 | 0.38 / 0.55 |
-| `tests/fixtures/benchmark/plane_board.kicad_pcb` | 212 | 12 | 0.27 / 0.31 | 0.49 / 0.54 | 0.94 / 1.29 |
-| `tests/fixtures/benchmark/qfp_fanout.kicad_pcb` | 379 | 19 | 0.56 / 0.66 | 1.33 / 1.84 | 2.08 / 2.31 |
-| `tests/fixtures/benchmark/stm32_breakout.kicad_pcb` | 456 | 29 | 0.58 / 0.86 | 1.33 / 1.73 | 1.85 / 2.22 |
-| `tests/fixtures/benchmark/shift_driver.kicad_pcb` | 688 | 55 | 0.70 / 0.78 | 2.14 / 2.83 | 2.86 / 3.93 |
-| `tests/fixtures/benchmark/multi_ic.kicad_pcb` | 905 | 52 | 0.90 / 1.00 | 2.50 / 3.57 | 3.54 / 4.55 |
+The WASM columns are the engine the browser runs, measured the same day: the module in `viewer/pkg` (the `wasm-release` profile) in headless Chromium under Playwright, on the viewer's dev server, 20 runs per board after one warm-up. The WASM engine has no call that parses alone, so it has no parse column. The browser rounds `performance.now()` to a tenth of a millisecond, which is why those cells end in zero.
+
+| Board | Lines | Components | Parse | DRC | Whole load | WASM DRC | WASM whole load |
+|-------|------:|-----------:|------:|----:|-----------:|---------:|----------------:|
+| `examples/blink.cypcb` | 112 | 9 | 0.01 / 0.02 | 0.21 / 0.32 | 0.30 / 0.34 | 1.40 / 1.70 | 1.30 / 1.70 |
+| `examples/mains-sequencer.cypcb` | 404 | 33 | 0.08 / 0.11 | 1.23 / 1.36 | 1.55 / 1.97 | 3.60 / 4.90 | 3.90 / 4.90 |
+| `tests/fixtures/benchmark/esp32_starter.cypcb` | 436 | 18 | 0.09 / 0.11 | 1.44 / 1.59 | 1.85 / 2.14 | 3.90 / 4.00 | 4.40 / 4.60 |
+| `tests/fixtures/benchmark/led_blink.kicad_pcb` | 152 | 7 | 0.16 / 0.25 | 0.18 / 0.23 | 0.38 / 0.55 | 0.50 / 0.80 | 1.50 / 3.00 |
+| `tests/fixtures/benchmark/plane_board.kicad_pcb` | 212 | 12 | 0.27 / 0.31 | 0.49 / 0.54 | 0.94 / 1.29 | 1.80 / 2.10 | 2.20 / 3.10 |
+| `tests/fixtures/benchmark/qfp_fanout.kicad_pcb` | 379 | 19 | 0.56 / 0.66 | 1.33 / 1.84 | 2.08 / 2.31 | 3.30 / 3.90 | 5.20 / 5.80 |
+| `tests/fixtures/benchmark/stm32_breakout.kicad_pcb` | 456 | 29 | 0.58 / 0.86 | 1.33 / 1.73 | 1.85 / 2.22 | 2.80 / 3.10 | 4.60 / 5.20 |
+| `tests/fixtures/benchmark/shift_driver.kicad_pcb` | 688 | 55 | 0.70 / 0.78 | 2.14 / 2.83 | 2.86 / 3.93 | 5.00 / 6.20 | 7.20 / 7.80 |
+| `tests/fixtures/benchmark/multi_ic.kicad_pcb` | 905 | 52 | 0.90 / 1.00 | 2.50 / 3.57 | 3.54 / 4.55 | 6.00 / 6.50 | 9.20 / 9.70 |
 
 The slowest board, `multi_ic`, in each build and on a busy host. Busy is a `cargo build --release -j3` of the workspace running beside it (three `rustc` processes, load average 6.1).
 
@@ -345,15 +347,27 @@ To repeat the measurement, run the test that keeps this table. It prints each ro
 cargo test --release -p cypcb-render --features native --test the_editor_timings_are_measured -- --nocapture
 ```
 
+The WASM columns, and the memory below, come from a Playwright spec that prints its rows the same way:
+
+```bash
+cd viewer && npx playwright test e2e/the-wasm-timings-are-measured.spec.ts --workers=1
+```
+
 The test checks the lines and the components of every row against the board, and the wait above against `viewer/src/main.ts`. The milliseconds are this measurement and move with the machine. `loading_a_board_is_quick` sets the ceiling a load of any example must stay under.
 
 ### Memory Usage
 
-- WASM engine: ~2-5MB heap
-- Monaco editor: ~10-15MB (includes editor, themes, language features)
-- Total overhead: ~15-20MB
+Measured 2026-09-27 by the spec above: five page loads in headless Chromium on the viewer's dev server, median / max, in MiB. The JS heap is read after a forced garbage collection (`Runtime.getHeapUsage` over the DevTools protocol). WASM memory is the engine's linear memory, `memory.buffer.byteLength`, which the JS heap does not count.
 
-**Lazy loading:** Monaco editor is loaded on-demand (first toggle), so initial page load doesn't include this overhead.
+| What | MiB |
+|------|----:|
+| JS heap, page ready | 3.8 / 3.8 |
+| JS heap, `tests/fixtures/benchmark/multi_ic.kicad_pcb` loaded | 4.1 / 4.2 |
+| JS heap added by the editor | 11.1 / 11.3 |
+| WASM memory, page ready | 1.3 / 1.3 |
+| WASM memory, `tests/fixtures/benchmark/multi_ic.kicad_pcb` loaded | 1.8 / 1.8 |
+
+**When Monaco loads:** the first paint does not wait for it. Once the page is ready, `preloadEditor` in `viewer/src/main.ts` builds the editor when the browser is next idle, without the panel being opened, so the panel opens at once when it is asked for. The spec holds Monaco at the network to measure the heap before it.
 
 ## API Reference
 

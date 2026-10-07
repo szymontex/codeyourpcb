@@ -185,8 +185,8 @@ sudo apt install binaryen     # Debian/Ubuntu
 brew install binaryen         # macOS
 ```
 
-`cargo binstall wasm-bindgen-cli --version ...` fetches a prebuilt binary and
-takes seconds where `cargo install` takes minutes; `cargo install
+`cargo binstall wasm-bindgen-cli --version ...` fetches a prebuilt binary where
+`cargo install` compiles it from source; `cargo install
 cargo-binstall` first, and fall back to `cargo install` on a platform it has no
 build for.
 

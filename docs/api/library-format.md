@@ -121,7 +121,7 @@ CREATE VIRTUAL TABLE components_fts USING fts5(
 **Why FTS5 instead of LIKE?**
 - Orders results by relevance (BM25 algorithm)
 - Tokenizes text (matches word stems, ignores punctuation)
-- Faster for large datasets (100k+ components)
+- Looks words up in the index instead of reading every row, as `LIKE '%word%'` has to
 
 ### Triggers
 
@@ -555,14 +555,14 @@ pub fn insert_components_batch(
 
 - **Storage:** SQLite file on local filesystem
 - **Path:** Platform-specific (XDG_DATA_HOME on Linux, AppData on Windows)
-- **Performance:** Native rusqlite performance (~10k components/sec import)
+- **Performance:** measured 2026-09-27 on the build machine, release build: 10,000 footprints in 10 `.pretty` folders imported into an index file on disk in 1.53 s median, 1.58 s slowest, over 5 runs - 6551 and 6320 footprints per second. The repository holds no library that size, so the test generates one from the KiCad footprints under `tests/fixtures`, each copied under a new name. To repeat it: `cargo test --release -p cypcb-library --test the_import_rate_is_measured -- --nocapture`
 - **Concurrency:** Mutex-protected Connection for thread safety
 
 ### Web (IndexedDB via SQL.js)
 
 - **Storage:** IndexedDB (browser's object store)
-- **Performance:** Slower than native SQLite (~1k components/sec import)
-- **Limitations:** No native filesystem access, 50MB-1GB quota
+- **Performance:** not measured; there is no web import to measure yet
+- **Limitations:** No native filesystem access. The browser sets the storage quota: Chromium lets an origin store up to 60% of the total disk, Firefox the smaller of 10% of the disk and 10 GiB, Safari from macOS 14 and iOS 17 around 60% ([MDN, Storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria), last modified 2026-01-05, read 2026-09-27)
 - **Future:** SQLite compiled to WASM with virtual filesystem backed by IndexedDB
 
 **Current status:** Web library management not yet implemented (Phase 13 scope).
