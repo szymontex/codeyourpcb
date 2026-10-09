@@ -392,6 +392,26 @@ fn apply_expansion(shape: ApertureShape, expansion: Nm) -> ApertureShape {
             height: height + (expansion.0 * 2),
             corner_ratio,
         },
+        // The opening runs past the copper on every side, so a shape stood at
+        // an angle keeps its angle and grows both sides.
+        ApertureShape::TurnedRect {
+            width,
+            height,
+            millideg,
+        } => ApertureShape::TurnedRect {
+            width: width + (expansion.0 * 2),
+            height: height + (expansion.0 * 2),
+            millideg,
+        },
+        ApertureShape::TurnedOblong {
+            width,
+            height,
+            millideg,
+        } => ApertureShape::TurnedOblong {
+            width: width + (expansion.0 * 2),
+            height: height + (expansion.0 * 2),
+            millideg,
+        },
     }
 }
 
@@ -424,6 +444,25 @@ fn apply_reduction(shape: ApertureShape, reduction: f64) -> ApertureShape {
             width: ((width as f64) * factor) as i64,
             height: ((height as f64) * factor) as i64,
             corner_ratio,
+        },
+        // Both sides shrink by the same proportion and the angle stands.
+        ApertureShape::TurnedRect {
+            width,
+            height,
+            millideg,
+        } => ApertureShape::TurnedRect {
+            width: ((width as f64) * factor) as i64,
+            height: ((height as f64) * factor) as i64,
+            millideg,
+        },
+        ApertureShape::TurnedOblong {
+            width,
+            height,
+            millideg,
+        } => ApertureShape::TurnedOblong {
+            width: ((width as f64) * factor) as i64,
+            height: ((height as f64) * factor) as i64,
+            millideg,
         },
     }
 }

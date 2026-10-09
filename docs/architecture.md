@@ -287,7 +287,8 @@ browser engine alike, and described once under `fab` in `docs/SYNTAX.md`.
 
 
 Gerber export uses aperture-based rendering:
-- Define apertures (circles, rectangles, rounded rectangles)
+- Define apertures (circles, rectangles, rounded rectangles; rectangles and
+  oblongs turned by an angle that is not a multiple of 90 degrees, as macros)
 - Emit draw/flash commands
 - Coordinate precision: 5.5 format (µm-level accuracy)
 

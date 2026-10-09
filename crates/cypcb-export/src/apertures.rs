@@ -5,7 +5,7 @@
 //! once in the aperture section and reused throughout the file.
 
 use crate::coords::{nm_to_decimal, CoordinateFormat};
-use cypcb_world::components::PadShape as WorldPadShape;
+use cypcb_world::components::{rotate_about_origin, PadShape as WorldPadShape};
 use cypcb_world::footprint::PadOutline;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,6 +27,20 @@ pub enum ApertureShape {
         width: i64,
         height: i64,
         corner_ratio: u8,
+    },
+    /// A rectangle stood at an angle (millidegrees counterclockwise) that a
+    /// plain `R` aperture cannot state.
+    TurnedRect {
+        width: i64,
+        height: i64,
+        millideg: i32,
+    },
+    /// An oblong stood at an angle (millidegrees counterclockwise) that a
+    /// plain `O` aperture cannot state.
+    TurnedOblong {
+        width: i64,
+        height: i64,
+        millideg: i32,
     },
 }
 
@@ -176,6 +190,42 @@ impl ApertureManager {
                     ));
                     format!("%ADD{dcode}RR{dcode}*%\n")
                 }
+                ApertureShape::TurnedRect {
+                    width,
+                    height,
+                    millideg,
+                } => {
+                    // Same discipline as the rounded rectangle above: one
+                    // macro per aperture, numbers worked out. The rotation is
+                    // the one thing left as a parameter for the reader to
+                    // apply, because that is what the primitive is for - the
+                    // specification's own rotating-rectangle macro passes the
+                    // angle into primitive 21 the same way (revision 2026.05,
+                    // section 4.5.1, `Box`; read 2026-10-07).
+                    macros.push_str(&turned_rect_macro(
+                        dcode, *width, *height, *millideg, format,
+                    ));
+                    format!("%ADD{dcode}TR{dcode}*%\n")
+                }
+                ApertureShape::TurnedOblong {
+                    width,
+                    height,
+                    millideg,
+                } => {
+                    // A stadium cannot be rotated by parameter the way a
+                    // rectangle can without trusting every reader with a
+                    // rotated circle, so the angle goes into the geometry:
+                    // a thick line between the two cap centres, with a circle
+                    // on each. KiCad's `HorizOval` macro is the same drawing,
+                    // and its authors note they avoid shape-level rotation
+                    // because readers break on it
+                    // (`include/plotters/gbr_plotter_aperture_macros.h`,
+                    // read 2026-10-07).
+                    macros.push_str(&turned_oblong_macro(
+                        dcode, *width, *height, *millideg, format,
+                    ));
+                    format!("%ADD{dcode}TO{dcode}*%\n")
+                }
             };
             result.push_str(&definition);
         }
@@ -200,6 +250,18 @@ impl ApertureManager {
 /// and height are the ones along the board's axes: a part turned a quarter
 /// turn gets its pads' sides swapped, which the definition alone cannot say.
 ///
+/// A turn that is a multiple of 90 degrees ends here, on the plain apertures:
+/// the swap in [`PadOutline::size`] has already stated it. A turn between
+/// quarter turns cannot be stated by any width and height - a 2 by 1mm pad at
+/// 30 degrees is still 2 by 1 along its own axes - so a rectangle or an
+/// oblong becomes a macro aperture carrying the angle. This is what KiCad
+/// does for the same pads (`FlashPadRect` swaps or flashes a `RotRect` macro;
+/// `FlashPadOval` swaps or a `HorizOval` macro - pcbnew's
+/// `common/plotters/GERBER_plotter.cpp` and
+/// `include/plotters/gbr_plotter_aperture_macros.h`, read 2026-10-07), and
+/// what the Gerber specification's own rotating-rectangle example does
+/// (revision 2026.05, section 4.5.1, the `Box` macro; read 2026-10-07).
+///
 /// ```
 /// use cypcb_export::apertures::{aperture_for_pad, ApertureShape};
 /// use cypcb_world::footprint::PadDef;
@@ -223,20 +285,48 @@ impl ApertureManager {
 ///     turned,
 ///     ApertureShape::Rectangle { width: Nm::from_mm(1.45).0, height: Nm::from_mm(1.0).0 }
 /// );
+///
+/// // A turn between quarter turns keeps its angle.
+/// let stood = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::from_degrees(30.0)));
+/// assert_eq!(
+///     stood,
+///     ApertureShape::TurnedRect {
+///         width: Nm::from_mm(1.0).0,
+///         height: Nm::from_mm(1.45).0,
+///         millideg: 30_000,
+///     }
+/// );
 /// ```
 pub fn aperture_for_pad(pad: &PadOutline) -> ApertureShape {
     let (width, height) = pad.size;
+    // The turn left over above the quarter turns the swap in `size` has
+    // already taken up: the slope the pad stands at. Zero for every multiple
+    // of 90 degrees, and 0-90 degrees otherwise, because a shape symmetric
+    // under a half turn stands at the same slope whichever quarter it is.
+    let slope = pad.turn.0 % 90_000;
 
     match pad.shape {
         WorldPadShape::Circle => ApertureShape::Circle { diameter: width.0 },
+        WorldPadShape::Rect if slope != 0 => ApertureShape::TurnedRect {
+            width: width.0,
+            height: height.0,
+            millideg: slope,
+        },
         WorldPadShape::Rect => ApertureShape::Rectangle {
             width: width.0,
             height: height.0,
+        },
+        WorldPadShape::Oblong if slope != 0 => ApertureShape::TurnedOblong {
+            width: width.0,
+            height: height.0,
+            millideg: slope,
         },
         WorldPadShape::Oblong => ApertureShape::Oblong {
             width: width.0,
             height: height.0,
         },
+        // A rounded rectangle stood at an angle has no aperture yet: it is
+        // flashed unturned, the way every pad was before the angle was kept.
         WorldPadShape::RoundRect { corner_ratio } => ApertureShape::RoundRect {
             width: width.0,
             height: height.0,
@@ -297,6 +387,130 @@ pub fn round_rect_macro(
     ] {
         text.push_str(&format!("1,1,{},{},{},0*\n", d(2 * radius), d(x), d(y)));
     }
+    text.push_str("%\n");
+    text
+}
+
+/// Millidegrees as a decimal degree figure, `17.500` for 17_500.
+///
+/// Integer arithmetic all the way: the angle a board states is whole
+/// millidegrees, and a float formatting it would give a reader one digit of
+/// the writer's rounding to disagree with.
+fn millideg_to_decimal(millideg: i32) -> String {
+    format!("{}.{:03}", millideg / 1000, millideg % 1000)
+}
+
+/// One aperture macro drawing a rectangle stood at an angle, named after its
+/// D-code.
+///
+/// A single center-line primitive, rotated by its last parameter. The
+/// specification's `Box` macro - its own example of a rotating rectangle -
+/// rotates the same primitive the same way, and warns that the rotation is
+/// around the macro's origin, not the primitive's centre: the centre here is
+/// the origin, so the rectangle turns in place (revision 2026.05, section
+/// 4.5.1.5; read 2026-10-07).
+///
+/// ```
+/// use cypcb_export::apertures::turned_rect_macro;
+/// use cypcb_export::coords::CoordinateFormat;
+/// use cypcb_core::Nm;
+///
+/// let text = turned_rect_macro(
+///     10u16,
+///     Nm::from_mm(2.0).0,
+///     Nm::from_mm(1.0).0,
+///     30_000,
+///     &CoordinateFormat::FORMAT_MM_2_6,
+/// );
+/// assert_eq!(text, "%AMTR10*\n21,1,2.000000,1.000000,0,0,30.000*\n%\n");
+/// ```
+pub fn turned_rect_macro(
+    dcode: u16,
+    width: i64,
+    height: i64,
+    millideg: i32,
+    format: &CoordinateFormat,
+) -> String {
+    let d = |value: i64| nm_to_decimal(value, format);
+    format!(
+        "%AMTR{dcode}*\n21,1,{},{},0,0,{}*\n%\n",
+        d(width),
+        d(height),
+        millideg_to_decimal(millideg)
+    )
+}
+
+/// One aperture macro drawing an oblong stood at an angle, named after its
+/// D-code.
+///
+/// A thick vector line between the two cap centres with a circle on each, the
+/// angle carried by the centres' coordinates rather than by a rotation
+/// parameter. The cap centres are the half span of the long axis over the
+/// short, turned by
+/// [`rotate_about_origin`](cypcb_world::components::rotate_about_origin) -
+/// the one place a point is turned - so a pad's aperture leans exactly the
+/// way its own offset was placed.
+///
+/// ```
+/// use cypcb_export::apertures::turned_oblong_macro;
+/// use cypcb_export::coords::CoordinateFormat;
+/// use cypcb_core::Nm;
+///
+/// // 2.4 by 1.0mm at 30 degrees: caps 0.7mm either side of the centre,
+/// // 0.606218 across and 0.35 up.
+/// let text = turned_oblong_macro(
+///     11u16,
+///     Nm::from_mm(2.4).0,
+///     Nm::from_mm(1.0).0,
+///     30_000,
+///     &CoordinateFormat::FORMAT_MM_2_6,
+/// );
+/// assert_eq!(
+///     text,
+///     "%AMTO11*\n20,1,1.000000,0.606218,0.350000,-0.606218,-0.350000,0*\n\
+///      1,1,1.000000,0.606218,0.350000,0*\n\
+///      1,1,1.000000,-0.606218,-0.350000,0*\n%\n"
+/// );
+/// ```
+pub fn turned_oblong_macro(
+    dcode: u16,
+    width: i64,
+    height: i64,
+    millideg: i32,
+    format: &CoordinateFormat,
+) -> String {
+    let long = width.max(height);
+    let short = width.min(height);
+    // The long axis runs along the pad's own x; a pad taller than wide at
+    // this slope has its long axis a quarter turn further round.
+    let axis = if width >= height {
+        millideg
+    } else {
+        millideg + 90_000
+    };
+    // The cap centres through the one place a point is turned, so the pad's
+    // aperture leans exactly the way its own offset was placed.
+    let half_span = (long - short) / 2;
+    let turned = rotate_about_origin(
+        cypcb_core::Point::new(cypcb_core::Nm(half_span), cypcb_core::Nm(0)),
+        f64::from(axis) / 1000.0,
+    );
+    let (x, y) = (turned.x.0, turned.y.0);
+    let d = |value: i64| nm_to_decimal(value, format);
+
+    let mut text = format!("%AMTO{dcode}*\n");
+    // The body between the caps, as a line the width of the short side.
+    text.push_str(&format!(
+        "20,1,{},{},{},{},{},0*\n",
+        d(short),
+        d(x),
+        d(y),
+        d(-x),
+        d(-y)
+    ));
+    // A cap on each end, centred where the line stops.
+    text.push_str(&format!("1,1,{},{},{},0*\n", d(short), d(x), d(y)));
+    text.push_str(&format!("1,1,{},{},{},0*\n", d(short), d(-x), d(-y)));
     text.push_str("%\n");
     text
 }
@@ -523,6 +737,103 @@ mod tests {
                 height: Nm::from_mm(0.8).0
             }
         );
+    }
+
+    #[test]
+    fn test_aperture_for_pad_turned_rect() {
+        let pad = PadDef {
+            number: "1".into(),
+            shape: WorldPadShape::Rect,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(2.0), Nm::from_mm(1.0)),
+            drill: None,
+            slot: None,
+            layers: vec![Layer::TopCopper],
+            mask_margin: None,
+            rotation: Rotation::ZERO,
+        };
+
+        // 135 degrees: sides swapped by the quarter turn, slope 45 kept.
+        let aperture = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::from_degrees(135.0)));
+        assert_eq!(
+            aperture,
+            ApertureShape::TurnedRect {
+                width: Nm::from_mm(1.0).0,
+                height: Nm::from_mm(2.0).0,
+                millideg: 45_000,
+            }
+        );
+    }
+
+    #[test]
+    fn test_aperture_for_pad_turned_oblong() {
+        let pad = PadDef {
+            number: "1".into(),
+            shape: WorldPadShape::Oblong,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(2.4), Nm::from_mm(1.0)),
+            drill: None,
+            slot: None,
+            layers: vec![Layer::TopCopper],
+            mask_margin: None,
+            rotation: Rotation::ZERO,
+        };
+
+        let aperture = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::from_degrees(17.5)));
+        assert_eq!(
+            aperture,
+            ApertureShape::TurnedOblong {
+                width: Nm::from_mm(2.4).0,
+                height: Nm::from_mm(1.0).0,
+                millideg: 17_500,
+            }
+        );
+    }
+
+    #[test]
+    fn test_to_definitions_turned_rect_and_oblong() {
+        let mut manager = ApertureManager::new();
+        let format = CoordinateFormat::FORMAT_MM_2_6;
+
+        manager.get_or_create(ApertureShape::TurnedRect {
+            width: Nm::from_mm(2.0).0,
+            height: Nm::from_mm(1.0).0,
+            millideg: 30_000,
+        });
+        let defs = manager.to_definitions(&format);
+        assert!(defs.contains("%AMTR10*\n"), "{defs}");
+        assert!(
+            defs.contains("21,1,2.000000,1.000000,0,0,30.000*\n"),
+            "{defs}"
+        );
+        assert!(defs.contains("%ADD10TR10*%\n"), "{defs}");
+    }
+
+    #[test]
+    fn test_to_definitions_turned_oblong() {
+        let mut manager = ApertureManager::new();
+        let format = CoordinateFormat::FORMAT_MM_2_6;
+
+        manager.get_or_create(ApertureShape::TurnedOblong {
+            width: Nm::from_mm(2.4).0,
+            height: Nm::from_mm(1.0).0,
+            millideg: 30_000,
+        });
+        let defs = manager.to_definitions(&format);
+        assert!(defs.contains("%AMTO10*\n"), "{defs}");
+        assert!(
+            defs.contains("20,1,1.000000,0.606218,0.350000,-0.606218,-0.350000,0*\n"),
+            "{defs}"
+        );
+        assert!(
+            defs.contains("1,1,1.000000,0.606218,0.350000,0*\n"),
+            "{defs}"
+        );
+        assert!(
+            defs.contains("1,1,1.000000,-0.606218,-0.350000,0*\n"),
+            "{defs}"
+        );
+        assert!(defs.contains("%ADD10TO10*%\n"), "{defs}");
     }
 
     #[test]

@@ -124,6 +124,15 @@ pub struct PadOutline {
     /// Width along the board's x, height along its y, once every quarter turn
     /// of the part is taken up by swapping the pad's own two sides.
     pub size: (Nm, Nm),
+    /// The whole turn that stood the pad up: the part's and the pad's own
+    /// added together. The sides above have the quarter turns of it absorbed
+    /// by their swap; this carries the angle itself, because a rectangle
+    /// stood at, say, 30 degrees is not any width by any height a plain
+    /// aperture can flash - the copper lands tilted, and a writer that drops
+    /// the angle draws a pad the board never had (measured 2026-10-07: a
+    /// 2 by 1mm pad at 30 degrees exports 46 percent of its copper in the
+    /// wrong place).
+    pub turn: Rotation,
 }
 
 impl PadDef {
@@ -216,11 +225,12 @@ impl PadDef {
     /// The one place a pad is turned: the position through [`place_pad`] by
     /// the part's turn alone, since the pad turns about its own centre; the
     /// sides swapped for every odd quarter turn of the part's turn and the
-    /// pad's own [`rotation`](Self::rotation) added together. A turn between
-    /// quarter turns stands the pad at an angle a width and a height cannot
-    /// state; this takes the quarter turn below it, and no board in this
-    /// repository places a part or a pad that way (every `rotate` in its
-    /// designs is 90, 180 or 270, measured 2026-09-26).
+    /// pad's own [`rotation`](Self::rotation) added together, and the whole
+    /// of that turn kept in [`PadOutline::turn`]. A writer that can only
+    /// flash an axis-aligned figure reads `size` and is done - the swap has
+    /// already taken up its quarter turns. A writer that can stand a figure
+    /// at an angle - the Gerber aperture macro - reads `turn` too and tilts
+    /// the pad by the turn left over above its quarter turns.
     pub fn outline(&self, at: Point, rotation: Rotation) -> PadOutline {
         let turn = (rotation.0 + self.rotation.0).rem_euclid(360_000);
         let (width, height) = self.size;
@@ -233,6 +243,7 @@ impl PadDef {
             centre: place_pad(at, self.position, rotation),
             shape: self.shape,
             size,
+            turn: Rotation::from_millidegrees(turn),
         }
     }
 
