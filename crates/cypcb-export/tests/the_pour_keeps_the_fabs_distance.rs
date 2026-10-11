@@ -82,7 +82,6 @@ fn poured(clearance_mm: f64) -> String {
         Layer::TopCopper,
         &CoordinateFormat::FORMAT_MM_2_6,
         &options,
-        None,
         cypcb_export::stamp::Stamp::UNIX_EPOCH,
     )
     .expect("the layer exports")

@@ -356,7 +356,6 @@ fn a_pour_keeps_clear_of_other_nets_and_reaches_its_own() {
         Layer::TopCopper,
         &format,
         &cypcb_export::pour::PourOptions::default(),
-        None,
         cypcb_export::stamp::Stamp::UNIX_EPOCH,
     )
     .expect("top copper");

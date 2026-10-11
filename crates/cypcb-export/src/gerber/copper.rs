@@ -11,7 +11,7 @@ use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::{place_pad, FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::in_build_order;
-use cypcb_world::teardrop::{inscribed_radius, teardrop, TeardropRatios};
+use cypcb_world::teardrop::teardrop_copper;
 use cypcb_world::{BoardWorld, Layer};
 
 /// Export error types.
@@ -73,7 +73,6 @@ pub fn export_copper_layer(
         layer,
         format,
         &crate::pour::PourOptions::default(),
-        None,
         stamp,
     )
 }
@@ -89,7 +88,6 @@ pub fn export_copper_layer_with(
     layer: Layer,
     format: &CoordinateFormat,
     pour: &crate::pour::PourOptions,
-    teardrops: Option<TeardropRatios>,
     stamp: crate::stamp::Stamp,
 ) -> Result<String, ExportError> {
     // Only copper layers are supported
@@ -151,10 +149,9 @@ pub fn export_copper_layer_with(
     export_vias(world, layer, &mut apertures, &mut drawing_commands, format);
 
     // The fillets where tracks meet pads, before the pour, so a pour still
-    // cuts its clearance around them the way it does around a track.
-    if let Some(ratios) = teardrops {
-        export_teardrops(world, library, layer, ratios, &mut drawing_commands, format)?;
-    }
+    // cuts its clearance around them the way it does around a track. They are
+    // in the board as copper when the board asks for them.
+    export_teardrops(world, layer, &mut drawing_commands, format);
 
     // Fill any copper pour on this layer, last, so the regions are cut around
     // copper that is already placed.
@@ -354,81 +351,24 @@ fn export_pours(
     }
 }
 
-/// Draw a fillet wherever a track ends on a pad of this layer.
+/// Draw the teardrops of this layer, as the board holds them.
 ///
 /// Item 1 of the KiCad parity audit: a track meeting a pad at a right angle
-/// tears away there when the board is drilled or flexed. The shape comes from
-/// [`cypcb_world::teardrop`]; this decides which shapes a layer has.
-///
-/// Only track *ends* are filleted, and only where the end lands inside a pad.
-/// That is where a router leaves copper - on the pad's centre - and it is the
-/// join a fabricator asks about. A track crossing a pad on its way elsewhere
-/// is not an entry and gets nothing.
+/// tears away there when the board is drilled or flexed. A teardrop is copper in
+/// the board like a track or a via - [`BoardWorld::rebuild_teardrops`] makes it,
+/// once, from the ratios the board states - and this writes each as a region,
+/// in the order the board holds them.
 fn export_teardrops(
     world: &mut BoardWorld,
-    library: &FootprintLibrary,
     layer: Layer,
-    ratios: TeardropRatios,
     output: &mut String,
     format: &CoordinateFormat,
-) -> Result<(), ExportError> {
-    // Every pad on this layer, as a centre and the radius a fillet may start
-    // from. Collected once: a board has far more track ends than pads.
-    let mut pads: Vec<(cypcb_core::Point, cypcb_core::Nm)> = Vec::new();
-    {
-        let mut query = world
-            .ecs_mut()
-            .query::<(&Position, &FootprintRef, &Rotation)>();
-        for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
-            let footprint = library
-                .get(&footprint_ref.0)
-                .ok_or_else(|| ExportError::FootprintNotFound(footprint_ref.0.clone()))?;
-            for pad in &footprint.pads {
-                if !pad.is_on(layer) {
-                    continue;
-                }
-                let centre = place_pad_millideg(position.0, pad.position, rotation.0);
-                pads.push((centre, inscribed_radius(pad.size.0, pad.size.1)));
-            }
+) {
+    for (_, copper, _) in teardrop_copper(world) {
+        if copper.layer == layer {
+            emit_polygon(&copper.outline, output, format);
         }
     }
-    if pads.is_empty() {
-        return Ok(());
-    }
-
-    let ends: Vec<(cypcb_core::Point, cypcb_core::Point, cypcb_core::Nm)> = {
-        let mut query = world.ecs_mut().query::<&Trace>();
-        let mut ends = Vec::new();
-        for trace in query.iter(world.ecs()) {
-            if trace.layer != layer || trace.segments.is_empty() {
-                continue;
-            }
-            for segment in &trace.segments {
-                // Both ends of every segment: a net with three pads is one
-                // `Trace` holding several chains, so the ends that matter are
-                // not only the first and the last of the list.
-                ends.push((segment.start, segment.end, trace.width));
-                ends.push((segment.end, segment.start, trace.width));
-            }
-        }
-        ends
-    };
-
-    for (end, toward, width) in ends {
-        for (centre, radius) in &pads {
-            let dx = (end.x.0 - centre.x.0) as f64;
-            let dy = (end.y.0 - centre.y.0) as f64;
-            if dx * dx + dy * dy > (radius.0 as f64) * (radius.0 as f64) {
-                continue;
-            }
-            if let Some(shape) = teardrop(*centre, *radius, toward, width, ratios) {
-                emit_polygon(&shape, output, format);
-            }
-            break;
-        }
-    }
-
-    Ok(())
 }
 
 /// Emit one closed polygon as a Gerber region.

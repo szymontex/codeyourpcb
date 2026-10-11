@@ -8,7 +8,7 @@ use clap::Args;
 use miette::{IntoDiagnostic, Result, WrapErr};
 
 use cypcb_export::presets::from_name;
-use cypcb_export::{run_export_with, ExportJob};
+use cypcb_export::{run_export, ExportJob};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
@@ -401,6 +401,15 @@ impl ExportCommand {
             // silently changed which rules a board was measured against
             // without anybody asking for that.
             let rules = crate::preset_choice::resolve(None, &world)?.rules();
+            // What the board itself asked for wins: a design that states its
+            // ratios is more specific than a flag that states none, and a person
+            // running the command should not have to repeat what the file says.
+            // The flag turns the ordinary ones on for a board that is silent -
+            // in the board, before it is checked, so the checker reads the
+            // copper the Gerber files will carry.
+            if self.teardrops && world.teardrops().is_none() {
+                world.set_teardrops(cypcb_world::components::Teardrops::default());
+            }
             world.rebuild_spatial_index_from_library(&library);
             let report = run_drc(&mut world, &rules);
 
@@ -448,21 +457,7 @@ impl ExportCommand {
         eprintln!();
         eprintln!("Generating Gerber files...");
 
-        // What the board itself asked for wins: a design that states its
-        // ratios is more specific than a flag that states none, and a person
-        // running the command should not have to repeat what the file says.
-        // The flag turns them on for a board that is silent.
-        let teardrops = world
-            .teardrops()
-            .map(|asked| cypcb_world::teardrop::TeardropRatios {
-                length: asked.length,
-                width: asked.width,
-            })
-            .or_else(|| {
-                self.teardrops
-                    .then(cypcb_world::teardrop::TeardropRatios::default)
-            });
-        let export_result = run_export_with(&job, &mut world, &library, teardrops)
+        let export_result = run_export(&job, &mut world, &library)
             .into_diagnostic()
             .wrap_err("Export failed")?;
 

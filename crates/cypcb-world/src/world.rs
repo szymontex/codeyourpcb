@@ -537,6 +537,23 @@ impl BoardWorld {
             }
         }
 
+        // Index teardrops: the box around each polygon, on the layer it is on
+        {
+            for (entity, copper) in
+                in_build_order::<(Entity, &crate::teardrop::TeardropCopper)>(&mut self.world)
+            {
+                let bounds = copper.bounds();
+                entries.push(SpatialEntry::from_raw(
+                    entity,
+                    bounds.min.x.0,
+                    bounds.min.y.0,
+                    bounds.max.x.0,
+                    bounds.max.y.0,
+                    copper.layer.to_copper_mask(),
+                ));
+            }
+        }
+
         self.world.resource_mut::<SpatialIndex>().rebuild(entries);
     }
 
@@ -582,6 +599,37 @@ impl BoardWorld {
             .copied()
     }
 
+    /// Put the teardrops the board asks for into the board as copper.
+    ///
+    /// Every [`TeardropCopper`](crate::teardrop::TeardropCopper) there is gets
+    /// removed and the ones the tracks and pads give now get spawned, so the
+    /// copper is always the copper of the tracks as they stand. A board that
+    /// asks for none ends with none. This is the one place a teardrop is made;
+    /// the Gerber writer, the checker and the router read what it leaves.
+    ///
+    /// Called by [`rebuild_spatial_index_from_library`](Self::rebuild_spatial_index_from_library),
+    /// which every caller already runs after it changes a track.
+    pub fn rebuild_teardrops(&mut self, library: &crate::footprint::FootprintLibrary) {
+        let old: Vec<Entity> =
+            in_build_order::<(Entity, &crate::teardrop::TeardropCopper)>(&mut self.world)
+                .into_iter()
+                .map(|(entity, _)| entity)
+                .collect();
+        for entity in old {
+            self.world.despawn(entity);
+        }
+        let Some(asked) = self.teardrops() else {
+            return;
+        };
+        let ratios = crate::teardrop::TeardropRatios {
+            length: asked.length,
+            width: asked.width,
+        };
+        for (copper, net) in crate::teardrop::teardrops_of(self, library, ratios) {
+            self.world.spawn((copper, net));
+        }
+    }
+
     /// Rebuild the spatial index, sizing every component from its footprint.
     ///
     /// This is the correct way to build the index before running DRC. The index
@@ -597,6 +645,7 @@ impl BoardWorld {
         &mut self,
         library: &crate::footprint::FootprintLibrary,
     ) {
+        self.rebuild_teardrops(library);
         self.rebuild_spatial_index_with_traces(|name| {
             library
                 .get(name)

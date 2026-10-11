@@ -106,6 +106,7 @@ impl ClearanceField {
         field.seed_pads(world, library, grid);
         field.seed_zones(world, grid);
         field.seed_copper(world, grid);
+        field.seed_teardrops(world, grid);
         field.transform();
         field
     }
@@ -294,6 +295,35 @@ impl ClearanceField {
                     let x = x0 + (dx * t) as i64;
                     let y = y0 + (dy * t) as i64;
                     self.seed_disc(x, y, layer_idx, radius_cells, grid);
+                }
+            }
+        }
+    }
+
+    /// Seed the cells whose centre lies inside a teardrop: copper like a
+    /// track's, with no clearance added.
+    fn seed_teardrops(&mut self, world: &mut BoardWorld, grid: &RoutingGrid) {
+        for (_, teardrop, _) in cypcb_world::teardrop::teardrop_copper(world) {
+            let Some(layer_idx) = layer_to_index(teardrop.layer) else {
+                continue;
+            };
+            if (layer_idx as u8) >= self.layer_count {
+                continue;
+            }
+            let bounds = teardrop.bounds();
+            let (min_x, max_x) = (
+                grid.nm_to_grid_x(bounds.min.x.raw()),
+                grid.nm_to_grid_x(bounds.max.x.raw()),
+            );
+            let (min_y, max_y) = (
+                grid.nm_to_grid_y(bounds.min.y.raw()),
+                grid.nm_to_grid_y(bounds.max.y.raw()),
+            );
+            for gy in min_y..=max_y {
+                for gx in min_x..=max_x {
+                    if teardrop.contains(grid.grid_to_nm(gx, gy)) {
+                        self.seed(gx, gy, layer_idx);
+                    }
                 }
             }
         }

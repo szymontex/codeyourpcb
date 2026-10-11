@@ -519,11 +519,12 @@ pub struct EntryRecord {
     pub trace_index: usize,
     /// Whether the end inside the land is also an end of the whole trace.
     ///
-    /// The Gerber writer fillets only a track *end* that lands inside a pad -
-    /// "a track crossing a pad on its way elsewhere is not an entry and gets
-    /// nothing", in `crates/cypcb-export/src/gerber/copper.rs`. That is a
-    /// narrower set than the crossings this rule measures, and R-08's two
-    /// halves are about different junctions unless this says otherwise.
+    /// A teardrop grows only from a track *end* that lands inside a pad - "a
+    /// track crossing a pad on its way elsewhere is not an entry and gets
+    /// nothing", in `teardrops_of` in `crates/cypcb-world/src/teardrop.rs`.
+    /// That is a narrower set than the crossings this rule measures, and
+    /// R-08's two halves are about different junctions unless this says
+    /// otherwise.
     pub inside_is_trace_end: bool,
     /// Where this segment sits in its trace.
     pub segment_index: usize,
@@ -685,8 +686,75 @@ impl DrcRule for PadEntryRule {
     }
 
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
-        measure_entries(world).0
+        let mut violations = measure_entries(world).0;
+        violations.extend(teardrop_findings(world));
+        violations
     }
+}
+
+/// R-08's second half: where the board asks for teardrops, the teardrops it
+/// holds are the ones its tracks and lands give.
+///
+/// The subject is the teardrop copper in the board. What the tracks give is
+/// what [`cypcb_world::teardrop::teardrops_of`] makes of them - the one
+/// builder, so this rule does not carry a second idea of where a fillet goes -
+/// and what the board holds is read from its copper. A fillet the tracks give
+/// and the copper lacks is a track that grew a join the board never drew (a
+/// copper that was not rebuilt after the track moved); a fillet the copper
+/// holds and the tracks do not give is the same fault the other way. A board
+/// that never asked has no teardrops to account for and says nothing.
+pub fn teardrop_findings(world: &mut BoardWorld) -> Vec<DrcViolation> {
+    let Some(asked) = world.teardrops() else {
+        return Vec::new();
+    };
+    let ratios = cypcb_world::teardrop::TeardropRatios {
+        length: asked.length,
+        width: asked.width,
+    };
+    let library = world.footprints().clone();
+    let expected = cypcb_world::teardrop::teardrops_of(world, &library, ratios);
+    let held = cypcb_world::teardrop::teardrop_copper(world);
+
+    let key = |t: &cypcb_world::teardrop::TeardropCopper, net: cypcb_world::components::NetId| {
+        (t.outline.clone(), t.layer, net)
+    };
+    let mut unmatched: Vec<_> = held
+        .iter()
+        .map(|(entity, t, net)| (key(t, *net), *entity))
+        .collect();
+
+    let mut violations = Vec::new();
+    for (teardrop, net) in &expected {
+        let wanted = key(teardrop, *net);
+        match unmatched.iter().position(|(k, _)| *k == wanted) {
+            Some(at) => {
+                unmatched.remove(at);
+            }
+            None => {
+                if let Some((part, pin)) = &teardrop.land {
+                    let label = world
+                        .get::<RefDes>(*part)
+                        .map(|r| format!("{}.{}", r.as_str(), pin))
+                        .unwrap_or_else(|| pin.clone());
+                    violations.push(DrcViolation::teardrop_off(
+                        *part,
+                        label,
+                        false,
+                        teardrop.outline[0],
+                    ));
+                }
+            }
+        }
+    }
+    for ((outline, _, _), entity) in unmatched {
+        violations.push(DrcViolation::teardrop_off(
+            entity,
+            "teardrop".to_string(),
+            true,
+            outline[0],
+        ));
+    }
+    violations
 }
 
 #[cfg(test)]

@@ -325,6 +325,18 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
             .collect()
     };
 
+    // A teardrop is copper of its track's net, and is named for it.
+    let teardrop_label_map: HashMap<u32, String> = cypcb_world::teardrop::teardrop_copper(world)
+        .into_iter()
+        .map(|(e, _, _)| {
+            let net = net_name_map
+                .get(&e.index())
+                .map(|n| n.as_str())
+                .unwrap_or("?");
+            (e.index(), format!("teardrop '{}'", net))
+        })
+        .collect();
+
     // Helper: get human label for an entity
     let label = |idx: u32| -> String {
         if let Some(r) = refdes_map.get(&idx) {
@@ -337,6 +349,9 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
             return l.clone();
         }
         if let Some(l) = via_label_map.get(&idx) {
+            return l.clone();
+        }
+        if let Some(l) = teardrop_label_map.get(&idx) {
             return l.clone();
         }
         // Nothing in the world names this entity. Rather than invent a label,

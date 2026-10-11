@@ -953,6 +953,32 @@ impl DrcViolation {
         }
     }
 
+    /// A board that asks for teardrops, and a land whose teardrop is not what
+    /// the tracks give.
+    ///
+    /// R-08's second half. `held` says which way it is wrong: the board holds
+    /// a teardrop where no track meets the land, or none where one does.
+    pub fn teardrop_off(entity: Entity, pin: String, held: bool, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::PadEntry,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: if held {
+                format!("{pin}: a teardrop is in the copper where no track meets the land")
+            } else {
+                format!(
+                    "{pin}: the board asks for teardrops and none is in the copper where a \
+                     track meets the land"
+                )
+            },
+        }
+    }
+
     /// Another net's copper too close to a milled slot.
     ///
     /// The same physical question `edge_clearance` asks about the board
