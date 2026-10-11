@@ -308,6 +308,7 @@ impl ApertureManager {
 ///     layers: vec![Layer::TopCopper],
 ///     mask_margin: None,
 ///     rotation: Rotation::ZERO,
+///     hole_offset: None,
 /// };
 ///
 /// let turned = aperture_for_pad(&pad.outline(Point::ORIGIN, Rotation::DEG_90));
@@ -790,6 +791,7 @@ mod tests {
     #[test]
     fn test_aperture_for_pad_circle() {
         let pad = PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: WorldPadShape::Circle,
             position: Point::ORIGIN,
@@ -813,6 +815,7 @@ mod tests {
     #[test]
     fn test_aperture_for_pad_rect() {
         let pad = PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: WorldPadShape::Rect,
             position: Point::ORIGIN,
@@ -837,6 +840,7 @@ mod tests {
     #[test]
     fn test_aperture_for_pad_oblong() {
         let pad = PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: WorldPadShape::Oblong,
             position: Point::ORIGIN,
@@ -861,6 +865,7 @@ mod tests {
     #[test]
     fn test_aperture_for_pad_turned_rect() {
         let pad = PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: WorldPadShape::Rect,
             position: Point::ORIGIN,
@@ -887,6 +892,7 @@ mod tests {
     #[test]
     fn test_aperture_for_pad_turned_oblong() {
         let pad = PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: WorldPadShape::Oblong,
             position: Point::ORIGIN,
@@ -958,6 +964,7 @@ mod tests {
     #[test]
     fn test_aperture_for_pad_roundrect() {
         let pad = PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: WorldPadShape::RoundRect { corner_ratio: 25 },
             position: Point::ORIGIN,

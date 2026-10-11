@@ -32,6 +32,7 @@ fn footprint(name: &str, w: f64, h: f64, ratio: u8, margin: Option<f64>) -> Foot
         name: name.to_string(),
         description: String::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::RoundRect {
                 corner_ratio: ratio,

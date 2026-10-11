@@ -30,6 +30,7 @@ fn board_with_pour(pad_at: Point, cut: bool) -> BoardWorld {
         courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

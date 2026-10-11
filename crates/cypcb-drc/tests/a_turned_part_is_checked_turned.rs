@@ -24,6 +24,7 @@ fn board(spacing_mm: f64, rotation: Rotation) -> BoardWorld {
     let mut world = BoardWorld::new();
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
     let pad = |number: &str, x: f64| PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Rect,
         position: Point::from_mm(x, 0.0),

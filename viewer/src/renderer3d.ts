@@ -224,8 +224,10 @@ export function padDrills(
     for (const pad of comp.pads) {
       if (!pad.drill_nm) continue;
 
-      const padXmm = pad.x_nm * NM_TO_MM;
-      const padYmm = pad.y_nm * NM_TO_MM;
+      // The hole, which a pad can state off the middle of its copper.
+      const [holeDx, holeDy] = pad.hole_offset_nm ?? [0, 0];
+      const padXmm = (pad.x_nm + holeDx) * NM_TO_MM;
+      const padYmm = (pad.y_nm + holeDy) * NM_TO_MM;
       drills.push({
         x: comp.x_nm * NM_TO_MM + (padXmm * cosR - padYmm * sinR),
         y: comp.y_nm * NM_TO_MM + (padXmm * sinR + padYmm * cosR),

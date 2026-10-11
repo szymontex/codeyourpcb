@@ -43,6 +43,7 @@ use cypcb_world::BoardWorld;
 /// parser, and the question here is about what the writer emits.
 fn two_pin_header() -> Footprint {
     let pad = |number: &str, x: f64| PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Circle,
         position: Point::from_mm(x, 0.0),

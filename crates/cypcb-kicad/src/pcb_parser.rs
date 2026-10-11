@@ -1222,8 +1222,8 @@ fn coordinate(value: &Sexp, what: &str) -> Result<f64, KicadPcbError> {
 /// otherwise the name with a numbered suffix, so a second geometry sharing a
 /// name gets a home of its own rather than silently inheriting the first.
 ///
-/// Pads are compared as written - number, shape, position, size, drill and
-/// layers - because those are what the router and the checker read. Two parts
+/// Pads are compared as written - number, shape, position, size, drill, the
+/// hole's offset and layers - because those are what the router and the checker read. Two parts
 /// that differ only in rotation are the same footprint placed differently and
 /// share a key, which is what the `rotation` on the component is for.
 fn resolve_library_key(library: &FootprintLibrary, name: &str, pads: &[PadDef]) -> String {
@@ -1237,6 +1237,7 @@ fn resolve_library_key(library: &FootprintLibrary, name: &str, pads: &[PadDef]) 
                     && a.drill == b.drill
                     && a.layers == b.layers
                     && a.rotation == b.rotation
+                    && a.hole_offset == b.hole_offset
             })
     };
 
@@ -1376,23 +1377,28 @@ fn parse_footprint(
 
     let pad_defs: Vec<PadDef> = pads
         .iter()
-        .map(|p| PadDef {
-            number: p.number.clone(),
-            shape: p.shape,
-            position: p.local_position,
-            size: p.size,
-            drill: p.drill,
-            slot: p.slot,
-            layers: p.layers.clone(),
-            mask_margin: None,
-            // "The pad angle in the file is a board frame absolute value. If
-            // it is missing, the pad is axis aligned regardless of the parent
-            // footprint orientation" - KiCad's board reader,
-            // `pcb_io_kicad_sexpr_parser.cpp` at a62d8cd4 (read 2026-09-26).
-            // The footprint keeps a pad's turn inside itself, so the part's
-            // turn comes off. A pad with no angle on a turned part is turned
-            // back by the part's turn, which is what "axis aligned" means.
-            rotation: Rotation((p.angle.0 - rotation.0).rem_euclid(360_000)),
+        .map(|p| {
+            let turn = Rotation((p.angle.0 - rotation.0).rem_euclid(360_000));
+            let (position, hole_offset) = p.copper_and_hole(turn);
+            PadDef {
+                hole_offset,
+                number: p.number.clone(),
+                shape: p.shape,
+                position,
+                size: p.size,
+                drill: p.drill,
+                slot: p.slot,
+                layers: p.layers.clone(),
+                mask_margin: None,
+                // "The pad angle in the file is a board frame absolute value. If
+                // it is missing, the pad is axis aligned regardless of the parent
+                // footprint orientation" - KiCad's board reader,
+                // `pcb_io_kicad_sexpr_parser.cpp` at a62d8cd4 (read 2026-09-26).
+                // The footprint keeps a pad's turn inside itself, so the part's
+                // turn comes off. A pad with no angle on a turned part is turned
+                // back by the part's turn, which is what "axis aligned" means.
+                rotation: turn,
+            }
         })
         .collect();
 
@@ -1490,6 +1496,36 @@ pub(crate) struct ParsedPad {
     /// footprint; in a board file it is the pad's turn on the board, and the
     /// board reader takes the part's turn off it.
     pub(crate) angle: Rotation,
+    /// The `(offset x y)` of the pad's `(drill ...)`, as a vector in this
+    /// project's frame and the pad's own: how far KiCad puts the pad's COPPER
+    /// from its hole. The pad's `(at)` is the hole - the anchor - and the
+    /// copper is `at` plus this turned by the pad's angle (`PAD::ShapePos`,
+    /// `pcbnew/pad.cpp`; KiCad master, read 2026-10-11).
+    pub(crate) shape_offset: Option<Point>,
+}
+
+impl ParsedPad {
+    /// Where the copper stands in the footprint, and where the hole is from
+    /// the copper's middle, once the pad's turn inside the footprint is
+    /// `rotation`.
+    ///
+    /// This project keeps a pad at its copper, and states the hole as an offset
+    /// from it, so the two are made here from KiCad's one: the copper is the
+    /// hole plus the file's offset turned, and the hole from the copper is the
+    /// offset negated.
+    pub(crate) fn copper_and_hole(&self, rotation: Rotation) -> (Point, Option<Point>) {
+        let Some(offset) = self.shape_offset else {
+            return (self.local_position, None);
+        };
+        let turned = cypcb_world::components::rotate_about_origin(offset, rotation.to_degrees());
+        (
+            Point::new(
+                Nm(self.local_position.x.0 + turned.x.0),
+                Nm(self.local_position.y.0 + turned.y.0),
+            ),
+            Some(Point::new(Nm(-offset.x.0), Nm(-offset.y.0))),
+        )
+    }
 }
 
 /// The corner a `roundrect` pad states, as a percentage of its short side.
@@ -1566,6 +1602,7 @@ pub(crate) fn parse_pad(
     let mut net_id: Option<NetId> = None;
     let mut mask_margin: Option<Nm> = None;
     let mut angle = Rotation::ZERO;
+    let mut shape_offset: Option<Point> = None;
 
     for prop in &elements[3..] {
         if let Some(name) = list_name(prop) {
@@ -1598,11 +1635,30 @@ pub(crate) fn parse_pad(
                 // with a message about a stray comma. Every USB connector,
                 // barrel jack and latching header has one.
                 //
-                // Either form may carry `(offset x y)`, which moves the hole
-                // inside its pad. That is read where the pad is placed, not
-                // here.
+                // Either form may carry `(offset x y)`. It moves the pad's
+                // COPPER off the hole, not the hole off the pad: `(at)` stays
+                // the hole and the copper stands at `at` plus the offset turned
+                // by the pad's angle (`PAD::ShapePos` in `pcbnew/pad.cpp`;
+                // KiCad master, read 2026-10-11). Kept here as read and made
+                // into a position and a hole offset by `copper_and_hole`. This
+                // comment used to say it was "read where the pad is placed";
+                // nothing read it anywhere.
                 "drill" => {
                     if let Ok(list) = prop.list() {
+                        for item in list.iter().skip(1) {
+                            if list_name(item).as_deref() == Some("offset") {
+                                if let Ok(pair) = item.list() {
+                                    if pair.len() >= 3 {
+                                        let x = coordinate(&pair[1], "pad drill offset x")?;
+                                        let y = coordinate(&pair[2], "pad drill offset y")?;
+                                        let moved = frame::local_point(x, y);
+                                        if moved != Point::ORIGIN {
+                                            shape_offset = Some(moved);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         let is_oval = list.get(1).and_then(get_string).as_deref() == Some("oval");
                         if is_oval && list.len() >= 4 {
                             let w = coordinate(&list[2], "pad slot width")?;
@@ -1688,6 +1744,7 @@ pub(crate) fn parse_pad(
         mask_margin,
         approximated_from,
         angle,
+        shape_offset,
     }))
 }
 

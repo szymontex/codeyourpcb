@@ -28,6 +28,7 @@ const AT: (f64, f64) = (10.0, 40.0);
 fn pin_header_1x12() -> Footprint {
     let pads = (0..12)
         .map(|i| PadDef {
+            hole_offset: None,
             number: (i + 1).to_string(),
             shape: if i == 0 {
                 PadShape::Rect
@@ -61,6 +62,7 @@ fn pin_header_1x12() -> Footprint {
 /// with no copper under the body.
 fn module_on_its_body(peg: bool) -> Footprint {
     let smd = |number: &str, x: f64| PadDef {
+        hole_offset: None,
         number: number.into(),
         shape: PadShape::Rect,
         position: Point::from_mm(x, 3.0),
@@ -74,6 +76,7 @@ fn module_on_its_body(peg: bool) -> Footprint {
     let mut pads = vec![smd("1", -2.0), smd("2", 2.0)];
     if peg {
         pads.push(PadDef {
+            hole_offset: None,
             number: String::new(),
             shape: PadShape::Circle,
             position: Point::from_mm(0.0, -1.0),

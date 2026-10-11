@@ -6,9 +6,15 @@
 //!
 //! For non-circular pads, the smaller of width/height is used as the
 //! effective pad diameter (worst-case check).
+//!
+//! A pad whose hole is not in the middle of its copper
+//! ([`PadDef::hole_offset`]) is measured where the hole is: the ring is the
+//! smallest gap between the hole's edge and the pad's edge, which is narrower
+//! on the side the hole is moved towards.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::{FootprintRef, Position, RefDes};
+use cypcb_world::components::{FootprintRef, PadShape, Position, RefDes};
+use cypcb_world::footprint::PadDef;
 use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
@@ -74,18 +80,21 @@ impl DrcRule for AnnularRingRule {
                     continue; // SMD pad — no drill, no annular ring check
                 };
 
-                // Use the smaller of width/height for worst-case annular ring
-                let pad_diameter = pad.size.0.min(pad.size.1);
+                let ring = if pad.hole_offset.is_some() {
+                    ring_round_an_offset_hole(pad, drill)
+                } else {
+                    // Use the smaller of width/height for worst-case annular ring
+                    let pad_diameter = pad.size.0.min(pad.size.1);
 
-                // annular_ring = (pad_diameter - drill_diameter) / 2
-                // Use saturating sub to avoid underflow on malformed data
-                let ring = Nm((pad_diameter.0.saturating_sub(drill.0)) / 2);
+                    // annular_ring = (pad_diameter - drill_diameter) / 2
+                    // Use saturating sub to avoid underflow on malformed data
+                    Nm((pad_diameter.0.saturating_sub(drill.0)) / 2)
+                };
 
                 if ring < min_ring {
-                    let pad_location = Point::new(
-                        Nm(position.0.x.0 + pad.position.x.0),
-                        Nm(position.0.y.0 + pad.position.y.0),
-                    );
+                    let hole = pad.hole_centre();
+                    let pad_location =
+                        Point::new(Nm(position.0.x.0 + hole.x.0), Nm(position.0.y.0 + hole.y.0));
                     violations.push(
                         DrcViolation::annular_ring(entity, ring, min_ring, pad_location)
                             .with_pad_info(refdes.as_str(), &pad.number),
@@ -96,6 +105,47 @@ impl DrcRule for AnnularRingRule {
 
         violations
     }
+}
+
+/// The ring round a hole that is not in the middle of its pad: the shortest
+/// way from the hole's edge to the pad's edge, in the pad's own frame.
+///
+/// A hole is the path of its bit's centre - one point for a drilled hole, two
+/// ends for a slot - grown by the bit's radius. The distance from a point
+/// inside a convex pad to the pad's edge is a concave function of the point, so
+/// the smallest over the path is at one of its ends, and the ring is that
+/// smallest distance less the radius. The distance itself is that of a
+/// rounded rectangle, which every shape this project has is: a rectangle is
+/// one with no rounding, a rounded rectangle has its own, and a circle or an
+/// oblong is one rounded by half its narrow side.
+fn ring_round_an_offset_hole(pad: &PadDef, drill: Nm) -> Nm {
+    let (half_w, half_h) = (pad.size.0 .0 as f64 / 2.0, pad.size.1 .0 as f64 / 2.0);
+    let rounding = match pad.shape {
+        PadShape::Rect => 0.0,
+        PadShape::RoundRect { corner_ratio } => {
+            pad.size.0 .0.min(pad.size.1 .0) as f64 * f64::from(corner_ratio) / 100.0
+        }
+        PadShape::Circle | PadShape::Oblong => half_w.min(half_h),
+    };
+    let offset = pad.hole_offset.unwrap_or(Point::ORIGIN);
+    let travel = pad
+        .slot_half_travel_in_the_pad_frame()
+        .unwrap_or(Point::ORIGIN);
+    let from_the_edge = |x: f64, y: f64| {
+        let (qx, qy) = (
+            (x.abs() - (half_w - rounding)).max(0.0),
+            (y.abs() - (half_h - rounding)).max(0.0),
+        );
+        if qx == 0.0 && qy == 0.0 {
+            (half_w - x.abs()).min(half_h - y.abs())
+        } else {
+            rounding - (qx * qx + qy * qy).sqrt()
+        }
+    };
+    let (ox, oy) = (offset.x.0 as f64, offset.y.0 as f64);
+    let (tx, ty) = (travel.x.0 as f64, travel.y.0 as f64);
+    let nearest = from_the_edge(ox - tx, oy - ty).min(from_the_edge(ox + tx, oy + ty));
+    Nm((nearest - drill.0 as f64 / 2.0).round().max(0.0) as i64)
 }
 
 #[cfg(test)]

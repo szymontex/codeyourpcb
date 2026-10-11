@@ -31,6 +31,7 @@ const OTHER: NetId = NetId::new(2);
 
 fn pad(number: &str, y_nm: i64) -> PadDef {
     PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Rect,
         position: Point::new(Nm(0), Nm(y_nm)),

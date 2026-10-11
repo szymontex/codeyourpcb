@@ -23,6 +23,7 @@ use cypcb_world::BoardWorld;
 /// parser, and the export job does not care where its board came from.
 fn two_pad_footprint() -> Footprint {
     let pad = |number: &str, x: f64| PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Rect,
         position: Point::from_mm(x, 0.0),

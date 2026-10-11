@@ -126,6 +126,7 @@ fn board_with_pad_and_body(gap_mm: f64, courtyard_half_mm: f64) -> BoardWorld {
         ),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

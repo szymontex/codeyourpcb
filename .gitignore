@@ -58,7 +58,7 @@ export-test/
 TODO.md
 
 # Node.js
-node_modules/
+node_modules
 .next/
 dist/
 build/

@@ -48,6 +48,7 @@ fn board(
         name: "P".to_string(),
         description: String::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::RoundRect {
                 corner_ratio: ratio,

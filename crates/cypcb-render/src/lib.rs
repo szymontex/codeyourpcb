@@ -1594,6 +1594,12 @@ impl PcbEngine {
                         slot_nm: pad
                             .slot
                             .map(|(w, h)| if stood_up { (h.0, w.0) } else { (w.0, h.0) }),
+                        // From the pad's middle to its hole, in the footprint's
+                        // frame: the pad's own turn is taken up like its sides.
+                        hole_offset_nm: pad.hole_offset.map(|_| {
+                            let hole = pad.hole_centre();
+                            (hole.x.0 - pad.position.x.0, hole.y.0 - pad.position.y.0)
+                        }),
                     });
                 }
             }

@@ -85,6 +85,7 @@ fn board_with_mounting_hole(drill_mm: f64, thickness_mm: f64) -> BoardWorld {
     library.register_design(Footprint {
         name: "screw".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: String::new(),
             shape: PadShape::Circle,
             position: Point::from_mm(0.0, 0.0),

@@ -122,6 +122,7 @@ fn the_slot_rule_speaks_when_foreign_copper_is_beside_a_slot() {
         courtyard: Rect::from_points(Point::from_mm(-2.0, -1.2), Point::from_mm(2.0, 1.2)),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Oblong,
             position: Point::ORIGIN,
@@ -142,6 +143,7 @@ fn the_slot_rule_speaks_when_foreign_copper_is_beside_a_slot() {
         courtyard: Rect::from_points(Point::from_mm(-0.5, -0.5), Point::from_mm(0.5, 0.5)),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

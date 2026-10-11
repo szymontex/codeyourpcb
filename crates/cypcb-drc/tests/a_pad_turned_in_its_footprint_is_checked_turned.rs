@@ -32,6 +32,7 @@ fn board(part: Rotation, pad: Rotation) -> BoardWorld {
     library.register_design(Footprint {
         name: "land".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

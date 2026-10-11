@@ -209,10 +209,15 @@ fn read_pad(pad: &Sexp) -> Result<Option<PadDef>, KicadImportError> {
         .skip(1)
         .any(|item| list_name(item).as_deref() == Some("drill"));
 
+    // A footprint file has no part around it: the angle it states is the
+    // pad's turn inside the footprint, as it is.
+    let (position, hole_offset) = parsed.copper_and_hole(parsed.angle);
+
     Ok(Some(PadDef {
+        hole_offset,
         number: parsed.number,
         shape: parsed.shape,
-        position: parsed.local_position,
+        position,
         size: parsed.size,
         drill: if states_drill { parsed.drill } else { None },
         slot: parsed.slot,

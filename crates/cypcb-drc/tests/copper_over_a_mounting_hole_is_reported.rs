@@ -38,6 +38,7 @@ fn mounting_hole() -> Footprint {
         name: "MOUNT-M3".to_string(),
         description: "M3 mounting hole".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: String::new(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,
@@ -200,6 +201,7 @@ fn a_plated_hole_is_not_measured_by_this_rule() {
         name: "PIN".to_string(),
         description: "one plated pin".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,

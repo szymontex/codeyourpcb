@@ -760,6 +760,7 @@ mod tests {
         use cypcb_world::components::{Layer, PadShape, Rotation};
         use cypcb_world::footprint::PadDef;
         let pad = |size: (f64, f64), turn: Rotation| PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: cypcb_core::Point::ORIGIN,

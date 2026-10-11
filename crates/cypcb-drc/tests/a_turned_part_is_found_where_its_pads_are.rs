@@ -31,6 +31,7 @@ const HALF_PAD_MM: f64 = 0.3;
 
 fn pad(number: &str, x_mm: f64) -> PadDef {
     PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Rect,
         position: Point::from_mm(x_mm, 0.0),
@@ -75,6 +76,7 @@ fn mounting_hole() -> Footprint {
         name: "MOUNT-M3".to_string(),
         description: "M3 mounting hole".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: String::new(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,
@@ -100,6 +102,7 @@ fn latch(library: &FootprintLibrary) -> Footprint {
     Footprint {
         name: "latch".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Oblong,
             position: Point::ORIGIN,

@@ -447,6 +447,17 @@ pub struct PadInfo {
     /// 1mm circle shows a designer a hole their connector will not fit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slot_nm: Option<(i64, i64)>,
+    /// Where the hole is from the pad's middle, `(dx, dy)` in nanometers in the
+    /// footprint's frame, y up: the pad's own turn already taken up, as the
+    /// sides above are.
+    ///
+    /// Absent when the hole is in the middle of its copper, which is nearly
+    /// every hole - and absent from the JSON entirely, so a snapshot written
+    /// before a hole could be off the middle still reads. A drilled pad's hole
+    /// is where the drill file puts it, and a view that draws it in the middle
+    /// of the land shows a hole the board does not have.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hole_offset_nm: Option<(i64, i64)>,
 }
 
 impl PadInfo {
@@ -489,6 +500,7 @@ impl PadInfo {
         }
 
         PadDef {
+            hole_offset: pad.hole_offset_nm.map(|(x, y)| Point::new(Nm(x), Nm(y))),
             number: pad.number.clone(),
             shape,
             position: Point::new(Nm(pad.x_nm), Nm(pad.y_nm)),
@@ -678,6 +690,7 @@ mod tests {
                         layer_mask: 1,
                         drill_nm: None,
                         slot_nm: None,
+                        hole_offset_nm: None,
                     },
                     PadInfo {
                         number: "2".to_string(),
@@ -689,6 +702,7 @@ mod tests {
                         layer_mask: 1,
                         drill_nm: None,
                         slot_nm: None,
+                        hole_offset_nm: None,
                     },
                 ],
                 body_width_nm: 1_000_000,

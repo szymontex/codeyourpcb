@@ -115,6 +115,7 @@ fn two_pads_with_no_net_are_compared_to_each_other() {
         courtyard: Rect::from_points(Point::from_mm(-0.5, -0.5), Point::from_mm(0.5, 0.5)),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

@@ -66,6 +66,7 @@ fn chip_footprint(
         description: description.into(),
         pads: vec![
             PadDef {
+                hole_offset: None,
                 number: "1".into(),
                 shape: PadShape::Rect,
                 position: Point::new(-half_span, Nm::ZERO),
@@ -77,6 +78,7 @@ fn chip_footprint(
                 rotation: Rotation::ZERO,
             },
             PadDef {
+                hole_offset: None,
                 number: "2".into(),
                 shape: PadShape::Rect,
                 position: Point::new(half_span, Nm::ZERO),

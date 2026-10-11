@@ -936,6 +936,7 @@ mod tests {
 
     fn square_pad(offset: Point) -> PadDef {
         PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Rect,
             position: offset,
@@ -1196,6 +1197,7 @@ mod tests {
         library.register_design(Footprint {
             name: "pin".to_string(),
             pads: vec![PadDef {
+                hole_offset: None,
                 number: "1".to_string(),
                 shape,
                 position: Point::from_mm(offset_mm.0, offset_mm.1),
@@ -1675,6 +1677,7 @@ mod tests {
     fn a_pad_s_own_turn_turns_the_land_a_trace_enters() {
         use cypcb_world::components::Rotation;
         let pad = |turn: Rotation| PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

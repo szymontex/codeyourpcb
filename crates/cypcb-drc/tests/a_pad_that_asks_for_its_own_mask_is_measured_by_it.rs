@@ -30,6 +30,7 @@ fn board(margin: Option<Nm>) -> BoardWorld {
     world.set_board("two".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
 
     let pad = |x_mm: f64, number: &str| PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Rect,
         position: Point::from_mm(x_mm, 0.0),

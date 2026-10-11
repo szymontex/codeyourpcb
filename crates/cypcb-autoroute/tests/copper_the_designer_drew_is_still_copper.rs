@@ -30,6 +30,7 @@ fn board(locked: bool) -> (BoardWorld, cypcb_world::footprint::FootprintLibrary)
         courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,
@@ -134,6 +135,7 @@ fn a_net_a_hand_trace_already_joins_is_not_routed_again() {
         courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,
@@ -202,6 +204,7 @@ fn copper_on_another_layer_does_not_count_as_a_connection() {
         courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,
@@ -270,6 +273,7 @@ fn a_via_joins_two_traces_into_one_piece_of_copper() {
         courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,
@@ -361,6 +365,7 @@ fn a_ground_plane_connects_the_pins_that_sit_in_it() {
         courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,
@@ -436,6 +441,7 @@ fn a_net_crosses_its_own_hand_trace_to_reach_its_pad() {
         courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,
@@ -536,6 +542,7 @@ fn strip_board(layer_count: u8) -> (BoardWorld, cypcb_world::footprint::Footprin
             courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
             silk: Vec::new(),
             pads: vec![PadDef {
+                hole_offset: None,
                 number: "1".into(),
                 shape: PadShape::Rect,
                 position: Point::ORIGIN,

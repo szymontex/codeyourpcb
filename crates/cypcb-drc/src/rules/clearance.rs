@@ -2590,6 +2590,7 @@ mod tests {
         use cypcb_world::components::{PadShape, Rotation};
         use cypcb_world::footprint::PadDef;
         let pad = |turn: Rotation| PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

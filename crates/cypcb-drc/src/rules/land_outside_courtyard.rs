@@ -98,6 +98,7 @@ mod tests {
 
     fn pad(number: &str, x_mm: f64) -> PadDef {
         PadDef {
+            hole_offset: None,
             number: number.to_string(),
             shape: PadShape::Rect,
             position: Point::from_mm(x_mm, 0.0),

@@ -26,6 +26,7 @@ const FORMAT: CoordinateFormat = CoordinateFormat::FORMAT_MM_2_6;
 
 fn pad(number: &str, x: f64, shape: PadShape, w: f64, h: f64) -> PadDef {
     PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape,
         position: Point::from_mm(x, 0.0),

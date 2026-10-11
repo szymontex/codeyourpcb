@@ -146,3 +146,43 @@ describe('holes in the 3D view', () => {
     expect(padDrills([])).toEqual([]);
   });
 });
+
+describe('a hole off the middle of its pad', () => {
+  const offset = component('J2', 10_000_000, 10_000_000, 90_000, [
+    {
+      number: '1',
+      x_nm: 1_000_000,
+      y_nm: 0,
+      width_nm: 2_000_000,
+      height_nm: 3_000_000,
+      shape: 'rect',
+      layer_mask: 0x03,
+      drill_nm: 800_000,
+      // 0.5mm right and 0.25mm up from the middle of the land, in the
+      // footprint's frame.
+      hole_offset_nm: [500_000, 250_000],
+    },
+    {
+      number: '2',
+      x_nm: 3_000_000,
+      y_nm: 0,
+      width_nm: 2_000_000,
+      height_nm: 3_000_000,
+      shape: 'rect',
+      layer_mask: 0x03,
+      drill_nm: 800_000,
+    },
+  ]);
+
+  it('is drilled where the hole is, turned with its part', () => {
+    // The part is turned a quarter: the hole of pad 1 is at (1.5, 0.25) in the
+    // footprint, which a quarter turn puts at (-0.25, 1.5) from the part's
+    // origin. Pad 2, whose hole is in the middle, is at (3, 0) -> (0, 3).
+    const [first, second] = padDrills([offset]);
+    expect(first.x).toBeCloseTo(10 - 0.25, 6);
+    expect(first.y).toBeCloseTo(10 + 1.5, 6);
+    // The control: the hole in the middle of its land is drilled at the pad.
+    expect(second.x).toBeCloseTo(10, 6);
+    expect(second.y).toBeCloseTo(10 + 3, 6);
+  });
+});

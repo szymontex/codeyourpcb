@@ -1,0 +1,17 @@
+{
+  "_source": "Synthetic, written 2026-10-11 from the PAD example in the EasyEDA format document (docs.easyeda.com/en/DocumentFormat/EasyEDA-Format-Standard, read 2026-10-11): `PAD~ELLIPSE~4020~3308.5~6~6~11~~1~1.8~~0~gge5~0~~Y~0~~~4020,3308.5`, whose twentieth field, holeCenter, states the pad's centre again. Three 2.00 x 3.00mm pads with a 0.80mm hole, 2.54mm apart. Pad 1: holeCenter moved 0.5mm right and 0.5mm down the sheet from the pad's centre (EasyEDA's y grows downwards). Pad 2: the same, with the pad turned 90 degrees. Pad 3: the hole in the middle, which is the control.",
+  "result": {
+    "title": "OFFSET-HOLE",
+    "packageDetail": {
+      "title": "OFFSET-HOLE",
+      "dataStr": {
+        "head": { "x": "4000", "y": "3000" },
+        "shape": [
+          "PAD~RECT~4000~3000~7.874~11.811~11~~1~1.5748~~0~gge_o1~0~~Y~0~0~0.2~4001.9685,3001.9685",
+          "PAD~RECT~4010~3000~7.874~11.811~11~~2~1.5748~~90~gge_o2~0~~Y~0~0~0.2~4011.9685,3001.9685",
+          "PAD~RECT~4020~3000~7.874~11.811~11~~3~1.5748~~0~gge_o3~0~~Y~0~0~0.2~4020,3000"
+        ]
+      }
+    }
+  }
+}

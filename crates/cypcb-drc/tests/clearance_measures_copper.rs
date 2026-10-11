@@ -24,6 +24,7 @@ use cypcb_world::BoardWorld;
 /// 0.4mm wide and the courtyard is 2.0 x 1.2mm.
 fn two_pad_footprint() -> Footprint {
     let pad = |number: &str, x: f64| PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Rect,
         position: Point::from_mm(x, 0.0),

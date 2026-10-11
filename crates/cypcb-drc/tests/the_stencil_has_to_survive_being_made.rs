@@ -34,6 +34,7 @@ fn board_with_pad_gap(gap_mm: f64, drilled: bool) -> BoardWorld {
     let half = 0.5;
     let offset = half + gap_mm / 2.0;
     let pad = |number: &str, x: f64| PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Rect,
         position: Point::from_mm(x, 0.0),

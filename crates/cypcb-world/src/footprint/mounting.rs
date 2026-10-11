@@ -37,6 +37,7 @@ fn mounting_hole(name: &str, screw: &str, drill: Nm) -> Footprint {
             drill.to_mm()
         ),
         pads: vec![PadDef {
+            hole_offset: None,
             // KiCad writes no number on an NPTH pad, and nothing here needs
             // one: a mounting hole has no pin for a net to connect to.
             number: String::new(),
