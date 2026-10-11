@@ -34,7 +34,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::{FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
-use cypcb_world::{BoardWorld, Layer, PadShape};
+use cypcb_world::{in_build_order, BoardWorld, Layer, PadShape};
 
 /// Millimetres, with three decimals - a micron, the same figure the SVG uses.
 fn mm(value: Nm) -> String {
@@ -157,11 +157,8 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
 
     // Pads, where the component's rotation puts them.
     let parts: Vec<(Point, i32, String)> = {
-        let mut query = world
-            .ecs_mut()
-            .query::<(&Position, &Rotation, &FootprintRef)>();
-        query
-            .iter(world.ecs())
+        in_build_order::<(&Position, &Rotation, &FootprintRef)>(world.ecs_mut())
+            .into_iter()
             .map(|(position, rotation, footprint)| {
                 (position.0, rotation.0, footprint.as_str().to_string())
             })
@@ -198,11 +195,8 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
     // at as the polyline's own width.
     type PlottedTrace = (Trace, Option<cypcb_world::components::trace::Curve>);
     let traces: Vec<PlottedTrace> = {
-        let mut query = world
-            .ecs_mut()
-            .query::<(&Trace, Option<&cypcb_world::components::trace::Curve>)>();
-        query
-            .iter(world.ecs())
+        in_build_order::<(&Trace, Option<&cypcb_world::components::trace::Curve>)>(world.ecs_mut())
+            .into_iter()
             .filter(|(trace, _)| trace.layer == layer)
             .map(|(trace, curve)| (trace.clone(), curve.copied()))
             .collect()
@@ -271,8 +265,10 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
     // because a mechanical tool asking where to clear a boss wants the drilled
     // holes and not the copper around them.
     let vias: Vec<Via> = {
-        let mut query = world.ecs_mut().query::<&Via>();
-        query.iter(world.ecs()).cloned().collect()
+        in_build_order::<&Via>(world.ecs_mut())
+            .into_iter()
+            .cloned()
+            .collect()
     };
     for via in vias {
         circle(
@@ -288,9 +284,10 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
     // draws them: the line stood off what it measures, a witness line back to
     // each end, and the figure the ends give.
     let dimensions: Vec<cypcb_world::components::BoardDimension> = {
-        let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&cypcb_world::components::BoardDimension>();
-        query.iter(ecs).copied().collect()
+        in_build_order::<&cypcb_world::components::BoardDimension>(world.ecs_mut())
+            .into_iter()
+            .copied()
+            .collect()
     };
     for dimension in &dimensions {
         let dx = (dimension.to.x.0 - dimension.from.x.0) as f64;

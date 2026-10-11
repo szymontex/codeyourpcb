@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="24.000mm" height="20.000mm" viewBox="0 0 24.000 20.000">
+  <title>curved_track - TopCopper</title>
+  <g transform="translate(0 20.000) scale(1 -1)">
+  <rect x="0" y="0" width="24.000" height="20.000" fill="none" stroke="#404040" stroke-width="0.100"/>
+  <line x1="8.000" y1="6.000" x2="12.000" y2="6.000" stroke="#c02020" stroke-width="0.250" stroke-linecap="round"/>
+  <path d="M 12.000 6.000 A 4.000 4.000 0 0 0 8.000 10.000" fill="none" stroke="#c02020" stroke-width="0.250" stroke-linecap="round"/>
+  <line x1="8.000" y1="10.000" x2="8.000" y2="14.000" stroke="#c02020" stroke-width="0.250" stroke-linecap="round"/>
+  </g>
+</svg>

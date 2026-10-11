@@ -298,10 +298,8 @@ pub fn export_silkscreen_reporting(
             Side::Bottom => Layer::BottomSilk,
         };
         let texts: Vec<cypcb_world::components::BoardText> = {
-            let ecs = world.ecs_mut();
-            let mut query = ecs.query::<&cypcb_world::components::BoardText>();
-            query
-                .iter(ecs)
+            in_build_order::<&cypcb_world::components::BoardText>(world.ecs_mut())
+                .into_iter()
                 .filter(|text| text.layer == silk_layer)
                 .cloned()
                 .collect()
