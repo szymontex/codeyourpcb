@@ -14,20 +14,44 @@
 //   drawing dated 18/12/23, https://gct.co/files/drawings/usb4105.pdf
 // - CC pull-downs 5.1k (Rd, sink): USB Type-C Cable and Connector
 //   Specification Release 2.0, August 2019, Table 4-25
-// - pad geometry: KiCad footprint library, https://gitlab.com/kicad/libraries/kicad-footprints
-//   (RF_Module, Connector_USB, Button_Switch_SMD,
-//   Connector_PinHeader_2.54mm), converted with Y negated because KiCad's Y
-//   grows down and a board's grows up. The regulator uses the built-in
-//   SOT-23-5, pin 1 at the top left. Module pads cross-checked against
-//   datasheet Figure 11-1: 1.27mm pitch, 1.5 x 0.9mm pads, columns 17.5mm apart.
+// - the four footprints below are drawn from part documents, pad by pad:
+//   - ESP32-S3-WROOM-1: the same datasheet, Figure 3-1 on p.10 (pin numbers,
+//     nine-pad ground grid, antenna zone) and Figure 11-1 on p.45 (land
+//     pattern) with the DXF it links (ESP32-S3-WROOM-1 PCB Footprint.dxf, read
+//     2026-10-09; figure and pin map re-read 2026-10-11): 1.27mm pitch,
+//     1.5 x 0.9mm side pads on columns 17.5mm apart, 0.9 x 1.5mm bottom pads,
+//     the first side pad 7.49mm below the module's top edge, module 18.0 x
+//     25.5mm, ground grid of 0.9 x 0.9mm pads on a 1.4mm pitch, its centre
+//     7.5mm from the left edge and 10.29mm from the bottom edge;
+//   - receptacle: the GCT drawing above, sheet 1, "Recommended PCB Layout"
+//     (read 2026-10-11): contact rows 6.40, 4.80 and 3.50mm over centres,
+//     0.50mm pitch, pads 0.60 and 0.30mm wide, 1.15mm long; shell slots 1.00 x
+//     2.10mm (hole 0.60 x 1.70mm) and 1.00 x 1.80mm (hole 0.60 x 1.40mm) on
+//     8.64mm centres; pegs 2 x diameter 0.65mm, 5.78mm apart; the lower slot
+//     centre line 2.60mm from the PCB edge line, the pegs 3.68mm and the near
+//     edge of the contact pads 4.18mm above that line; body 8.94 x 7.35mm;
+//   - tact switch: E-Switch series TL3342 catalogue page 22 (specifications
+//     dated 11.8.2018, read 2026-10-11), "P.C. Mounting": pads 8.00mm over
+//     the outside, 4.60mm over the inside, 4.80mm outside to outside in the
+//     other direction, 2.80mm inside; body 5.20 x 5.20mm;
+//   - pin header: Wurth Elektronik WR-PHD 61301211121 datasheet, revision
+//     003.001 of 2025-07-22, page 1/7 (read 2026-10-11): pitch 2.54mm, hole
+//     diameter 1.10mm (+/-0.15), body 2.54mm wide and 30.48mm long. That
+//     page gives no pad size: the 1.70mm pad is this file's own, the 1.10mm
+//     hole plus a 0.30mm ring on each side (the fab preset asks for 0.18mm,
+//     and the hole may be 0.15mm wider);
+//   - every courtyard is the part's body and pads, with 0.25mm added on each
+//     side (the project's IPC-7351 excess), written as one rectangle.
+//   The regulator uses the built-in SOT-23-5, pin 1 at the top left.
 //
 // What the language could not say, written as it is instead:
-// - `kicad::<name>` does not resolve, so every footprint is inline;
+// - a footprint from an imported library does not resolve here, so every
+//   footprint is inline;
 // - an inline hole is always plated, so the receptacle's two 0.65mm pegs are
 //   plated holes with no ring;
-// - a courtyard is one rectangle round the origin, so the module's antenna
+// - a courtyard is one rectangle, so the module's antenna
 //   clearance is a keepout on the board;
-// - the module's 12 thermal vias (0.2mm drill) under the ground pad are left
+// - the module's 12 thermal vias (0.25mm drill) under the ground pads are left
 //   out: the fab's smallest drill is 0.3mm, and the datasheet says soldering
 //   the pad is optional;
 // - there is no way to mark a pin as not connected, so the module's spare
@@ -40,8 +64,8 @@
 version 1
 
 footprint ESP32_S3_WROOM_1 {
-    description "ESP32-S3-WROOM-1 module, 41 pads"
-    courtyard 19.5mm x 27mm
+    description "ESP32-S3-WROOM-1 module, 40 edge pads and a nine-pad ground grid"
+    courtyard 19.5mm x 26.5mm at 0mm, -0.25mm
 
     pad 1 rect at -8.75mm, 5.26mm size 1.5mm x 0.9mm
     pad 2 rect at -8.75mm, 3.99mm size 1.5mm x 0.9mm
@@ -83,41 +107,57 @@ footprint ESP32_S3_WROOM_1 {
     pad 38 rect at 8.75mm, 2.72mm size 1.5mm x 0.9mm
     pad 39 rect at 8.75mm, 3.99mm size 1.5mm x 0.9mm
     pad 40 rect at 8.75mm, 5.26mm size 1.5mm x 0.9mm
-    pad 41 rect at -1.5mm, -2.46mm size 3.9mm x 3.9mm
+
+    // pin 41, ground: nine 0.9 x 0.9mm pads on a 1.4mm pitch, one pin
+    pad 41 rect at -2.9mm, -1.06mm size 0.9mm x 0.9mm
+    pad 41 rect at -1.5mm, -1.06mm size 0.9mm x 0.9mm
+    pad 41 rect at -0.1mm, -1.06mm size 0.9mm x 0.9mm
+    pad 41 rect at -2.9mm, -2.46mm size 0.9mm x 0.9mm
+    pad 41 rect at -1.5mm, -2.46mm size 0.9mm x 0.9mm
+    pad 41 rect at -0.1mm, -2.46mm size 0.9mm x 0.9mm
+    pad 41 rect at -2.9mm, -3.86mm size 0.9mm x 0.9mm
+    pad 41 rect at -1.5mm, -3.86mm size 0.9mm x 0.9mm
+    pad 41 rect at -0.1mm, -3.86mm size 0.9mm x 0.9mm
 }
 
 footprint USB_C_GCT_USB4105 {
-    description "GCT USB4105 USB 2.0 Type-C receptacle, 16 contacts"
-    courtyard 10.64mm x 8.94mm
+    description "GCT USB4105 USB 2.0 Type-C receptacle, 12 contact pads for 16 pins"
+    courtyard 10.14mm x 8.43mm at 0mm, 3.965mm
 
-    pad NPTH circle at -2.89mm, 2.605mm size 0.65mm x 0.65mm drill 0.65mm
-    pad NPTH circle at 2.89mm, 2.605mm size 0.65mm x 0.65mm drill 0.65mm
-    pad A1 roundrect at -3.2mm, 3.68mm size 0.6mm x 1.15mm corner 25%
-    pad A4 roundrect at -2.4mm, 3.68mm size 0.6mm x 1.15mm corner 25%
-    pad A5 roundrect at -1.25mm, 3.68mm size 0.3mm x 1.15mm corner 25%
-    pad A6 roundrect at -0.25mm, 3.68mm size 0.3mm x 1.15mm corner 25%
-    pad A7 roundrect at 0.25mm, 3.68mm size 0.3mm x 1.15mm corner 25%
-    pad A8 roundrect at 1.25mm, 3.68mm size 0.3mm x 1.15mm corner 25%
-    pad A9 roundrect at 2.4mm, 3.68mm size 0.6mm x 1.15mm corner 25%
-    pad A12 roundrect at 3.2mm, 3.68mm size 0.6mm x 1.15mm corner 25%
-    pad B1 roundrect at 3.2mm, 3.68mm size 0.6mm x 1.15mm corner 25%
-    pad B4 roundrect at 2.4mm, 3.68mm size 0.6mm x 1.15mm corner 25%
-    pad B5 roundrect at 1.75mm, 3.68mm size 0.3mm x 1.15mm corner 25%
-    pad B6 roundrect at 0.75mm, 3.68mm size 0.3mm x 1.15mm corner 25%
-    pad B7 roundrect at -0.75mm, 3.68mm size 0.3mm x 1.15mm corner 25%
-    pad B8 roundrect at -1.75mm, 3.68mm size 0.3mm x 1.15mm corner 25%
-    pad B9 roundrect at -2.4mm, 3.68mm size 0.6mm x 1.15mm corner 25%
-    pad B12 roundrect at -3.2mm, 3.68mm size 0.6mm x 1.15mm corner 25%
-    pad SH oblong at -4.32mm, 3.105mm size 1mm x 2.1mm drill 0.6mm x 1.7mm
-    pad SH oblong at -4.32mm, -1.075mm size 1mm x 1.8mm drill 0.6mm x 1.4mm
-    pad SH oblong at 4.32mm, 3.105mm size 1mm x 2.1mm drill 0.6mm x 1.7mm
-    pad SH oblong at 4.32mm, -1.075mm size 1mm x 1.8mm drill 0.6mm x 1.4mm
+    // origin: the PCB edge line of the drawing, on the centre line
+
+    pad NPTH circle at -2.89mm, 6.28mm size 0.65mm x 0.65mm drill 0.65mm
+    pad NPTH circle at 2.89mm, 6.28mm size 0.65mm x 0.65mm drill 0.65mm
+
+    pad A1 rect at -3.2mm, 7.355mm size 0.6mm x 1.15mm
+    pad B12 rect at -3.2mm, 7.355mm size 0.6mm x 1.15mm
+    pad A4 rect at -2.4mm, 7.355mm size 0.6mm x 1.15mm
+    pad B9 rect at -2.4mm, 7.355mm size 0.6mm x 1.15mm
+    pad B8 rect at -1.75mm, 7.355mm size 0.3mm x 1.15mm
+    pad A5 rect at -1.25mm, 7.355mm size 0.3mm x 1.15mm
+    pad B7 rect at -0.75mm, 7.355mm size 0.3mm x 1.15mm
+    pad A6 rect at -0.25mm, 7.355mm size 0.3mm x 1.15mm
+    pad A7 rect at 0.25mm, 7.355mm size 0.3mm x 1.15mm
+    pad B6 rect at 0.75mm, 7.355mm size 0.3mm x 1.15mm
+    pad A8 rect at 1.25mm, 7.355mm size 0.3mm x 1.15mm
+    pad B5 rect at 1.75mm, 7.355mm size 0.3mm x 1.15mm
+    pad B4 rect at 2.4mm, 7.355mm size 0.6mm x 1.15mm
+    pad A9 rect at 2.4mm, 7.355mm size 0.6mm x 1.15mm
+    pad B1 rect at 3.2mm, 7.355mm size 0.6mm x 1.15mm
+    pad A12 rect at 3.2mm, 7.355mm size 0.6mm x 1.15mm
+
+    pad SH oblong at -4.32mm, 6.78mm size 1mm x 2.1mm drill 0.6mm x 1.7mm
+    pad SH oblong at -4.32mm, 2.6mm size 1mm x 1.8mm drill 0.6mm x 1.4mm
+    pad SH oblong at 4.32mm, 6.78mm size 1mm x 2.1mm drill 0.6mm x 1.7mm
+    pad SH oblong at 4.32mm, 2.6mm size 1mm x 1.8mm drill 0.6mm x 1.4mm
 }
 
 footprint SW_TL3342 {
-    description "TL3342 SMD tactile switch, pads 1-1 and 2-2 joined"
-    courtyard 8.5mm x 6mm
+    description "TL3342 SMD tactile switch, terminals 3+4 and 1+2 joined"
+    courtyard 8.5mm x 5.7mm
 
+    // pad 1: the upper pair (the catalogue's terminals 3 and 4, joined
+    // inside); pad 2: the lower pair (terminals 1 and 2)
     pad 1 rect at -3.15mm, 1.9mm size 1.7mm x 1mm
     pad 1 rect at 3.15mm, 1.9mm size 1.7mm x 1mm
     pad 2 rect at -3.15mm, -1.9mm size 1.7mm x 1mm
@@ -126,20 +166,20 @@ footprint SW_TL3342 {
 
 footprint PINHDR_1X12 {
     description "Pin header 1x12, 2.54mm, vertical"
-    courtyard 3.54mm x 31.48mm at 0mm, -13.97mm
+    courtyard 3.04mm x 30.98mm at 0mm, -13.97mm
 
-    pad 1 rect at 0mm, 0mm size 1.7mm x 1.7mm drill 1mm
-    pad 2 circle at 0mm, -2.54mm size 1.7mm x 1.7mm drill 1mm
-    pad 3 circle at 0mm, -5.08mm size 1.7mm x 1.7mm drill 1mm
-    pad 4 circle at 0mm, -7.62mm size 1.7mm x 1.7mm drill 1mm
-    pad 5 circle at 0mm, -10.16mm size 1.7mm x 1.7mm drill 1mm
-    pad 6 circle at 0mm, -12.7mm size 1.7mm x 1.7mm drill 1mm
-    pad 7 circle at 0mm, -15.24mm size 1.7mm x 1.7mm drill 1mm
-    pad 8 circle at 0mm, -17.78mm size 1.7mm x 1.7mm drill 1mm
-    pad 9 circle at 0mm, -20.32mm size 1.7mm x 1.7mm drill 1mm
-    pad 10 circle at 0mm, -22.86mm size 1.7mm x 1.7mm drill 1mm
-    pad 11 circle at 0mm, -25.4mm size 1.7mm x 1.7mm drill 1mm
-    pad 12 circle at 0mm, -27.94mm size 1.7mm x 1.7mm drill 1mm
+    pad 1 rect at 0mm, 0mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 2 circle at 0mm, -2.54mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 3 circle at 0mm, -5.08mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 4 circle at 0mm, -7.62mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 5 circle at 0mm, -10.16mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 6 circle at 0mm, -12.7mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 7 circle at 0mm, -15.24mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 8 circle at 0mm, -17.78mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 9 circle at 0mm, -20.32mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 10 circle at 0mm, -22.86mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 11 circle at 0mm, -25.4mm size 1.7mm x 1.7mm drill 1.1mm
+    pad 12 circle at 0mm, -27.94mm size 1.7mm x 1.7mm drill 1.1mm
 }
 
 
@@ -163,7 +203,7 @@ component U1 ic "ESP32_S3_WROOM_1" {
 
 component J1 connector "USB_C_GCT_USB4105" {
     value "USB4105"
-    at 17mm, 4.5mm
+    at 17mm, 0.825mm
 }
 
 component U2 ic "SOT-23-5" {
