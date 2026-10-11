@@ -157,6 +157,14 @@ impl DrcRule for ClearanceRule {
                 })
                 .collect()
         };
+        // A teardrop is a polygon of copper on its track's net. Its edges are
+        // what gets measured, with the inside checked apart, so a part that
+        // sits wholly inside the fillet reads as touching it.
+        let teardrop_map: HashMap<u32, Polygon> = cypcb_world::teardrop::teardrop_copper(world)
+            .into_iter()
+            .map(|(entity, copper, _)| (entity.index(), Polygon::new(&copper.outline)))
+            .collect();
+
         // The copper of anything that is not a component: a via's disc, or
         // the entry's own box.
         let shape_of = |idx: u32, envelope: &AABB<[i64; 2]>| -> Copper {
@@ -297,8 +305,23 @@ impl DrcRule for ClearanceRule {
                         )
                     };
 
-                let side_a = side_of(a_idx, net_a, trace_a.is_some(), entry.layer_mask);
-                let side_b = side_of(b_idx, net_b, trace_b.is_some(), candidate.layer_mask);
+                let tear_a = teardrop_map.get(&a_idx);
+                let tear_b = teardrop_map.get(&b_idx);
+                // A teardrop is a piece of its track's net on its layer, and
+                // counts as the track does: one place along a net pair, not
+                // one per entity the copper happens to be cut into.
+                let side_a = side_of(
+                    a_idx,
+                    net_a,
+                    trace_a.is_some() || tear_a.is_some(),
+                    entry.layer_mask,
+                );
+                let side_b = side_of(
+                    b_idx,
+                    net_b,
+                    trace_b.is_some() || tear_b.is_some(),
+                    candidate.layer_mask,
+                );
                 // How far apart two contacts of these two sides can be and
                 // still be one place: the width of the trace copper that makes
                 // them. See `one_row_per_place`.
@@ -330,150 +353,227 @@ impl DrcRule for ClearanceRule {
                     .max(stated(net_b, nc_b));
 
                 let mut no_copper_in_reach = false;
-                let contacts: Vec<Measured> = match (trace_a, trace_b) {
-                    // Both are traces: segment-to-segment distance minus both
-                    // half-widths, measured from both sides.
-                    //
-                    // One side is not enough, and the asymmetry was visible as
-                    // two commands disagreeing about the same board. On
-                    // examples/blink.cypcb the router lays a GND run straight
-                    // up x=22.479 and VCC crosses it twice - once with a
-                    // horizontal segment at y=21.971 and once with a diagonal
-                    // at y=24.765. Measuring per segment of GND gives that one
-                    // segment one closest approach and so reports one short;
-                    // measuring per segment of VCC gives two, because they are
-                    // two segments. Two real shorts, and which number came out
-                    // depended on which entity the spatial index happened to
-                    // hand over first - so the same board scored 4 in memory
-                    // and 5 after being written to a file and read back.
-                    //
-                    // Measured segment against segment, every pair of them,
-                    // because that is the one answer that does not depend on
-                    // how the copper is grouped into entities. Measuring a
-                    // segment against the other trace as a whole finds one
-                    // closest point per piece the other trace is cut into, so
-                    // the same net cut in two pieces gained a contact. Which
-                    // of these points are one place is decided once, over the
-                    // whole board, in `one_row_per_place`.
-                    (Some(ta), Some(tb)) => {
-                        let (first, second) = if side_a <= side_b { (ta, tb) } else { (tb, ta) };
-                        let limit = required.0 + ta.half_width + tb.half_width;
-                        segment_pairs(first, second)
-                            .into_iter()
-                            .map(|(s, t, at, seg_dist)| {
-                                let pieces = if seg_dist < limit {
-                                    [
-                                        stretch(s, limit, |p| {
-                                            point_to_segment_distance(p, t.0, t.1)
-                                        }),
-                                        stretch(t, limit, |p| {
-                                            point_to_segment_distance(p, s.0, s.1)
-                                        }),
-                                    ]
-                                } else {
-                                    [(s.0, s.0); 2]
-                                };
-                                (
+                // A pair with a teardrop in it is measured polygon against
+                // the other side's copper; every other pair as it always was.
+                let teardrop_contacts: Option<Vec<Measured>> = match (tear_a, tear_b) {
+                    (None, None) => None,
+                    _ => {
+                        let (poly, other, other_idx, poly_layers, poly_net, other_trace, other_box) =
+                            match (tear_a, tear_b) {
+                                (Some(poly), _) => (
+                                    poly,
+                                    tear_b,
+                                    b_idx,
+                                    entry.layer_mask,
+                                    net_a,
+                                    trace_b,
+                                    &candidate.envelope,
+                                ),
+                                (None, Some(poly)) => (
+                                    poly,
+                                    tear_a,
+                                    a_idx,
+                                    candidate.layer_mask,
+                                    net_b,
+                                    trace_a,
+                                    &entry.envelope,
+                                ),
+                                (None, None) => unreachable!(),
+                            };
+                        let mut measured: Vec<Measured> = Vec::new();
+                        if let Some(trace) = other_trace {
+                            let limit = required.0 + trace.half_width;
+                            for seg in &trace.segments {
+                                let s = lower_end_first(seg);
+                                let (at, d) = poly.to_segment(s.0, s.1);
+                                if d >= limit {
+                                    continue;
+                                }
+                                let run = stretch(s, limit, |p| poly.to_point(p));
+                                let here = [at.x.0, at.y.0];
+                                measured.push((
                                     at,
-                                    (seg_dist - ta.half_width - tb.half_width).max(0),
-                                    pieces,
+                                    (d - trace.half_width).max(0),
+                                    [run, (here, here)],
                                     None,
-                                )
-                            })
-                            .collect()
-                    }
-                    // One is a trace, the other is a via or a component
-                    (Some(t), None) => {
-                        let measured = match copper_of(b_idx, entry.layer_mask, net_a) {
-                            Some(pads) if pads.is_empty() => {
-                                no_copper_in_reach = true;
-                                Vec::new()
+                                ));
                             }
-                            Some(pads) => per_segment_to_copper(
-                                t,
-                                &copper_of_pads(&pads),
-                                required.0 + t.half_width,
-                            ),
-                            None => per_segment_to_copper(
-                                t,
-                                &[&shape_of(b_idx, &candidate.envelope)],
-                                required.0 + t.half_width,
-                            ),
-                        };
-                        measured
-                            .into_iter()
-                            .map(|(at, seg_dist, pieces, pad)| {
-                                (at, (seg_dist - t.half_width).max(0), pieces, pad)
-                            })
-                            .collect()
-                    }
-                    (None, Some(t)) => {
-                        let measured = match copper_of(a_idx, candidate.layer_mask, net_b) {
-                            Some(pads) if pads.is_empty() => {
-                                no_copper_in_reach = true;
-                                Vec::new()
-                            }
-                            Some(pads) => per_segment_to_copper(
-                                t,
-                                &copper_of_pads(&pads),
-                                required.0 + t.half_width,
-                            ),
-                            None => per_segment_to_copper(
-                                t,
-                                &[&shape_of(a_idx, &entry.envelope)],
-                                required.0 + t.half_width,
-                            ),
-                        };
-                        measured
-                            .into_iter()
-                            .map(|(at, seg_dist, pieces, pad)| {
-                                (at, (seg_dist - t.half_width).max(0), pieces, pad)
-                            })
-                            .collect()
-                    }
-                    // Neither is a trace: vias and pads. A component stands for
-                    // its pads, a via for its disc, anything else for its own
-                    // box. A via leaves out the pads on its own net, as a trace
-                    // does: a via dropped onto its own pin is a join, and
-                    // measured against that pin it read as a short.
-                    (None, None) => vec![at_a_point({
-                        let a_boxes = copper_of(a_idx, candidate.layer_mask, net_b);
-                        let b_boxes = copper_of(b_idx, entry.layer_mask, net_a);
-                        if a_boxes.as_ref().is_some_and(|p| p.is_empty())
-                            || b_boxes.as_ref().is_some_and(|p| p.is_empty())
-                        {
-                            no_copper_in_reach = true;
-                            (Point::ORIGIN, i64::MAX)
+                        } else if let Some(other_poly) = other {
+                            measured.push(at_a_point(poly.to_polygon(other_poly)));
                         } else {
-                            match (a_boxes, b_boxes) {
-                                // Two components: pad against pad, skipping the
-                                // pairs that are meant to touch - two pads of
-                                // the same net, which is a deliberate join.
-                                (Some(a_pads), Some(b_pads)) => {
-                                    let pairs = nearest_pad_pair(&a_pads, &b_pads);
-                                    match pairs {
-                                        Some(found) => found,
-                                        None => {
-                                            no_copper_in_reach = true;
-                                            (Point::ORIGIN, i64::MAX)
-                                        }
+                            match copper_of(other_idx, poly_layers, poly_net) {
+                                Some(pads) if pads.is_empty() => no_copper_in_reach = true,
+                                Some(pads) => {
+                                    for pad in pads {
+                                        let (at, d) = poly.to_copper(&pad.copper);
+                                        let here = [at.x.0, at.y.0];
+                                        measured.push((
+                                            at,
+                                            d,
+                                            [(here, here); 2],
+                                            Some(pad.copper.core.lower()),
+                                        ));
                                     }
                                 }
-                                (Some(a_pads), None) => nearest_pair(
-                                    &copper_of_pads(&a_pads),
-                                    &[&shape_of(b_idx, &candidate.envelope)],
-                                ),
-                                (None, Some(b_pads)) => nearest_pair(
-                                    &[&shape_of(a_idx, &entry.envelope)],
-                                    &copper_of_pads(&b_pads),
-                                ),
-                                (None, None) => nearest_pair(
-                                    &[&shape_of(a_idx, &entry.envelope)],
-                                    &[&shape_of(b_idx, &candidate.envelope)],
-                                ),
+                                None => {
+                                    measured.push(at_a_point(
+                                        poly.to_copper(&shape_of(other_idx, other_box)),
+                                    ));
+                                }
                             }
                         }
-                    })],
+                        Some(measured)
+                    }
+                };
+                let contacts: Vec<Measured> = if let Some(found) = teardrop_contacts {
+                    found
+                } else {
+                    match (trace_a, trace_b) {
+                        // Both are traces: segment-to-segment distance minus both
+                        // half-widths, measured from both sides.
+                        //
+                        // One side is not enough, and the asymmetry was visible as
+                        // two commands disagreeing about the same board. On
+                        // examples/blink.cypcb the router lays a GND run straight
+                        // up x=22.479 and VCC crosses it twice - once with a
+                        // horizontal segment at y=21.971 and once with a diagonal
+                        // at y=24.765. Measuring per segment of GND gives that one
+                        // segment one closest approach and so reports one short;
+                        // measuring per segment of VCC gives two, because they are
+                        // two segments. Two real shorts, and which number came out
+                        // depended on which entity the spatial index happened to
+                        // hand over first - so the same board scored 4 in memory
+                        // and 5 after being written to a file and read back.
+                        //
+                        // Measured segment against segment, every pair of them,
+                        // because that is the one answer that does not depend on
+                        // how the copper is grouped into entities. Measuring a
+                        // segment against the other trace as a whole finds one
+                        // closest point per piece the other trace is cut into, so
+                        // the same net cut in two pieces gained a contact. Which
+                        // of these points are one place is decided once, over the
+                        // whole board, in `one_row_per_place`.
+                        (Some(ta), Some(tb)) => {
+                            let (first, second) =
+                                if side_a <= side_b { (ta, tb) } else { (tb, ta) };
+                            let limit = required.0 + ta.half_width + tb.half_width;
+                            segment_pairs(first, second)
+                                .into_iter()
+                                .map(|(s, t, at, seg_dist)| {
+                                    let pieces = if seg_dist < limit {
+                                        [
+                                            stretch(s, limit, |p| {
+                                                point_to_segment_distance(p, t.0, t.1)
+                                            }),
+                                            stretch(t, limit, |p| {
+                                                point_to_segment_distance(p, s.0, s.1)
+                                            }),
+                                        ]
+                                    } else {
+                                        [(s.0, s.0); 2]
+                                    };
+                                    (
+                                        at,
+                                        (seg_dist - ta.half_width - tb.half_width).max(0),
+                                        pieces,
+                                        None,
+                                    )
+                                })
+                                .collect()
+                        }
+                        // One is a trace, the other is a via or a component
+                        (Some(t), None) => {
+                            let measured = match copper_of(b_idx, entry.layer_mask, net_a) {
+                                Some(pads) if pads.is_empty() => {
+                                    no_copper_in_reach = true;
+                                    Vec::new()
+                                }
+                                Some(pads) => per_segment_to_copper(
+                                    t,
+                                    &copper_of_pads(&pads),
+                                    required.0 + t.half_width,
+                                ),
+                                None => per_segment_to_copper(
+                                    t,
+                                    &[&shape_of(b_idx, &candidate.envelope)],
+                                    required.0 + t.half_width,
+                                ),
+                            };
+                            measured
+                                .into_iter()
+                                .map(|(at, seg_dist, pieces, pad)| {
+                                    (at, (seg_dist - t.half_width).max(0), pieces, pad)
+                                })
+                                .collect()
+                        }
+                        (None, Some(t)) => {
+                            let measured = match copper_of(a_idx, candidate.layer_mask, net_b) {
+                                Some(pads) if pads.is_empty() => {
+                                    no_copper_in_reach = true;
+                                    Vec::new()
+                                }
+                                Some(pads) => per_segment_to_copper(
+                                    t,
+                                    &copper_of_pads(&pads),
+                                    required.0 + t.half_width,
+                                ),
+                                None => per_segment_to_copper(
+                                    t,
+                                    &[&shape_of(a_idx, &entry.envelope)],
+                                    required.0 + t.half_width,
+                                ),
+                            };
+                            measured
+                                .into_iter()
+                                .map(|(at, seg_dist, pieces, pad)| {
+                                    (at, (seg_dist - t.half_width).max(0), pieces, pad)
+                                })
+                                .collect()
+                        }
+                        // Neither is a trace: vias and pads. A component stands for
+                        // its pads, a via for its disc, anything else for its own
+                        // box. A via leaves out the pads on its own net, as a trace
+                        // does: a via dropped onto its own pin is a join, and
+                        // measured against that pin it read as a short.
+                        (None, None) => vec![at_a_point({
+                            let a_boxes = copper_of(a_idx, candidate.layer_mask, net_b);
+                            let b_boxes = copper_of(b_idx, entry.layer_mask, net_a);
+                            if a_boxes.as_ref().is_some_and(|p| p.is_empty())
+                                || b_boxes.as_ref().is_some_and(|p| p.is_empty())
+                            {
+                                no_copper_in_reach = true;
+                                (Point::ORIGIN, i64::MAX)
+                            } else {
+                                match (a_boxes, b_boxes) {
+                                    // Two components: pad against pad, skipping the
+                                    // pairs that are meant to touch - two pads of
+                                    // the same net, which is a deliberate join.
+                                    (Some(a_pads), Some(b_pads)) => {
+                                        let pairs = nearest_pad_pair(&a_pads, &b_pads);
+                                        match pairs {
+                                            Some(found) => found,
+                                            None => {
+                                                no_copper_in_reach = true;
+                                                (Point::ORIGIN, i64::MAX)
+                                            }
+                                        }
+                                    }
+                                    (Some(a_pads), None) => nearest_pair(
+                                        &copper_of_pads(&a_pads),
+                                        &[&shape_of(b_idx, &candidate.envelope)],
+                                    ),
+                                    (None, Some(b_pads)) => nearest_pair(
+                                        &[&shape_of(a_idx, &entry.envelope)],
+                                        &copper_of_pads(&b_pads),
+                                    ),
+                                    (None, None) => nearest_pair(
+                                        &[&shape_of(a_idx, &entry.envelope)],
+                                        &[&shape_of(b_idx, &candidate.envelope)],
+                                    ),
+                                }
+                            }
+                        })],
+                    }
                 };
 
                 if no_copper_in_reach {
@@ -957,11 +1057,16 @@ pub(crate) struct EntryCopper {
     pads: HashMap<u32, Vec<PadBox>>,
     vias: HashMap<u32, Copper>,
     traces: HashMap<u32, TraceData>,
+    teardrops: HashMap<u32, Polygon>,
 }
 
 impl EntryCopper {
     pub(crate) fn collect(world: &mut BoardWorld) -> Self {
         let pads = component_pads(world);
+        let teardrops = cypcb_world::teardrop::teardrop_copper(world)
+            .into_iter()
+            .map(|(entity, copper, _)| (entity.index(), Polygon::new(&copper.outline)))
+            .collect();
         let ecs = world.ecs_mut();
         let vias = in_build_order::<(bevy_ecs::entity::Entity, &Via)>(ecs)
             .into_iter()
@@ -992,7 +1097,12 @@ impl EntryCopper {
                 )
             })
             .collect();
-        EntryCopper { pads, vias, traces }
+        EntryCopper {
+            pads,
+            vias,
+            traces,
+            teardrops,
+        }
     }
 
     /// A component's pads, when the entity is one.
@@ -1010,6 +1120,9 @@ impl EntryCopper {
         }
         if let Some(via) = self.vias.get(&index) {
             return vec![Piece::Area(*via)];
+        }
+        if let Some(polygon) = self.teardrops.get(&index) {
+            return polygon.pieces();
         }
         if let Some(trace) = self.traces.get(&index) {
             // One entry per segment, each the segment's box grown by half the
@@ -1340,6 +1453,138 @@ fn per_segment_to_copper(trace: &TraceData, copper: &[&Copper], limit: i64) -> V
         }
     }
     out
+}
+
+/// A polygon of copper - a teardrop - measured against the rest.
+///
+/// The distance is taken from its edges, with the inside decided apart: copper
+/// that lies wholly inside the polygon has no edge near it and is still
+/// touching. The shapes a teardrop is made of are convex, which is what
+/// "inside" below assumes.
+pub(crate) struct Polygon {
+    corners: Vec<[i64; 2]>,
+}
+
+impl Polygon {
+    pub(crate) fn new(outline: &[Point]) -> Self {
+        Polygon {
+            corners: outline.iter().map(|p| [p.x.0, p.y.0]).collect(),
+        }
+    }
+
+    fn edges(&self) -> impl Iterator<Item = ([i64; 2], [i64; 2])> + '_ {
+        let n = self.corners.len();
+        (0..n).map(move |i| (self.corners[i], self.corners[(i + 1) % n]))
+    }
+
+    /// Whether the point is inside, or on the edge of, the polygon.
+    fn contains(&self, p: [i64; 2]) -> bool {
+        let mut sign = 0i32;
+        for (a, b) in self.edges() {
+            let cross = (b[0] - a[0]) as i128 * (p[1] - a[1]) as i128
+                - (b[1] - a[1]) as i128 * (p[0] - a[0]) as i128;
+            let s = cross.signum() as i32;
+            if s != 0 {
+                if sign != 0 && s != sign {
+                    return false;
+                }
+                sign = s;
+            }
+        }
+        true
+    }
+
+    /// The distance from a point: 0 inside.
+    pub(crate) fn to_point(&self, p: [i64; 2]) -> i64 {
+        if self.contains(p) {
+            return 0;
+        }
+        self.edges()
+            .map(|(a, b)| point_to_segment_distance(p, a, b))
+            .min()
+            .unwrap_or(i64::MAX)
+    }
+
+    /// The closest approach to a segment, and where.
+    pub(crate) fn to_segment(&self, from: [i64; 2], to: [i64; 2]) -> (Point, i64) {
+        if self.contains(from) {
+            return (Point::new(Nm(from[0]), Nm(from[1])), 0);
+        }
+        if self.contains(to) {
+            return (Point::new(Nm(to[0]), Nm(to[1])), 0);
+        }
+        self.edges()
+            .map(|(a, b)| segment_closest(a, b, from, to))
+            .min_by_key(|(_, d)| *d)
+            .unwrap_or((Point::ORIGIN, i64::MAX))
+    }
+
+    /// The closest approach to a piece of copper, and where. A box grown by a
+    /// radius, so the box is measured and the radius taken off.
+    pub(crate) fn to_copper(&self, copper: &Copper) -> (Point, i64) {
+        let (lo, hi) = (copper.core.lower(), copper.core.upper());
+        let corners = [
+            [lo[0], lo[1]],
+            [hi[0], lo[1]],
+            [hi[0], hi[1]],
+            [lo[0], hi[1]],
+        ];
+        for c in corners {
+            if self.contains(c) {
+                return (Point::new(Nm(c[0]), Nm(c[1])), 0);
+            }
+        }
+        // A polygon corner inside the box is a touch as well.
+        let inside = |p: [i64; 2]| p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1];
+        if let Some(c) = self.corners.iter().find(|c| inside(**c)) {
+            return (Point::new(Nm(c[0]), Nm(c[1])), 0);
+        }
+        let mut best = (Point::ORIGIN, i64::MAX);
+        for (a, b) in self.edges() {
+            for i in 0..4 {
+                let (p, d) = segment_closest(a, b, corners[i], corners[(i + 1) % 4]);
+                if d < best.1 {
+                    best = (p, d);
+                }
+            }
+        }
+        (best.0, best.1.saturating_sub(copper.radius).max(0))
+    }
+
+    /// The closest approach to another polygon, and where.
+    pub(crate) fn to_polygon(&self, other: &Polygon) -> (Point, i64) {
+        for c in &other.corners {
+            if self.contains(*c) {
+                return (Point::new(Nm(c[0]), Nm(c[1])), 0);
+            }
+        }
+        for c in &self.corners {
+            if other.contains(*c) {
+                return (Point::new(Nm(c[0]), Nm(c[1])), 0);
+            }
+        }
+        let mut best = (Point::ORIGIN, i64::MAX);
+        for (a, b) in self.edges() {
+            for (c, d) in other.edges() {
+                let (p, dist) = segment_closest(a, b, c, d);
+                if dist < best.1 {
+                    best = (p, dist);
+                }
+            }
+        }
+        best
+    }
+
+    /// The outline as the pieces the edge, slot and hole rules measure.
+    pub(crate) fn pieces(&self) -> Vec<Piece> {
+        self.edges()
+            .map(|(from, to)| Piece::Stroke {
+                from,
+                to,
+                radius: 0,
+            })
+            .collect()
+    }
 }
 
 /// Minimum distance from trace centerlines to an AABB.

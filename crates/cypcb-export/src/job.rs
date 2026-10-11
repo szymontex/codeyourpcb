@@ -142,25 +142,14 @@ fn pour_options(job: &ExportJob) -> crate::pour::PourOptions {
 ///     ├── board-BOM.json
 ///     └── board-CPL.csv
 /// ```
+///
+/// A board that asks for teardrops has them in its copper (see
+/// [`BoardWorld::rebuild_teardrops`]) and they are written with the rest; a
+/// board that has never asked receives the copper it received before.
 pub fn run_export(
     job: &ExportJob,
     world: &mut BoardWorld,
     library: &FootprintLibrary,
-) -> Result<ExportResult, ExportError> {
-    run_export_with(job, world, library, None)
-}
-
-/// Run the same export, filleting where tracks meet pads.
-///
-/// Separate from [`run_export`] rather than a field on [`ExportJob`] because a
-/// board that has never asked for teardrops must keep receiving the copper it
-/// received yesterday: the default is the absence, and a caller has to say the
-/// word. Item 1 of the KiCad parity audit.
-pub fn run_export_with(
-    job: &ExportJob,
-    world: &mut BoardWorld,
-    library: &FootprintLibrary,
-    teardrops: Option<cypcb_world::teardrop::TeardropRatios>,
 ) -> Result<ExportResult, ExportError> {
     let start = Instant::now();
     let mut files = Vec::new();
@@ -187,7 +176,6 @@ pub fn run_export_with(
             Layer::TopCopper,
             &job.preset.coordinate_format,
             &pour_options(job),
-            teardrops,
             job.stamp,
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
@@ -204,7 +192,6 @@ pub fn run_export_with(
             Layer::BottomCopper,
             &job.preset.coordinate_format,
             &pour_options(job),
-            teardrops,
             job.stamp,
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
@@ -236,7 +223,6 @@ pub fn run_export_with(
             Layer::Inner(index),
             &job.preset.coordinate_format,
             &pour_options(job),
-            teardrops,
             job.stamp,
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;

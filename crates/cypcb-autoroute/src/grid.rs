@@ -275,6 +275,9 @@ impl RoutingGrid {
         // And the vias already on the board, the same way
         grid.populate_placed_vias(world, clearance_cells);
 
+        // And the teardrops the board holds: copper beside its tracks
+        grid.populate_teardrops(world, clearance_cells);
+
         Some(grid)
     }
 
@@ -478,6 +481,41 @@ impl RoutingGrid {
                         radius_cells,
                         trace.net_id.id(),
                     );
+                }
+            }
+        }
+    }
+
+    /// Populate the teardrops: polygons of copper, owned by their track's net,
+    /// that the router must keep its distance from as it does from the track.
+    ///
+    /// A cell is marked wherever its centre lies inside the polygon, grown by
+    /// the clearance. The polygon is a few cells across, so every cell of its
+    /// box is looked at.
+    fn populate_teardrops(&mut self, world: &mut BoardWorld, clearance_cells: u32) {
+        for (_, teardrop, net) in cypcb_world::teardrop::teardrop_copper(world) {
+            let Some(layer_idx) = layer_to_index(teardrop.layer) else {
+                continue;
+            };
+            if (layer_idx as u8) >= self.layer_count {
+                continue;
+            }
+            let bounds = teardrop.bounds();
+            let (min_x, max_x) = (
+                self.nm_to_grid_x(bounds.min.x.raw()),
+                self.nm_to_grid_x(bounds.max.x.raw()),
+            );
+            let (min_y, max_y) = (
+                self.nm_to_grid_y(bounds.min.y.raw()),
+                self.nm_to_grid_y(bounds.max.y.raw()),
+            );
+            for gy in min_y..=max_y {
+                for gx in min_x..=max_x {
+                    if !teardrop.contains(self.grid_to_nm(gx, gy)) {
+                        continue;
+                    }
+                    self.mark_obstacle(gx, gy, layer_idx, clearance_cells, CELL_TRACE);
+                    self.claim_fixed_disc(gx, gy, layer_idx, clearance_cells, net.id());
                 }
             }
         }

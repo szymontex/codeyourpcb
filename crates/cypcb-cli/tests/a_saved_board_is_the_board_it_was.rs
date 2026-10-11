@@ -445,6 +445,9 @@ const TYPES: &[(&str, Carried)] = &[
         Carried::Written,
     ),
     ("cypcb_world::components::zone::Zone", Carried::Written),
+    // Made from the request (`teardrops`, written) and the tracks (written),
+    // and rebuilt on load, so as many come back as went.
+    ("cypcb_world::teardrop::TeardropCopper", Carried::Written),
 ];
 
 /// Entities per ECS component type, whatever the type is.

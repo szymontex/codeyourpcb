@@ -31,7 +31,10 @@ cd "$(dirname "$0")/.." || exit 2
 # purpose, and asserting one fails until the number comes down with it. The
 # script was written on 2026-08-29 and nothing ran it, which is how a census
 # becomes a number nobody has looked at since the day it was measured.
-BASELINE_UNREAD=32
+# 31 since 2026-10-11: the 0.95mm in the comment on `gullwing.rs` line 246 is
+# named by a test of the teardrop change, which uses the same figure for a
+# board edge; the count fell by that one.
+BASELINE_UNREAD=31
 
 MODE=${1:-count}
 

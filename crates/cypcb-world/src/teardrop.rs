@@ -20,7 +20,13 @@
 //!        B           D
 //! ```
 
-use cypcb_core::{Nm, Point};
+use bevy_ecs::prelude::Component;
+use cypcb_core::{Nm, Point, Rect};
+
+use crate::components::trace::Trace;
+use crate::components::{place_pad, FootprintRef, Layer, NetId, Position, Rotation};
+use crate::footprint::FootprintLibrary;
+use crate::world::{in_build_order, BoardWorld};
 
 /// How large a teardrop is, as ratios of the pad it grows from.
 ///
@@ -117,4 +123,158 @@ pub fn teardrop(
 /// The inscribed radius of a pad of this size: half its smaller side.
 pub fn inscribed_radius(width: Nm, height: Nm) -> Nm {
     Nm(width.0.min(height.0) / 2)
+}
+
+/// A teardrop as the copper it is: a polygon on a layer, on the net of the
+/// track it grows from.
+///
+/// KiCad keeps a teardrop as a zone on the track's layer and net
+/// (`createTeardrop` in `pcbnew/teardrop/teardrop.cpp` makes a `ZONE` and
+/// adds it to the board), so the copper is part of the board and every reader
+/// of copper reads it with the rest. The entity carries a [`NetId`] beside
+/// this component, the way a trace and a via do, and the rules that compare
+/// nets read it from there.
+///
+/// Built in one place, [`BoardWorld::rebuild_teardrops`], from the ratios the
+/// board states and the tracks and pads as they are at that moment.
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct TeardropCopper {
+    /// The corners, in order round the shape.
+    pub outline: Vec<Point>,
+    /// The copper layer it is on: its track's.
+    pub layer: Layer,
+    /// Its place in the order the builder made it: tracks in the order of the
+    /// source, segments in the order of the track. The files are written in
+    /// this order and not in the order of the entities, which a rebuild
+    /// reverses when it hands out indices that were freed a moment before.
+    pub order: u32,
+    /// The part whose land it grows from and that land's pad number, for the
+    /// board that built it. A teardrop read from a file names no pad.
+    pub land: Option<(bevy_ecs::entity::Entity, String)>,
+}
+
+impl TeardropCopper {
+    /// The box around the outline.
+    pub fn bounds(&self) -> Rect {
+        let mut points = self.outline.iter();
+        let first = points.next().copied().unwrap_or(Point::ORIGIN);
+        let mut bounds = Rect::new(first, first);
+        for p in points {
+            bounds.min = Point::new(bounds.min.x.min(p.x), bounds.min.y.min(p.y));
+            bounds.max = Point::new(bounds.max.x.max(p.x), bounds.max.y.max(p.y));
+        }
+        bounds
+    }
+
+    /// Whether the point is inside the outline or on its edge. The outline of a
+    /// teardrop is convex, which is what this assumes.
+    pub fn contains(&self, p: Point) -> bool {
+        let n = self.outline.len();
+        let mut sign = 0i32;
+        for i in 0..n {
+            let (a, b) = (self.outline[i], self.outline[(i + 1) % n]);
+            let cross = (b.x.0 - a.x.0) as i128 * (p.y.0 - a.y.0) as i128
+                - (b.y.0 - a.y.0) as i128 * (p.x.0 - a.x.0) as i128;
+            let s = cross.signum() as i32;
+            if s != 0 {
+                if sign != 0 && s != sign {
+                    return false;
+                }
+                sign = s;
+            }
+        }
+        n >= 3
+    }
+}
+
+/// Every teardrop the board's tracks and pads give, for these ratios.
+///
+/// A teardrop grows wherever the end of a track segment lands inside the
+/// inscribed circle of a pad that is on the track's layer: one per segment end,
+/// from the first such pad, so a net with three pads - one `Trace` holding
+/// several chains - is filleted at each of its joins. A track crossing a pad on
+/// its way elsewhere is not an entry and gets nothing. The shape is
+/// [`teardrop`]; this decides where there is one.
+///
+/// The polygon takes the track's net. When the pad is on another net the track
+/// is a short and the clearance rule says so; the geometry does not change.
+pub fn teardrops_of(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    ratios: TeardropRatios,
+) -> Vec<(TeardropCopper, NetId)> {
+    // Every pad as a layer mask, a centre and the radius a fillet starts from.
+    // Collected once: a board has far more track ends than pads.
+    let mut pads: Vec<(u32, Point, Nm, bevy_ecs::entity::Entity, String)> = Vec::new();
+    for (part, position, footprint_ref, rotation) in in_build_order::<(
+        bevy_ecs::entity::Entity,
+        &Position,
+        &FootprintRef,
+        &Rotation,
+    )>(world.ecs_mut())
+    {
+        let Some(footprint) = library.get(&footprint_ref.0) else {
+            continue;
+        };
+        for pad in &footprint.pads {
+            let centre = place_pad(position.0, pad.position, *rotation);
+            pads.push((
+                pad.copper_mask(),
+                centre,
+                inscribed_radius(pad.size.0, pad.size.1),
+                part,
+                pad.number.clone(),
+            ));
+        }
+    }
+    if pads.is_empty() {
+        return Vec::new();
+    }
+
+    let mut found = Vec::new();
+    for trace in in_build_order::<&Trace>(world.ecs_mut()) {
+        let mask = trace.layer.to_copper_mask();
+        for segment in &trace.segments {
+            // Both ends of every segment, as the Gerber writer always took them.
+            for (end, toward) in [(segment.start, segment.end), (segment.end, segment.start)] {
+                for (pad_mask, centre, radius, part, number) in &pads {
+                    if pad_mask & mask == 0 {
+                        continue;
+                    }
+                    let dx = (end.x.0 - centre.x.0) as f64;
+                    let dy = (end.y.0 - centre.y.0) as f64;
+                    if dx * dx + dy * dy > (radius.0 as f64) * (radius.0 as f64) {
+                        continue;
+                    }
+                    if let Some(shape) = teardrop(*centre, *radius, toward, trace.width, ratios) {
+                        found.push((
+                            TeardropCopper {
+                                outline: shape.to_vec(),
+                                layer: trace.layer,
+                                order: found.len() as u32,
+                                land: Some((*part, number.clone())),
+                            },
+                            trace.net_id,
+                        ));
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    found
+}
+
+/// Every teardrop the board holds, with its entity and net, in the order the
+/// builder made them.
+pub fn teardrop_copper(
+    world: &mut BoardWorld,
+) -> Vec<(bevy_ecs::entity::Entity, TeardropCopper, NetId)> {
+    let mut all: Vec<_> =
+        in_build_order::<(bevy_ecs::entity::Entity, &TeardropCopper, &NetId)>(world.ecs_mut())
+            .into_iter()
+            .map(|(entity, copper, net)| (entity, copper.clone(), *net))
+            .collect();
+    all.sort_by_key(|(_, copper, _)| copper.order);
+    all
 }

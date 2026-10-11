@@ -482,7 +482,8 @@ rule's 90 is the trace arriving square on, which the same page recommends. The
 previous unremarked change of frame is what put 90 into this rule's condition
 where 45 belonged.
 
-In this repo: the angle is enforced and the teardrop is not. `PadEntryRule`
+In this repo: the angle is enforced everywhere, and the teardrop on a board
+that asks for them. `PadEntryRule`
 is in the registry
 (`crates/cypcb-drc/src/lib.rs:172`) and reports through `entry_angle`
 (`crates/cypcb-drc/src/rules/pad_entry.rs:212`) and `entry_angle_placed`
@@ -497,8 +498,9 @@ cannot say whether anything was looked at. The rows it writes carry
 wedge beside a corner; see "What nothing measures". `grep -c '#\[test\]'
 crates/cypcb-drc/src/rules/pad_entry.rs` answers 31: 29 at `4ff318c`, 30 with the pass-through case this measurement added, 31 with the pad turned inside its footprint (2026-09-26).
 
-**The teardrop condition has no check, and measuring it on 2026-09-12 found
-three reasons that go deeper than "nobody wrote the rule".**
+**The teardrop condition had no check until 2026-10-11, and measuring it on
+2026-09-12 found reasons that go deeper than "nobody wrote the rule". The
+second is closed; the others stand.**
 
 First, nothing declares one. `git ls-files ':(glob)examples/*.cypcb' | wc -l`
 gives 33 and `git grep -l teardrop -- ':(glob)examples/*.cypcb' | wc -l` gives 1,
@@ -507,13 +509,24 @@ and that one is
 rule reading `world.teardrops()` would find it unset on 32 boards out of 33.
 
 Second, no rule could read the copper even if it were drawn, because the copper
-is not in the board. Every mention of a teardrop in the DRC crate is a
-comment - `git grep -n teardrop -- crates/cypcb-drc/src/` finds no code, only prose,
-and a count would rot the next time somebody writes the word. The fillet is synthesised at export time by
-`export_teardrops` in `crates/cypcb-export/src/gerber/copper.rs`, from the
-ratios and the pad geometry; the world the checker walks holds pads, traces and
-vias, and no teardrop. A condition on a teardrop's shape is a condition on
-something that exists only in a Gerber file.
+was not in the board: the fillet was synthesised at export time by the Gerber
+writer, from the ratios and the pad geometry, and the world the checker walks
+held pads, traces and vias, and no teardrop. **Since 2026-10-11 it is in the
+board.** A teardrop is a `TeardropCopper` entity - a polygon on the layer and
+net of the track it grows from, as KiCad keeps it (`createTeardrop` in
+`pcbnew/teardrop/teardrop.cpp` adds a `ZONE` on the track's layer and net) -
+made in one place, `BoardWorld::rebuild_teardrops`, which
+`rebuild_spatial_index_from_library` runs after every change to a track. The
+Gerber writer, `ClearanceRule`, `NetSplitRule`, the edge, slot and hole rules and
+the router's grid and clearance field all read that copper like any other -
+`git grep -n 'teardrop_copper' -- crates/cypcb-drc/src/` finds the checker's
+readers of it - and
+the second half of this rule reads it too: `teardrop_findings` in
+`crates/cypcb-drc/src/rules/pad_entry.rs`, standing behind the declaration,
+reports a board that asks for teardrops and does not hold the ones its tracks
+give, or holds one they do not. Its controls are in
+`crates/cypcb-drc/tests/a_teardrop_is_copper_the_checker_reads.rs`, and the
+fillet that comes too close to another net is a clearance row that names it.
 
 Third, and this is the one that changes what the rule can honestly say: **the
 two halves of R-08 are not about the same junctions.** The angle half measures
@@ -546,13 +559,14 @@ declaration would report every junction on six boards that no fabricator
 flags, which is the mirror image of the threshold that never fired: one is
 silent everywhere, the other speaks everywhere, and neither carries
 information. **A teardrop rule stands behind the declaration or it is not a
-rule.** What is left decidable is a board that states `teardrops` and an export
-path that does not carry them.
+rule.** What is decidable is a board that states `teardrops`, and that is the
+population `teardrop_findings` reads; and an export path that does not carry
+them.
 
-Half the model is there - `teardrops` is a DSL property carrying length and
+The model carries it - `teardrops` is a DSL property carrying length and
 width ratios (`crates/cypcb-parser/src/parser.rs`, `convert_teardrops`),
-reachable as `world.teardrops()` (`crates/cypcb-world/src/world.rs:207`), and
-the Gerber writer honours it. **The KiCad export does not:** `to_kicad` prints
+reachable as `world.teardrops()` (`crates/cypcb-world/src/world.rs`), and
+the Gerber writer writes the copper it makes. **The KiCad export does not:** `to_kicad` prints
 a warning that the fillets the design asks for are not in the board it writes.
 The reason that warning used to give - that KiCad keeps its own teardrop
 settings somewhere this writer cannot reach - was not true, and the source was
@@ -1347,7 +1361,7 @@ this page is a counter-example to that sentence on the same page.
 | R-01 width against current | `TraceCurrentRule` (`crates/cypcb-drc/src/lib.rs:151`), silent on a net that declares no `current` |
 | R-03 acute angles | `AcuteAngleRule` (`crates/cypcb-drc/src/lib.rs:209`), reporting `ViolationKind::AcidTrap` |
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
-| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:172`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
+| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:172`), reporting `ViolationKind::PadEntry`: the angle everywhere, and on a board that declares `teardrops` whether the teardrop copper in the board is the copper its tracks give (`teardrop_findings`) |
 | R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
 **Bucket 2 - checkable today, nobody wrote the check. Ten.** Checkable is
@@ -1502,7 +1516,7 @@ last clause is the rule.
 
 **2. What the grid costs in accuracy, and it is worse than half a cell.** A pad
 centre is snapped by integer division, not by rounding: `nm_to_grid_x`
-(`crates/cypcb-autoroute/src/grid.rs:745`) computes `(nm - origin) / resolution`,
+(`crates/cypcb-autoroute/src/grid.rs:783`) computes `(nm - origin) / resolution`,
 which truncates toward zero. The node therefore sits at or below the pad centre
 on each axis, and the error approaches a whole cell per axis rather than half of
 one. Worst case radially is `resolution * sqrt(2)`.
@@ -2817,9 +2831,9 @@ Every rule above grades an artefact: copper that exists, measured where it
 lies. The teardrop half of R-08 cannot be written that way, and the reason is
 now measured rather than argued - one example declares the property, out of
 every example in `examples/`, the
-fillet is synthesised by the Gerber writer so the copper is not in the board the
-checker walks, and the design-side condition is true of all 897 entries on all
-six fixtures. What survives all three is not a statement about copper at all:
+fillet was synthesised by the Gerber writer so the copper was not in the board the
+checker walks (it is, since 2026-10-11), and the design-side condition is true of
+all 897 entries on all six fixtures. What survives all three is not a statement about copper at all:
 **a design that declares `teardrops` and leaves through `to_kicad` ships a board
 whose copper does not carry what the design asked for**, while the same design
 through the Gerber path does. One design, two outputs, two different pieces of

@@ -38,7 +38,7 @@ use crate::violation::DrcViolation;
 
 use super::clearance::{
     aabb_distance, component_pads, copper_distance, segment_distance, trace_to_copper_distance,
-    Copper, TraceData,
+    Copper, Polygon, TraceData,
 };
 use super::unrouted_pin::{pad_centre, pad_is_reached};
 use super::DrcRule;
@@ -88,13 +88,18 @@ pub struct CopperPiece {
     pub vias: Vec<Via>,
     /// Whether a pour's outline is part of it.
     pub pour: bool,
+    /// The outlines of the teardrops in it.
+    pub teardrops: Vec<Vec<Point>>,
 }
 
 impl CopperPiece {
     /// Whether it holds any copper beyond pads: a pad on its own is a pin
     /// nothing reaches, not a conductor.
     pub fn is_conductor(&self) -> bool {
-        !self.segments.is_empty() || !self.vias.is_empty() || self.pour
+        !self.segments.is_empty()
+            || !self.vias.is_empty()
+            || self.pour
+            || !self.teardrops.is_empty()
     }
 }
 
@@ -126,6 +131,8 @@ enum Shape {
     Segment(PieceSegment),
     Via(Via),
     Pour,
+    /// A teardrop: the corners as the model holds them, and as a polygon.
+    Teardrop(Vec<Point>, Polygon),
 }
 
 struct Feature {
@@ -273,6 +280,25 @@ pub fn copper_pieces(world: &mut BoardWorld) -> Vec<NetCopper> {
         });
     }
 
+    // A teardrop is copper of its track's net, and joins what it touches as
+    // the track does.
+    for (_, teardrop, net) in cypcb_world::teardrop::teardrop_copper(world) {
+        let Some(features) = by_net.get_mut(&net.id()) else {
+            continue;
+        };
+        let bounds = teardrop.bounds();
+        let bounds = AABB::from_corners(
+            [bounds.min.x.0, bounds.min.y.0],
+            [bounds.max.x.0, bounds.max.y.0],
+        );
+        features.push(Feature {
+            shape: Shape::Teardrop(teardrop.outline.clone(), Polygon::new(&teardrop.outline)),
+            layer_mask: teardrop.layer.to_copper_mask(),
+            bounds,
+            copper: Copper::boxed(bounds),
+        });
+    }
+
     for pour in &pours {
         let Some(features) = pour.net.and_then(|net| by_net.get_mut(&net.id())) else {
             continue;
@@ -314,6 +340,7 @@ pub fn copper_pieces(world: &mut BoardWorld) -> Vec<NetCopper> {
                         Some(Shape::Segment(segment)) => piece.segments.push(segment),
                         Some(Shape::Via(via)) => piece.vias.push(via),
                         Some(Shape::Pour) => piece.pour = true,
+                        Some(Shape::Teardrop(outline, _)) => piece.teardrops.push(outline),
                         None => {}
                     }
                 }
@@ -446,6 +473,14 @@ fn touches(one: &Feature, other: &Feature) -> bool {
             let ((a1, a2), (b1, b2)) = (ends(first), ends(second));
             segment_distance(a1, a2, b1, b2) <= first.half_width + second.half_width
         }
+        (Shape::Teardrop(_, first), Shape::Teardrop(_, second)) => first.to_polygon(second).1 == 0,
+        (Shape::Teardrop(_, polygon), Shape::Segment(segment))
+        | (Shape::Segment(segment), Shape::Teardrop(_, polygon)) => {
+            let (a, b) = ends(segment);
+            polygon.to_segment(a, b).1 <= segment.half_width
+        }
+        (Shape::Teardrop(_, polygon), _) => polygon.to_copper(&other.copper).1 == 0,
+        (_, Shape::Teardrop(_, polygon)) => polygon.to_copper(&one.copper).1 == 0,
         (Shape::Segment(segment), _) => {
             let (a, b) = ends(segment);
             segment_touches(a, b, segment.half_width, &other.copper)

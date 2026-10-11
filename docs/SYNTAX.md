@@ -94,6 +94,13 @@ A board that says nothing gets nothing: an export writes the copper it has
 always written, and `cypcb export --teardrops` is how to try the fillets
 without editing the design.
 
+A teardrop is copper in the board, on the layer and net of the track it grows
+from, like KiCad's. The checker measures it as it measures a track: a fillet
+that comes closer to another net than the fab allows is a clearance row that
+names it (`teardrop 'NET'`), and one that touches its own net is a join.
+`cypcb export --teardrops` sets the request before the check, so the check reads
+the copper the files will carry.
+
 ### Fab
 
 Every clearance the checker applies and every gap the router plans to comes from
