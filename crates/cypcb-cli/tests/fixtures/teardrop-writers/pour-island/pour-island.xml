@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IPC-2581 revision="C">
+  <Content roleRef="cypcb">
+    <FunctionMode mode="FABRICATION" level="1"/>
+    <StepRef name="island_demo"/>
+    <LayerRef name="F_Cu"/>
+    <LayerRef name="B_Cu"/>
+    <LayerRef name="Edge_Cuts"/>
+    <DictionaryStandard units="MILLIMETER">
+      <EntryStandard id="rect_1_000x1_000"><RectCenter width="1.000" height="1.000"/></EntryStandard>
+    </DictionaryStandard>
+    <DictionaryLineDesc units="MILLIMETER">
+      <EntryLineDesc id="line_0_200"><LineDesc lineEnd="ROUND" lineWidth="0.200"/></EntryLineDesc>
+    </DictionaryLineDesc>
+  </Content>
+  <LogisticHeader>
+    <Role id="cypcb" roleFunction="SENDER"/>
+    <Enterprise id="cypcb" name="cypcb" code="NONE"/>
+    <Person name="cypcb" enterpriseRef="cypcb" roleRef="cypcb"/>
+  </LogisticHeader>
+  <HistoryRecord number="1.0" origination="2025-10-09T08:53:20+0000" software="cypcb" lastChange="2025-10-09T08:53:20+0000">
+    <FileRevision fileRevisionId="1.0" comment="written by cypcb">
+      <SoftwarePackage name="cypcb" vendor="cypcb" revision="0.1.0-beta">
+        <Certification certificationStatus="SELFTEST"/>
+      </SoftwarePackage>
+    </FileRevision>
+  </HistoryRecord>
+  <Ecad name="island_demo">
+    <CadHeader units="MILLIMETER"/>
+    <CadData>
+      <Layer name="F_Cu" layerFunction="CONDUCTOR" side="TOP" polarity="POSITIVE"/>
+      <Layer name="B_Cu" layerFunction="CONDUCTOR" side="BOTTOM" polarity="POSITIVE"/>
+      <Layer name="Edge_Cuts" layerFunction="BOARD_OUTLINE" side="NONE" polarity="POSITIVE"/>
+      <Step name="island_demo">
+        <Datum x="0" y="0"/>
+        <Profile>
+          <Polygon>
+            <PolyBegin x="0.000" y="0.000"/>
+            <PolyStepSegment x="40.000" y="0.000"/>
+            <PolyStepSegment x="40.000" y="40.000"/>
+            <PolyStepSegment x="0.000" y="40.000"/>
+            <PolyStepSegment x="0.000" y="0.000"/>
+          </Polygon>
+        </Profile>
+        <LayerFeature layerRef="F_Cu">
+          <Set padUsage="TERMINATION">
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="20.000" y="10.000"/>
+              <StandardPrimitiveRef id="rect_1_000x1_000"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="2.000" y="20.000"/>
+              <StandardPrimitiveRef id="rect_1_000x1_000"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="38.000" y="20.000"/>
+              <StandardPrimitiveRef id="rect_1_000x1_000"/>
+            </Pad>
+          </Set>
+          <Set net="SIG">
+            <Features>
+              <Line startX="2.000" startY="20.000" endX="38.000" endY="20.000">
+                <LineDescRef id="line_0_200"/>
+              </Line>
+            </Features>
+          </Set>
+          <Set net="GND">
+            <Features>
+              <Contour>
+                <Polygon>
+                  <PolyBegin x="5.000" y="5.000"/>
+                  <PolyStepSegment x="35.000" y="5.000"/>
+                  <PolyStepSegment x="35.000" y="9.246"/>
+                  <PolyStepSegment x="5.000" y="9.246"/>
+                  <PolyStepSegment x="5.000" y="5.000"/>
+                </Polygon>
+              </Contour>
+            </Features>
+            <Features>
+              <Contour>
+                <Polygon>
+                  <PolyBegin x="5.000" y="10.754"/>
+                  <PolyStepSegment x="35.000" y="10.754"/>
+                  <PolyStepSegment x="35.000" y="19.600"/>
+                  <PolyStepSegment x="5.000" y="19.600"/>
+                  <PolyStepSegment x="5.000" y="10.754"/>
+                </Polygon>
+              </Contour>
+            </Features>
+            <Features>
+              <Contour>
+                <Polygon>
+                  <PolyBegin x="5.000" y="9.246"/>
+                  <PolyStepSegment x="19.246" y="9.246"/>
+                  <PolyStepSegment x="19.246" y="10.754"/>
+                  <PolyStepSegment x="5.000" y="10.754"/>
+                  <PolyStepSegment x="5.000" y="9.246"/>
+                </Polygon>
+              </Contour>
+            </Features>
+            <Features>
+              <Contour>
+                <Polygon>
+                  <PolyBegin x="20.754" y="9.246"/>
+                  <PolyStepSegment x="35.000" y="9.246"/>
+                  <PolyStepSegment x="35.000" y="10.754"/>
+                  <PolyStepSegment x="20.754" y="10.754"/>
+                  <PolyStepSegment x="20.754" y="9.246"/>
+                </Polygon>
+              </Contour>
+            </Features>
+            <Features>
+              <Contour>
+                <Polygon>
+                  <PolyBegin x="5.000" y="20.400"/>
+                  <PolyStepSegment x="35.000" y="20.400"/>
+                  <PolyStepSegment x="35.000" y="35.000"/>
+                  <PolyStepSegment x="5.000" y="35.000"/>
+                  <PolyStepSegment x="5.000" y="20.400"/>
+                </Polygon>
+              </Contour>
+            </Features>
+            <Features>
+              <Contour>
+                <Polygon>
+                  <PolyBegin x="19.246" y="9.873"/>
+                  <PolyStepSegment x="20.754" y="9.873"/>
+                  <PolyStepSegment x="20.754" y="10.127"/>
+                  <PolyStepSegment x="19.246" y="10.127"/>
+                  <PolyStepSegment x="19.246" y="9.873"/>
+                </Polygon>
+              </Contour>
+            </Features>
+            <Features>
+              <Contour>
+                <Polygon>
+                  <PolyBegin x="19.873" y="9.246"/>
+                  <PolyStepSegment x="20.127" y="9.246"/>
+                  <PolyStepSegment x="20.127" y="10.754"/>
+                  <PolyStepSegment x="19.873" y="10.754"/>
+                  <PolyStepSegment x="19.873" y="9.246"/>
+                </Polygon>
+              </Contour>
+            </Features>
+          </Set>
+        </LayerFeature>
+      </Step>
+    </CadData>
+  </Ecad>
+</IPC-2581>

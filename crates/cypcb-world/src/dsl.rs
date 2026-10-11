@@ -1552,6 +1552,21 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
         ));
     }
 
+    // Teardrop copper a file carried. The language states teardrops as a
+    // request on the board - `teardrops` - and this model builds them from the
+    // tracks, so a polygon read from a KiCad board has no written form: the
+    // copper the board was sent with is not the copper it will be built with.
+    let read_teardrops = crate::teardrop::teardrop_copper(world)
+        .iter()
+        .filter(|(_, copper, _)| copper.land.is_none())
+        .count();
+    if read_teardrops > 0 {
+        not_written.push(format!(
+            "{read_teardrops} teardrop(s) read from the board not written: the language asks for \
+             teardrops (`teardrops`) and builds them from the tracks, it does not state a polygon"
+        ));
+    }
+
     let traces = traces_as_dsl(world);
     if !traces.is_empty() {
         let _ = writeln!(out);

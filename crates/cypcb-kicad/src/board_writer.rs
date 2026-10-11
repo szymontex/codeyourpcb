@@ -490,6 +490,7 @@ pub fn write_board_with_rules(
     write_footprints(world, origin, &net_number, rules.as_ref(), &mut out);
     write_copper(world, origin, &net_number, &mut out);
     write_zones(world, origin, &net_number, rules.as_ref(), &mut out);
+    write_teardrops(world, origin, &net_number, &mut out);
 
     let _ = writeln!(out, ")");
     out
@@ -906,6 +907,91 @@ fn write_zones(
             let _ = writeln!(out, "    )");
             let _ = writeln!(out, "  )");
         }
+    }
+}
+
+/// Every teardrop the board holds, as the zone KiCad keeps it as.
+///
+/// KiCad's `TEARDROP_MANAGER::createTeardrop` (`pcbnew/teardrop/teardrop.cpp`)
+/// makes a `ZONE` on the layer and net of the track the teardrop grows from,
+/// with its local clearance 0, the zone minimum thickness (0.0254mm), its pad
+/// connection `FULL`, island removal `NEVER`, an invisible border and the fill
+/// equal to the outline; `PCB_IO_KICAD_SEXPR::format( const ZONE* )`
+/// (`pcbnew/pcb_io/kicad_sexpr/pcb_io_kicad_sexpr.cpp`) writes a teardrop zone
+/// with no uuid and no name, `(attr (teardrop (type padvia)))` for the type, no
+/// thermal figures, and the polygon twice: the outline and the filled copper.
+/// The invisible border is written as `(hatch none ...)` with the border pitch
+/// clamped to its minimum, 0.1mm (`ZONE::SetBorderDisplayStyle` in `zone.cpp`,
+/// `ZONE_BORDER_HATCH_MINDIST_MM` in `zones.h`). Its priority is the one
+/// `TEARDROP_MANAGER::setTeardropPriorities` hands out: on each copper layer
+/// the teardrops by decreasing outline area, the first at `MAGIC_TEARDROP_ZONE_ID`
+/// (30000), the next at 30001 and so on, because zones of equal priority on
+/// different nets do not clear each other. Equal areas keep the order the
+/// teardrops were made in. All of it read from the KiCad master branch on
+/// 2026-10-11.
+///
+/// The figures that are KiCad's own constants stay literals here for the reason
+/// the pour's do not: they are not a property of this board and no fab table
+/// states them. The solder mask zone KiCad makes beside each copper teardrop
+/// (`createTeardropMask`) is not written: the mask over a teardrop is derived
+/// from the copper by whoever reads the board, as it is here.
+fn write_teardrops(
+    world: &mut BoardWorld,
+    origin: cypcb_core::Point,
+    net_number: &std::collections::HashMap<cypcb_world::NetId, usize>,
+    out: &mut String,
+) {
+    let held: Vec<_> = cypcb_world::teardrop::teardrop_copper(world)
+        .into_iter()
+        .filter_map(|(_, teardrop, net)| Some((copper_layer(teardrop.layer)?, teardrop, net)))
+        .collect();
+
+    // Per layer, the largest first; the sort is stable, so equal areas keep the
+    // order `teardrop_copper` gives, which is the order they were made in.
+    let mut by_area: Vec<usize> = (0..held.len()).collect();
+    by_area.sort_by_key(|&i| std::cmp::Reverse(held[i].1.double_area()));
+    let mut next_on: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    let mut priority = vec![0u32; held.len()];
+    for i in by_area {
+        // literal: `MAGIC_TEARDROP_ZONE_ID`, where `teardrop.cpp` starts the priorities of each layer
+        let next = next_on.entry(held[i].0.clone()).or_insert(30000);
+        priority[i] = *next;
+        *next += 1;
+    }
+
+    for (i, (layer, teardrop, net)) in held.iter().enumerate() {
+        let number = net_number.get(net).copied().unwrap_or(0);
+        let net_name = world.net_name(*net).unwrap_or_default().to_string();
+        let points = teardrop
+            .outline
+            .iter()
+            .map(|p| {
+                let (x, y) = on_sheet(origin, p.x, p.y);
+                format!("(xy {x} {y})")
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let _ = writeln!(out, "  (zone");
+        let _ = writeln!(out, "    (net {number})");
+        let _ = writeln!(out, "    (net_name \"{net_name}\")");
+        let _ = writeln!(out, "    (layer \"{layer}\")");
+        // literal: KiCad's own border pitch for a teardrop zone, the minimum `ZONE_BORDER_HATCH_MINDIST_MM`
+        let _ = writeln!(out, "    (hatch none 0.1)");
+        let _ = writeln!(out, "    (priority {})", priority[i]);
+        let _ = writeln!(out, "    (attr (teardrop (type padvia)))");
+        let _ = writeln!(out, "    (connect_pads yes (clearance 0))");
+        // literal: KiCad's zone minimum thickness, which `createTeardrop` sets and no fab table states
+        let _ = writeln!(out, "    (min_thickness 0.0254)");
+        let _ = writeln!(out, "    (fill yes (island_removal_mode 1))");
+        let _ = writeln!(out, "    (polygon");
+        let _ = writeln!(out, "      (pts {points})");
+        let _ = writeln!(out, "    )");
+        let _ = writeln!(out, "    (filled_polygon");
+        let _ = writeln!(out, "      (layer \"{layer}\")");
+        let _ = writeln!(out, "      (pts {points})");
+        let _ = writeln!(out, "    )");
+        let _ = writeln!(out, "  )");
     }
 }
 

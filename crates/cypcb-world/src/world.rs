@@ -610,9 +610,12 @@ impl BoardWorld {
     /// Called by [`rebuild_spatial_index_from_library`](Self::rebuild_spatial_index_from_library),
     /// which every caller already runs after it changes a track.
     pub fn rebuild_teardrops(&mut self, library: &crate::footprint::FootprintLibrary) {
+        // The copper the builder made. A teardrop read from a file has no land
+        // and stays: its polygon is the file's.
         let old: Vec<Entity> =
             in_build_order::<(Entity, &crate::teardrop::TeardropCopper)>(&mut self.world)
                 .into_iter()
+                .filter(|(_, copper)| copper.land.is_some())
                 .map(|(entity, _)| entity)
                 .collect();
         for entity in old {

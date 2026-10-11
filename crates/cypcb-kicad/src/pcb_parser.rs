@@ -116,6 +116,9 @@ pub struct KicadPcbMetadata {
     pub layer_count: u8,
     /// Copper pours and rule areas carried into the board.
     pub zone_count: usize,
+    /// Teardrop zones carried into the board as teardrop copper: a polygon on
+    /// its layer and net, as KiCad keeps one.
+    pub teardrop_count: usize,
     /// Zones the file carried and this importer would not approximate, each
     /// with the reason. Reported rather than dropped in silence: a board that
     /// arrives without its ground plane and says nothing is a board whose
@@ -545,6 +548,8 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     // 8. Extract copper pours and rule areas
     let mut zone_refusals: Vec<String> = Vec::new();
     let mut zone_count = 0usize;
+    let mut teardrop_count = 0usize;
+    let mut mask_teardrops = 0usize;
     for elem in elements {
         if list_name(elem).as_deref() != Some("zone") {
             continue;
@@ -554,9 +559,37 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
                 world.spawn_entity((zone,));
                 zone_count += 1;
             }
+            // A teardrop is copper of the net and layer it is on, whole: the
+            // polygon in the file is the polygon, curved or not, and the
+            // builder that makes this model's own teardrops leaves it alone
+            // (no land).
+            ZoneImport::Teardrop {
+                outline,
+                layer,
+                net,
+            } => {
+                world.spawn_entity((
+                    cypcb_world::teardrop::TeardropCopper {
+                        outline,
+                        layer,
+                        order: FILE_TEARDROP_ORDER + teardrop_count as u32,
+                        land: None,
+                    },
+                    net,
+                ));
+                teardrop_count += 1;
+            }
+            ZoneImport::MaskTeardrop => mask_teardrops += 1,
             ZoneImport::Refused(why) => zone_refusals.push(why),
             ZoneImport::Skipped => {}
         }
+    }
+    if mask_teardrops > 0 {
+        zone_refusals.push(format!(
+            "{mask_teardrops} teardrop zone(s) on solder mask layers are not carried: KiCad \
+             makes one beside each copper teardrop to open the mask over it, and this model \
+             derives the mask from the copper"
+        ));
     }
 
     // Build reference routes
@@ -587,6 +620,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     let metadata = KicadPcbMetadata {
         pad_approximations,
         zone_count,
+        teardrop_count,
         zone_refusals,
         track_refusals,
         stackup_refusals,
@@ -1690,7 +1724,10 @@ fn parse_zone(
     let mut zone_name: Option<String> = None;
     let mut layer_mask: u32 = 0;
     let mut points: Vec<(f64, f64)> = Vec::new();
+    let mut filled_points: Vec<(f64, f64)> = Vec::new();
+    let mut layers_named: Vec<Layer> = Vec::new();
     let mut is_keepout = false;
+    let mut is_teardrop = false;
 
     for child in &list[1..] {
         match list_name(child).as_deref() {
@@ -1712,6 +1749,7 @@ fn parse_zone(
                         parse_layer_names(&get_string(layer_sexp).unwrap_or_default(), &mut layers);
                         for layer in layers {
                             layer_mask |= layer.to_copper_mask();
+                            layers_named.push(layer);
                         }
                     }
                 }
@@ -1733,6 +1771,43 @@ fn parse_zone(
             }
             // A KiCad "rule area": copper is kept out rather than poured.
             Some("keepout") => is_keepout = true,
+            // `(attr (teardrop (type padvia)))`: the zone is a teardrop, which
+            // KiCad stores as copper on its track's layer and net
+            // (`pcb_io_kicad_sexpr_parser.cpp`, read 2026-10-11).
+            Some("attr") => {
+                if let Ok(attr) = child.list() {
+                    if attr
+                        .iter()
+                        .skip(1)
+                        .any(|item| list_name(item).as_deref() == Some("teardrop"))
+                    {
+                        is_teardrop = true;
+                    }
+                }
+            }
+            // The copper the zone is filled with, taken when the zone states no
+            // outline of its own.
+            Some("filled_polygon") if filled_points.is_empty() => {
+                if let Ok(poly) = child.list() {
+                    for pts in &poly[1..] {
+                        if list_name(pts).as_deref() != Some("pts") {
+                            continue;
+                        }
+                        let Ok(pts_list) = pts.list() else { continue };
+                        for pt in &pts_list[1..] {
+                            if list_name(pt).as_deref() != Some("xy") {
+                                continue;
+                            }
+                            let Ok(pt_list) = pt.list() else { continue };
+                            if pt_list.len() >= 3 {
+                                let x = coordinate(&pt_list[1], "zone filled x")?;
+                                let y = coordinate(&pt_list[2], "zone filled y")?;
+                                filled_points.push(frame::board_mm(origin, x, y));
+                            }
+                        }
+                    }
+                }
+            }
             Some("polygon") => {
                 if let Ok(poly) = child.list() {
                     for pts in &poly[1..] {
@@ -1763,6 +1838,42 @@ fn parse_zone(
     } else {
         format!("the zone on net {net_name}")
     };
+
+    if is_teardrop {
+        // On a copper layer it is copper; on a mask layer it is the opening KiCad
+        // cuts over that copper.
+        if layer_mask == 0 {
+            return Ok(ZoneImport::MaskTeardrop);
+        }
+        let outline_points = if points.is_empty() {
+            &filled_points
+        } else {
+            &points
+        };
+        let (Some(layer), Some(net)) = (
+            layers_named.iter().copied().find(|layer| layer.is_copper()),
+            net_id,
+        ) else {
+            return Ok(ZoneImport::Refused(format!(
+                "a teardrop zone with no net or no copper layer carries nothing ({label})"
+            )));
+        };
+        if outline_points.len() < 3 {
+            return Ok(ZoneImport::Refused(format!(
+                "a teardrop zone with {} points is not a polygon ({label})",
+                outline_points.len()
+            )));
+        }
+        let outline = outline_points
+            .iter()
+            .map(|(x, y)| Point::from_mm(*x, *y))
+            .collect();
+        return Ok(ZoneImport::Teardrop {
+            outline,
+            layer,
+            net,
+        });
+    }
 
     if layer_mask == 0 {
         return Ok(ZoneImport::Refused(format!(
@@ -1799,10 +1910,23 @@ fn parse_zone(
     }
 }
 
+/// Where teardrop copper read from a file starts in the order a board writes
+/// its copper in: after every teardrop the builder makes.
+const FILE_TEARDROP_ORDER: u32 = 1 << 30;
+
 /// What became of one `(zone ...)`.
 pub enum ZoneImport {
     /// Carried into the board.
     Carried(Zone),
+    /// A teardrop zone on a copper layer: a polygon, the layer it is on and the
+    /// net it carries.
+    Teardrop {
+        outline: Vec<Point>,
+        layer: Layer,
+        net: NetId,
+    },
+    /// A teardrop zone on a solder mask layer, counted and said once.
+    MaskTeardrop,
     /// Not carried, and why - reported rather than dropped in silence.
     Refused(String),
     /// Not a zone worth a word.

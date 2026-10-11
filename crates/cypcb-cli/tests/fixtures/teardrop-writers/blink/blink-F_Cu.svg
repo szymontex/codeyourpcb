@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="60.000mm" height="40.000mm" viewBox="0 0 60.000 40.000">
+  <title>blink - TopCopper</title>
+  <g transform="translate(0 40.000) scale(1 -1)">
+  <rect x="0" y="0" width="60.000" height="40.000" fill="none" stroke="#404040" stroke-width="0.100"/>
+  <rect x="2.880" y="19.150" width="1.700" height="1.700" fill="#c02020" transform="rotate(-0.000 3.730 20.000)"/>
+  <circle cx="6.270" cy="20.000" r="0.850" fill="#c02020"/>
+  <rect x="24.550" y="21.605" width="1.500" height="0.600" fill="#c02020" transform="rotate(-0.000 25.300 21.905)"/>
+  <rect x="24.550" y="20.335" width="1.500" height="0.600" fill="#c02020" transform="rotate(-0.000 25.300 20.635)"/>
+  <rect x="24.550" y="19.065" width="1.500" height="0.600" fill="#c02020" transform="rotate(-0.000 25.300 19.365)"/>
+  <rect x="24.550" y="17.795" width="1.500" height="0.600" fill="#c02020" transform="rotate(-0.000 25.300 18.095)"/>
+  <rect x="29.950" y="17.795" width="1.500" height="0.600" fill="#c02020" transform="rotate(-0.000 30.700 18.095)"/>
+  <rect x="29.950" y="19.065" width="1.500" height="0.600" fill="#c02020" transform="rotate(-0.000 30.700 19.365)"/>
+  <rect x="29.950" y="20.335" width="1.500" height="0.600" fill="#c02020" transform="rotate(-0.000 30.700 20.635)"/>
+  <rect x="29.950" y="21.605" width="1.500" height="0.600" fill="#c02020" transform="rotate(-0.000 30.700 21.905)"/>
+  <rect x="34.200" y="29.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 34.500 30.000)"/>
+  <rect x="35.200" y="29.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 35.500 30.000)"/>
+  <rect x="34.200" y="23.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 34.500 24.000)"/>
+  <rect x="35.200" y="23.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 35.500 24.000)"/>
+  <rect x="40.725" y="19.100" width="1.150" height="1.800" fill="#c02020" transform="rotate(-0.000 41.300 20.000)"/>
+  <rect x="44.125" y="19.100" width="1.150" height="1.800" fill="#c02020" transform="rotate(-0.000 44.700 20.000)"/>
+  <rect x="21.200" y="12.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 21.500 13.000)"/>
+  <rect x="22.200" y="12.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 22.500 13.000)"/>
+  <rect x="21.200" y="26.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 21.500 27.000)"/>
+  <rect x="22.200" y="26.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 22.500 27.000)"/>
+  <rect x="49.200" y="19.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 49.500 20.000)"/>
+  <rect x="50.200" y="19.750" width="0.600" height="0.500" fill="#c02020" transform="rotate(-0.000 50.500 20.000)"/>
+  <rect x="53.550" y="19.275" width="1.000" height="1.450" fill="#c02020" transform="rotate(-0.000 54.050 20.000)"/>
+  <rect x="55.450" y="19.275" width="1.000" height="1.450" fill="#c02020" transform="rotate(-0.000 55.950 20.000)"/>
+  </g>
+</svg>

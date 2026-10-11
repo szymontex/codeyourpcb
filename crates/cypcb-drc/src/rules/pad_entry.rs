@@ -713,7 +713,12 @@ pub fn teardrop_findings(world: &mut BoardWorld) -> Vec<DrcViolation> {
     };
     let library = world.footprints().clone();
     let expected = cypcb_world::teardrop::teardrops_of(world, &library, ratios);
-    let held = cypcb_world::teardrop::teardrop_copper(world);
+    // Only what the builder made: copper read from a file has no land and is
+    // the file's, not something the tracks are asked to account for.
+    let held: Vec<_> = cypcb_world::teardrop::teardrop_copper(world)
+        .into_iter()
+        .filter(|(_, copper, _)| copper.land.is_some())
+        .collect();
 
     let key = |t: &cypcb_world::teardrop::TeardropCopper, net: cypcb_world::components::NetId| {
         (t.outline.clone(), t.layer, net)

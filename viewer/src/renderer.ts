@@ -4,7 +4,7 @@
  * component body outlines, pad pin numbers, net labels, and drill marks.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, PourInfo, TraceInfo, ViaInfo, RatsnestInfo, ZoneInfo } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, PourInfo, TeardropInfo, TraceInfo, ViaInfo, RatsnestInfo, ZoneInfo } from './types';
 import type { Viewport } from './viewport';
 import type { RoutingState } from './routing';
 import type { DragEditState, RectSelectState } from './interaction';
@@ -185,6 +185,14 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
       }
     }
     ctx.restore();
+  }
+
+  // Teardrops: copper beside the tracks they grow from, so they are drawn
+  // with them and under the mask.
+  if (snapshot.teardrops) {
+    for (const teardrop of snapshot.teardrops) {
+      drawTeardrop(ctx, viewport, teardrop, layers, state.highlightedNet);
+    }
   }
 
   // ---- SOLDER MASK OVERLAY ----
@@ -628,6 +636,39 @@ function drawPour(
       Math.abs(sx2 - sx1), Math.abs(sy2 - sy1),
     );
   }
+}
+
+/** The name the layer stack gives the one copper layer a mask names. */
+function copperLayerName(mask: number): string | null {
+  if ((mask & 0b01) !== 0) return 'Top';
+  if ((mask & 0b10) !== 0) return 'Bottom';
+  for (let inner = 0; inner < 30; inner++) {
+    if ((mask & (1 << (2 + inner))) !== 0) return `Inner${inner + 1}`;
+  }
+  return null;
+}
+
+/** A teardrop is a polygon of copper: filled in its layer's colour. */
+export function drawTeardrop(
+  ctx: CanvasRenderingContext2D, vp: Viewport, teardrop: TeardropInfo,
+  layers: LayerVisibility, highlightedNet: string | null,
+): void {
+  if (teardrop.points.length < 3) return;
+  const name = copperLayerName(teardrop.layer_mask);
+  if (name === null) return;
+  const color = getTraceColor(name, layers);
+  if (!color) return;
+
+  const isDimmed = highlightedNet != null && teardrop.net !== highlightedNet;
+  ctx.fillStyle = colorWithAlpha(color, isDimmed ? 0.2 : 1.0);
+  ctx.beginPath();
+  teardrop.points.forEach(([x, y], index) => {
+    const [sx, sy] = worldToScreen(vp, x, y);
+    if (index === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  });
+  ctx.closePath();
+  ctx.fill();
 }
 
 export function drawTrace(

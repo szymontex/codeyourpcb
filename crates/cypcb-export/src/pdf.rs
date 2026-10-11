@@ -263,6 +263,19 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
         }
     }
 
+    // Teardrops: filled polygons in the copper colour, which is the fill
+    // colour at this point of the stream.
+    for (_, teardrop, _) in cypcb_world::teardrop::teardrop_copper(world) {
+        if teardrop.layer != layer || teardrop.outline.len() < 3 {
+            continue;
+        }
+        for (index, point) in teardrop.outline.iter().enumerate() {
+            let operator = if index == 0 { "m" } else { "l" };
+            stream.push_str(&format!("{} {} {operator}\n", pt(point.x), pt(point.y)));
+        }
+        stream.push_str("h\nf\n");
+    }
+
     // Vias: the ring, and the hole through it in the colour of the paper.
     let vias: Vec<Via> = {
         let mut query = world.ecs_mut().query::<&Via>();

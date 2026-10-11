@@ -101,6 +101,14 @@ names it (`teardrop 'NET'`), and one that touches its own net is a join.
 `cypcb export --teardrops` sets the request before the check, so the check reads
 the copper the files will carry.
 
+Every writer reads that copper. The Gerber copper files carry each fillet as a
+region; the SVG, DXF and PDF plots and the IPC-2581 document draw it; and
+`cypcb to-kicad` writes it as the zone KiCad keeps a teardrop as, so the board
+opens in KiCad with the fillets in its copper. A KiCad board that carries
+teardrop zones arrives with them as teardrop copper (`cypcb from-kicad` says
+which it could not write back into a design: the language asks for teardrops, it
+does not state a polygon).
+
 ### Fab
 
 Every clearance the checker applies and every gap the router plans to comes from

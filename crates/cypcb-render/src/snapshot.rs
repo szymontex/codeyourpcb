@@ -49,6 +49,12 @@ pub struct BoardSnapshot {
     /// Copper pours, as the copper they become.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pours: Vec<PourInfo>,
+    /// Teardrops: copper where a track meets a land, one polygon each.
+    ///
+    /// The copper the checker measures and the Gerber carries, so the screen
+    /// shows what the fabricator receives. Absent when the board has none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub teardrops: Vec<TeardropInfo>,
     /// Zones as the design states them: an outline, a layer and a net.
     ///
     /// Carried separately from `pours`, which is what a zone becomes. The host
@@ -187,6 +193,17 @@ pub struct PourInfo {
     pub layer_mask: u32,
     /// The filled copper: min x, min y, max x, max y, in nanometres.
     pub rects: Vec<[i64; 4]>,
+}
+
+/// A teardrop, as the copper it is: a polygon on one layer, on one net.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeardropInfo {
+    /// Net name it belongs to, empty when the board names none.
+    pub net: String,
+    /// The one copper layer it is on, as a layer mask.
+    pub layer_mask: u32,
+    /// The corners in order round the shape: x, y in nanometres.
+    pub points: Vec<[i64; 2]>,
 }
 
 /// A DRC violation for display in the viewer.
@@ -697,6 +714,7 @@ mod tests {
             vias: vec![],
             ratsnest: vec![],
             pours: vec![],
+            teardrops: vec![],
             zones: vec![],
             stackup: None,
         };
@@ -863,6 +881,7 @@ mod tests {
             }],
             ratsnest: vec![],
             pours: vec![],
+            teardrops: vec![],
             zones: vec![],
             stackup: None,
         };

@@ -1459,8 +1459,7 @@ fn per_segment_to_copper(trace: &TraceData, copper: &[&Copper], limit: i64) -> V
 ///
 /// The distance is taken from its edges, with the inside decided apart: copper
 /// that lies wholly inside the polygon has no edge near it and is still
-/// touching. The shapes a teardrop is made of are convex, which is what
-/// "inside" below assumes.
+/// touching.
 pub(crate) struct Polygon {
     corners: Vec<[i64; 2]>,
 }
@@ -1477,21 +1476,15 @@ impl Polygon {
         (0..n).map(move |i| (self.corners[i], self.corners[(i + 1) % n]))
     }
 
-    /// Whether the point is inside, or on the edge of, the polygon.
+    /// Whether the point is inside, or on the edge of, the polygon. Any simple
+    /// polygon: a teardrop read from KiCad is curved and not convex.
     fn contains(&self, p: [i64; 2]) -> bool {
-        let mut sign = 0i32;
-        for (a, b) in self.edges() {
-            let cross = (b[0] - a[0]) as i128 * (p[1] - a[1]) as i128
-                - (b[1] - a[1]) as i128 * (p[0] - a[0]) as i128;
-            let s = cross.signum() as i32;
-            if s != 0 {
-                if sign != 0 && s != sign {
-                    return false;
-                }
-                sign = s;
-            }
-        }
-        true
+        let outline: Vec<Point> = self
+            .corners
+            .iter()
+            .map(|c| Point::new(Nm(c[0]), Nm(c[1])))
+            .collect();
+        cypcb_world::teardrop::polygon_contains(&outline, Point::new(Nm(p[0]), Nm(p[1])))
     }
 
     /// The distance from a point: 0 inside.
