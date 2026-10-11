@@ -259,6 +259,14 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
         }
     }
 
+    // Teardrops: a closed polyline each, on the copper layer. They are copper
+    // like the tracks, so a mechanical tool measuring the copper finds them.
+    for (_, teardrop, _) in cypcb_world::teardrop::teardrop_copper(world) {
+        if teardrop.layer == layer {
+            polyline(&mut body, &copper, &teardrop.outline, true, None);
+        }
+    }
+
     // Vias: the ring, and the hole through it. The hole is on its own layer
     // because a mechanical tool asking where to clear a boss wants the drilled
     // holes and not the copper around them.

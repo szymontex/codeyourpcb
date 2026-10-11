@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="40.000mm" height="40.000mm" viewBox="0 0 40.000 40.000">
+  <title>island_demo - TopCopper</title>
+  <g transform="translate(0 40.000) scale(1 -1)">
+  <rect x="0" y="0" width="40.000" height="40.000" fill="none" stroke="#404040" stroke-width="0.100"/>
+  <rect x="19.500" y="9.500" width="1.000" height="1.000" fill="#c02020" transform="rotate(-0.000 20.000 10.000)"/>
+  <rect x="1.500" y="19.500" width="1.000" height="1.000" fill="#c02020" transform="rotate(-0.000 2.000 20.000)"/>
+  <rect x="37.500" y="19.500" width="1.000" height="1.000" fill="#c02020" transform="rotate(-0.000 38.000 20.000)"/>
+  <line x1="2.000" y1="20.000" x2="38.000" y2="20.000" stroke="#c02020" stroke-width="0.200" stroke-linecap="round"/>
+  </g>
+</svg>

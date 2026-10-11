@@ -261,33 +261,9 @@ impl ToKicadCommand {
             );
         }
 
-        // The fillets a board asks for. KiCad has its own teardrops - per
-        // board, per net class, and per pad since 7.0.
-        //
-        // **This comment said until 2026-09-14 that they live in the project
-        // file rather than in the board, and that writing ours would put a
-        // request where nothing reads it. Both halves are wrong.** KiCad's
-        // `teardrop.cpp` takes its parameters from the board - `m_prmsList =
-        // m_board->GetDesignSettings().GetTeadropParamsList()` - and adds the
-        // copper to the board as a zone: `ZONE* teardrop = new ZONE( m_board )`
-        // and `m_board->Add( new_teardrop, ADD_MODE::BULK_INSERT )`. Read from
-        // the KiCad doxygen source on 2026-09-14.
-        //
-        // So a `.kicad_pcb` does have somewhere to put this, and this writer
-        // still does not put it there. That is the state, not the reason: the
-        // request is announced rather than written, and whether it should
-        // become copper in the model at all is the owner's open question.
-        if let Some(teardrops) = world.teardrops() {
-            eprintln!(
-                "Warning: the teardrops this design asks for (length {:.2}, width {:.2} of pad \
-                 size) are not in the KiCad board: this writer does not put them there. KiCad \
-                 has somewhere for them - it keeps the parameters in the board's design \
-                 settings and the copper as a zone in the board - so a board taken to KiCad \
-                 arrives without these and with KiCad's own switched off. Export from here with \
-                 `cypcb export` to get the fillets in the copper, or turn KiCad's on.",
-                teardrops.length, teardrops.width
-            );
-        }
+        // The fillets a board asks for are in the board as zones, the way KiCad
+        // keeps its own: `write_teardrops` in `cypcb-kicad`. They used to be
+        // announced here as not carried, which was true until 2026-10-11.
 
         // What a net asks for.
         //

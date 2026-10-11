@@ -560,26 +560,22 @@ flags, which is the mirror image of the threshold that never fired: one is
 silent everywhere, the other speaks everywhere, and neither carries
 information. **A teardrop rule stands behind the declaration or it is not a
 rule.** What is decidable is a board that states `teardrops`, and that is the
-population `teardrop_findings` reads; and an export path that does not carry
-them.
+population `teardrop_findings` reads.
 
 The model carries it - `teardrops` is a DSL property carrying length and
 width ratios (`crates/cypcb-parser/src/parser.rs`, `convert_teardrops`),
 reachable as `world.teardrops()` (`crates/cypcb-world/src/world.rs`), and
-the Gerber writer writes the copper it makes. **The KiCad export does not:** `to_kicad` prints
-a warning that the fillets the design asks for are not in the board it writes.
-The reason that warning used to give - that KiCad keeps its own teardrop
-settings somewhere this writer cannot reach - was not true, and the source was
-corrected on 2026-09-14 in f239ebc: KiCad takes the parameters from the board's
-own design settings and adds the fillet copper to the board as a zone, read
-that day from the KiCad doxygen source. **A `.kicad_pcb` has somewhere to put
-this and this writer does not put it there**, which is a statement about this
-writer rather than about the format. The warning sits inside
-`if let Some(teardrops) = world.teardrops()`, one per board, so a board that
-declares nothing is told nothing: **silence from the export does not mean the
-fillets are there, only that nobody asked for them.** So a board exported both ways
-ships two different pieces of copper, and only one of the two paths carries
-what the design stated.
+the copper it makes is read by the Gerber writer, the SVG, DXF, PDF and
+IPC-2581 writers, the viewer's snapshot and `to_kicad`. **Since 2026-10-11 the
+KiCad export carries it too**: `write_teardrops` in
+`crates/cypcb-kicad/src/board_writer.rs` writes each teardrop as the zone KiCad
+keeps it as - `(attr (teardrop (type padvia)))`, no uuid and no name, a zero
+clearance, the polygon as outline and as fill - in the form `createTeardrop` and
+`PCB_IO_KICAD_SEXPR::format( const ZONE* )` give it, read from the KiCad master
+branch that day. The warning that used to say the fillets were not in the board
+is gone with the fact it stated, and a board read back from KiCad holds each
+teardrop zone as teardrop copper again (`ZoneImport::Teardrop` in
+`crates/cypcb-kicad/src/pcb_parser.rs`).
 
 ### R-09 Thermal relief at a pad in a pour `[P]`
 
@@ -2112,7 +2108,7 @@ nothing. That is why it is a population to look at rather than a list of faults,
 and why nobody should turn the count into a gate before the rows have been read
 one by one.
 
-The pattern done right is `what_this_path_drops_is_not_in_the_board_it_writes`,
+The pattern done right is `what_this_path_carries_is_in_the_board_it_writes`,
 which exports one design through both paths and compares the two outputs against
 each other rather than against what either command said about itself.
 
@@ -2834,10 +2830,12 @@ every example in `examples/`, the
 fillet was synthesised by the Gerber writer so the copper was not in the board the
 checker walks (it is, since 2026-10-11), and the design-side condition is true of
 all 897 entries on all six fixtures. What survives all three is not a statement about copper at all:
-**a design that declares `teardrops` and leaves through `to_kicad` ships a board
-whose copper does not carry what the design asked for**, while the same design
-through the Gerber path does. One design, two outputs, two different pieces of
-copper, and nothing in this project notices.
+**a design that declared `teardrops` and left through `to_kicad` shipped a board
+whose copper did not carry what the design asked for**, while the same design
+through the Gerber path did. One design, two outputs, two different pieces of
+copper, and nothing in this project noticed. That gap closed on 2026-10-11, when
+the KiCad path began to write the zone, and the shape below is what stays true of
+any property one path carries and another does not.
 
 A rule of that shape has a different subject, a different denominator and a
 different failure, and the three are worth separating before any code is
@@ -2868,9 +2866,9 @@ written.
 - **What it asserts.** For each property a design declares, and each path the
   design is exported through: the output carries the property, or the path tells
   the operator it cannot, once per property rather than once per board. Silence
-  is not a pass. Today `to_kicad` warns only when a design declares teardrops,
-  which is correct - a board that asked for nothing is not owed a warning - but
-  it means the absence of a warning says nothing about whether fillets are there.
+  is not a pass. A board that asked for nothing is not owed a warning, which
+  means the absence of one says nothing about whether the property is there:
+  the output is what is read.
 
 **And the temptation to refuse, named before somebody takes it.** A check could
 read the exported Gerber back and confirm the fillets are present. That measures
@@ -2881,21 +2879,24 @@ output, in the output format's own terms, with a reader that is not the writer -
 and where no such reader exists, the honest form is the warning, stated once per
 declared property, rather than a check that cannot fail.
 
-**Its first instance is checked now, and writing the check found the gap the
-shape predicts.** Both halves already existed, in two files that did not know
+**Its first instance was checked on 2026-09-13, and writing the check found the
+gap the shape predicts.** Both halves existed in two files that did not know
 about each other: the Gerber path's fillets in
-`a_track_gets_a_fillet_where_it_meets_a_pad`, and the KiCad path's warning in
-`a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own`. The second read
-stderr and nothing else - **the warning was standing in for the absence it
-describes**, so a change that began writing fillets into the KiCad board while
-leaving the sentence in place would have passed it and shipped a sentence that
-was false. `what_this_path_drops_is_not_in_the_board_it_writes`, in
+`a_track_gets_a_fillet_where_it_meets_a_pad`, and the KiCad path's warning in a
+test that read stderr and nothing else - **the warning was standing in for the
+absence it described**, so a change that began writing fillets into the KiCad
+board while leaving the sentence in place would have passed it and shipped a
+sentence that was false. The check opened both files: 4 fillet regions in the top
+copper Gerber against 0 polygons in the KiCad board.
+
+**It is the same test now, with the sign of its answer turned.**
+`what_this_path_carries_is_in_the_board_it_writes`, in
 `crates/cypcb-cli/tests/what_a_kicad_board_cannot_carry.rs`, exports one design
-through both paths and opens both files: **4 fillet regions in the top copper
-Gerber against 0 polygons in the KiCad board**, with the warning naming the
-property. Two mutations kill it - silencing the warning, and making
-`export_teardrops` draw nothing - and the second kills only this test, because
-it is the only one that reads the two outputs of one design side by side.
+through both paths and opens both files: the number of fillet regions in the
+copper Gerbers equals the number of teardrop zones in the KiCad board, and both
+are above zero. Making `write_teardrops` write none, or `export_teardrops` draw
+none, kills it, and it is the only test that reads the two outputs of one design
+side by side.
 
 ### Constants a fab preset promises and nothing checks
 

@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IPC-2581 revision="C">
+  <Content roleRef="cypcb">
+    <FunctionMode mode="FABRICATION" level="1"/>
+    <StepRef name="blink"/>
+    <LayerRef name="F_Cu"/>
+    <LayerRef name="B_Cu"/>
+    <LayerRef name="Edge_Cuts"/>
+    <DictionaryStandard units="MILLIMETER">
+      <EntryStandard id="circle_1_700"><Circle diameter="1.700"/></EntryStandard>
+      <EntryStandard id="rect_0_600x0_500"><RectCenter width="0.600" height="0.500"/></EntryStandard>
+      <EntryStandard id="rect_1_000x1_450"><RectCenter width="1.000" height="1.450"/></EntryStandard>
+      <EntryStandard id="rect_1_150x1_800"><RectCenter width="1.150" height="1.800"/></EntryStandard>
+      <EntryStandard id="rect_1_500x0_600"><RectCenter width="1.500" height="0.600"/></EntryStandard>
+      <EntryStandard id="rect_1_700x1_700"><RectCenter width="1.700" height="1.700"/></EntryStandard>
+    </DictionaryStandard>
+  </Content>
+  <LogisticHeader>
+    <Role id="cypcb" roleFunction="SENDER"/>
+    <Enterprise id="cypcb" name="cypcb" code="NONE"/>
+    <Person name="cypcb" enterpriseRef="cypcb" roleRef="cypcb"/>
+  </LogisticHeader>
+  <HistoryRecord number="1.0" origination="2025-10-09T08:53:20+0000" software="cypcb" lastChange="2025-10-09T08:53:20+0000">
+    <FileRevision fileRevisionId="1.0" comment="written by cypcb">
+      <SoftwarePackage name="cypcb" vendor="cypcb" revision="0.1.0-beta">
+        <Certification certificationStatus="SELFTEST"/>
+      </SoftwarePackage>
+    </FileRevision>
+  </HistoryRecord>
+  <Ecad name="blink">
+    <CadHeader units="MILLIMETER"/>
+    <CadData>
+      <Layer name="F_Cu" layerFunction="CONDUCTOR" side="TOP" polarity="POSITIVE"/>
+      <Layer name="B_Cu" layerFunction="CONDUCTOR" side="BOTTOM" polarity="POSITIVE"/>
+      <Layer name="Edge_Cuts" layerFunction="BOARD_OUTLINE" side="NONE" polarity="POSITIVE"/>
+      <Step name="blink">
+        <Datum x="0" y="0"/>
+        <Profile>
+          <Polygon>
+            <PolyBegin x="0.000" y="0.000"/>
+            <PolyStepSegment x="60.000" y="0.000"/>
+            <PolyStepSegment x="60.000" y="40.000"/>
+            <PolyStepSegment x="0.000" y="40.000"/>
+            <PolyStepSegment x="0.000" y="0.000"/>
+          </Polygon>
+        </Profile>
+        <LayerFeature layerRef="F_Cu">
+          <Set padUsage="TERMINATION">
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="3.730" y="20.000"/>
+              <StandardPrimitiveRef id="rect_1_700x1_700"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="6.270" y="20.000"/>
+              <StandardPrimitiveRef id="circle_1_700"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="25.300" y="21.905"/>
+              <StandardPrimitiveRef id="rect_1_500x0_600"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="25.300" y="20.635"/>
+              <StandardPrimitiveRef id="rect_1_500x0_600"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="25.300" y="19.365"/>
+              <StandardPrimitiveRef id="rect_1_500x0_600"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="25.300" y="18.095"/>
+              <StandardPrimitiveRef id="rect_1_500x0_600"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="30.700" y="18.095"/>
+              <StandardPrimitiveRef id="rect_1_500x0_600"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="30.700" y="19.365"/>
+              <StandardPrimitiveRef id="rect_1_500x0_600"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="30.700" y="20.635"/>
+              <StandardPrimitiveRef id="rect_1_500x0_600"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="30.700" y="21.905"/>
+              <StandardPrimitiveRef id="rect_1_500x0_600"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="34.500" y="30.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="35.500" y="30.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="34.500" y="24.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="35.500" y="24.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="41.300" y="20.000"/>
+              <StandardPrimitiveRef id="rect_1_150x1_800"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="44.700" y="20.000"/>
+              <StandardPrimitiveRef id="rect_1_150x1_800"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="21.500" y="13.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="22.500" y="13.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="21.500" y="27.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="22.500" y="27.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="49.500" y="20.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="50.500" y="20.000"/>
+              <StandardPrimitiveRef id="rect_0_600x0_500"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="54.050" y="20.000"/>
+              <StandardPrimitiveRef id="rect_1_000x1_450"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="55.950" y="20.000"/>
+              <StandardPrimitiveRef id="rect_1_000x1_450"/>
+            </Pad>
+          </Set>
+        </LayerFeature>
+        <LayerFeature layerRef="B_Cu">
+          <Set padUsage="TERMINATION">
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="3.730" y="20.000"/>
+              <StandardPrimitiveRef id="rect_1_700x1_700"/>
+            </Pad>
+            <Pad>
+              <Xform rotation="0.000"/>
+              <Location x="6.270" y="20.000"/>
+              <StandardPrimitiveRef id="circle_1_700"/>
+            </Pad>
+          </Set>
+        </LayerFeature>
+      </Step>
+    </CadData>
+  </Ecad>
+</IPC-2581>

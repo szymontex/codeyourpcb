@@ -324,7 +324,7 @@ fn control_a_fillet_no_track_gives_is_reported() {
             ],
             layer: Layer::TopCopper,
             order: 99,
-            land: None,
+            land: Some((cypcb_world::Entity::from_raw(0), "1".to_string())),
         },
         NetId::new(0),
     ));
@@ -496,4 +496,65 @@ fn a_track_passing_the_tip_of_a_fillet_is_measured_along_its_length() {
         1,
         "the tip is 0.05mm from the track: {found:?}"
     );
+}
+
+/// A teardrop as KiCad draws a curved one: the upper side bows inwards, so the
+/// outline is not convex. Its net is A and it is not grown from any track here:
+/// it came from a file.
+fn a_curved_teardrop_and_a_track_of_another_net(track_y: f64) -> BoardWorld {
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
+    let mut library = FootprintLibrary::new();
+    library.register(land());
+    world.set_footprints(library.clone());
+    let a = world.intern_net("A");
+    let b = world.intern_net("B");
+    world.spawn_entity((
+        TeardropCopper {
+            outline: [
+                (10.0, 9.2),
+                (10.0, 10.8),
+                (10.8, 10.35),
+                (12.0, 10.1),
+                (12.0, 9.9),
+                (10.8, 9.65),
+            ]
+            .iter()
+            .map(|(x, y)| Point::from_mm(*x, *y))
+            .collect(),
+            layer: Layer::TopCopper,
+            order: 1 << 30,
+            land: None,
+        },
+        a,
+    ));
+    track(&mut world, b, 0.2, &[(10.6, track_y), (11.0, track_y)]);
+    world.rebuild_spatial_index_from_library(&library);
+    world
+}
+
+#[test]
+fn a_curved_teardrop_is_measured_as_the_polygon_it_is() {
+    // The track lies along the straight line between the corners either side of
+    // the bowed side - inside the hull, inside the box, outside the shape, 0.2mm
+    // from it. A box or a hull would call it a short or too close.
+    let mut world = a_curved_teardrop_and_a_track_of_another_net(10.8);
+    let found = ClearanceRule.check(&mut world, &rules());
+    assert!(found.is_empty(), "0.2mm from the copper clears: {found:?}");
+
+    // The control: the same track lowered onto the polygon's edge is a short.
+    let mut world = a_curved_teardrop_and_a_track_of_another_net(10.55);
+    let found = ClearanceRule.check(&mut world, &rules());
+    assert_eq!(shorts(&found), 1, "copper on copper: {found:?}");
+}
+
+#[test]
+fn teardrop_copper_from_a_file_is_not_accounted_for_by_the_tracks() {
+    // R-08's second half compares what the builder made with what the tracks
+    // give. Copper that came from a file is the file's: it is neither a fillet
+    // the board lacks nor one it holds in error.
+    let mut world = a_curved_teardrop_and_a_track_of_another_net(10.8);
+    assert!(world.set_teardrops(Teardrops::default()));
+    let found = PadEntryRule.check(&mut world, &rules());
+    assert!(found.is_empty(), "{found:?}");
 }

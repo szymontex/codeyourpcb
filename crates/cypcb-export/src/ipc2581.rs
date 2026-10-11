@@ -667,6 +667,37 @@ pub fn export_ipc2581_with(
             }
             out.push_str("          </Set>\n");
         }
+        // The teardrops of this layer, one set per net like the tracks they grow
+        // from: a polygon each, which is how the format states copper that is
+        // not a line.
+        for (_, teardrop, net) in cypcb_world::teardrop::teardrop_copper(world) {
+            if teardrop.layer != layer || teardrop.outline.len() < 3 {
+                continue;
+            }
+            let net = world.net_name(net).unwrap_or("unknown").to_string();
+            let _ = writeln!(out, "          <Set net=\"{}\">", qualified(&net));
+            out.push_str("            <Features>\n              <Contour>\n");
+            out.push_str("                <Polygon>\n");
+            let first = teardrop.outline[0];
+            let _ = writeln!(
+                out,
+                "                  <PolyBegin x=\"{}\" y=\"{}\"/>",
+                mm(first.x),
+                mm(first.y)
+            );
+            for point in teardrop.outline.iter().skip(1).chain(Some(&first)) {
+                let _ = writeln!(
+                    out,
+                    "                  <PolyStepSegment x=\"{}\" y=\"{}\"/>",
+                    mm(point.x),
+                    mm(point.y)
+                );
+            }
+            out.push_str("                </Polygon>\n              </Contour>\n");
+            out.push_str("            </Features>\n");
+            out.push_str("          </Set>\n");
+        }
+
         // The vias that pass through this layer: the ring, and the hole.
         let through: Vec<&Via> = vias
             .iter()

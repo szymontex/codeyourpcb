@@ -13,6 +13,8 @@ export interface BoardSnapshot {
   ratsnest: RatsnestInfo[];
   /** Copper pours, as the copper they become (absent from older snapshots) */
   pours?: PourInfo[];
+  /** Teardrops: copper where a track meets a land, one polygon each (absent when the board has none) */
+  teardrops?: TeardropInfo[];
   /** Zones as the design states them, sent to the engine so it can fill them */
   zones?: ZoneInfo[];
   /**
@@ -70,6 +72,21 @@ export interface PourInfo {
   layer_mask: number;
   /** The filled copper: [min x, min y, max x, max y] in nm */
   rects: [number, number, number, number][];
+}
+
+/**
+ * A teardrop, as the copper it is: a polygon on one layer, on one net.
+ *
+ * The copper the checker measures and the Gerber carries, sent so the screen
+ * shows what the fabricator receives.
+ */
+export interface TeardropInfo {
+  /** Net name it belongs to, empty when the board names none */
+  net: string;
+  /** The one copper layer it is on, as a layer mask: bit 0 top, bit 1 bottom, then the inner layers */
+  layer_mask: number;
+  /** The corners in order round the shape: [x, y] in nm */
+  points: [number, number][];
 }
 
 /**

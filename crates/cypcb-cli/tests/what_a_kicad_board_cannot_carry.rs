@@ -127,8 +127,26 @@ fn a_design_asking_for_teardrops() -> String {
     asked
 }
 
-/// The top copper the other path writes for the same design.
-fn top_copper(board: &Path, out: &Path) -> String {
+#[test]
+fn a_design_that_asks_for_teardrops_is_no_longer_told_kicad_drops_them() {
+    // KiCad keeps a teardrop as a zone in the board (`createTeardrop` in
+    // `pcbnew/teardrop/teardrop.cpp` adds a `ZONE`), and this writer puts ours
+    // there as the same zone. The warning that said it did not was true until
+    // 2026-10-11 and would be false now.
+    let board_dir = cypcb_fixtures::scratch_dir("cypcb-kicad-teardrops");
+    let board = board_dir.join("cypcb-kicad-teardrops.cypcb");
+    std::fs::write(&board, a_design_asking_for_teardrops()).expect("the board is writable");
+
+    let warnings = to_kicad(&board, &scratch("teardrops").join("board.kicad_pcb"));
+    assert!(
+        !warnings.contains("teardrops"),
+        "the fillets are in the board, so there is nothing to warn about: {warnings}"
+    );
+}
+
+/// How many regions the copper files of this design carry, over both outer
+/// layers.
+fn copper_regions(board: &Path, out: &Path) -> usize {
     let status = cypcb()
         .arg("export")
         .arg(board)
@@ -138,83 +156,50 @@ fn top_copper(board: &Path, out: &Path) -> String {
         .expect("the binary runs");
     assert!(status.success(), "the export failed");
     let gerber = out.join("gerber");
-    let top = cypcb_fixtures::tree::written_entries(&gerber)
+    cypcb_fixtures::tree::written_entries(&gerber)
         .expect("the gerber directory is there")
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .find(|path| {
+        .filter(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
-                .is_some_and(|name| name.ends_with("F_Cu.gbr"))
+                .is_some_and(|name| name.ends_with("F_Cu.gbr") || name.ends_with("B_Cu.gbr"))
         })
-        .expect("the top copper was written");
-    std::fs::read_to_string(top).expect("the top copper is readable")
+        .map(|path| {
+            std::fs::read_to_string(path)
+                .expect("the copper file is readable")
+                .lines()
+                .filter(|line| *line == "G36*")
+                .count()
+        })
+        .sum()
 }
 
 #[test]
-fn a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own() {
-    // KiCad has teardrops - per board, per net class and per pad since 7.0 -
-    // and keeps both the parameters and the resulting copper in the board:
-    // `teardrop.cpp` reads `m_board->GetDesignSettings().GetTeadropParamsList()`
-    // and adds a `ZONE` to the board. **This comment said the opposite until
-    // 2026-09-14.** The writer still does not put ours there, so it says so -
-    // which is a statement about this writer and not about the format.
-    let board_dir = cypcb_fixtures::scratch_dir("cypcb-kicad-teardrops");
-    let board = board_dir.join("cypcb-kicad-teardrops.cypcb");
-    std::fs::write(&board, a_design_asking_for_teardrops()).expect("the board is writable");
-
-    let warnings = to_kicad(&board, &scratch("teardrops").join("board.kicad_pcb"));
-    assert!(
-        warnings.contains("teardrops") && warnings.contains("design settings"),
-        "the writer names what it could not carry: {warnings}"
-    );
-}
-
-#[test]
-fn what_this_path_drops_is_not_in_the_board_it_writes() {
-    // The test above reads stderr and nothing else, which means the warning has
-    // been standing in for the absence it describes. A change that began
-    // writing fillets into the KiCad board while leaving the sentence in place
-    // would pass it and ship a sentence that is false. So this one opens both
-    // files.
-    //
-    // The subject is a pair - this design through this path - and not a land or
-    // a fillet, because that is the only level at which the question has an
-    // answer. One design, exported twice: the Gerber path carries what was
-    // asked for, the KiCad path does not, and the operator is told which.
+fn what_this_path_carries_is_in_the_board_it_writes() {
+    // One design, written down through both paths, and the two outputs are
+    // opened side by side. The Gerber path writes each fillet as a region; the
+    // KiCad path writes each as a teardrop zone. The numbers are equal, and
+    // both are above zero - without that, two empty outputs would agree.
     let board_dir = cypcb_fixtures::scratch_dir("cypcb-pair-teardrops");
     let board = board_dir.join("cypcb-pair-teardrops.cypcb");
     std::fs::write(&board, a_design_asking_for_teardrops()).expect("the board is writable");
 
     let kicad_home = scratch("pair-kicad");
     let kicad = kicad_home.join("board.kicad_pcb");
-    let warnings = to_kicad(&board, &kicad);
+    to_kicad(&board, &kicad);
     let written = std::fs::read_to_string(&kicad).expect("the board was written");
-    let polygons = written.matches("gr_poly").count() + written.matches("fp_poly").count();
+    let zones = written.matches("(attr (teardrop (type padvia)))").count();
 
-    let gerber = top_copper(&board, &scratch("pair-gerber"));
-    let regions = gerber.lines().filter(|line| *line == "G36*").count();
+    let regions = copper_regions(&board, &scratch("pair-gerber"));
 
-    assert!(
-        warnings.contains("teardrops"),
-        "a path that cannot carry a declared property has to say so: {warnings}"
-    );
-    // The limit of this half, said rather than hidden: it looks for a polygon,
-    // which is the shape a fillet takes in the Gerber the other path writes. A
-    // future writer emitting the same copper as something else would slip past
-    // it. That is why the warning is asserted beside this and not replaced by
-    // it - two weak readings of one claim, from different sides.
-    assert_eq!(
-        polygons, 0,
-        "the KiCad path says it drops the fillets, so the board it writes carries none"
-    );
-    // And the other half, without which the first is a statement about a writer
-    // that draws nothing at all: the same design through the export path does
-    // carry them, so the two outputs of one design really do differ.
     assert!(
         regions > 0,
-        "the same design through the export path carries the fillets: \
-         {regions} regions in the top copper against {polygons} polygons in the KiCad board"
+        "the export path carries the fillets: {regions}"
+    );
+    assert_eq!(
+        zones, regions,
+        "{regions} fillet regions in the Gerber copper against {zones} teardrop zones in the KiCad board"
     );
 }
 

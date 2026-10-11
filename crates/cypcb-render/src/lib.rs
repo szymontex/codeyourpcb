@@ -1815,6 +1815,9 @@ impl PcbEngine {
         // Build the copper the pours actually become
         let pours = self.collect_pours();
 
+        // And the teardrops the board holds, each as the polygon it is
+        let teardrops = self.collect_teardrops();
+
         // And the zones as written, so a host that sent them gets them back
         // rather than losing them on the round trip.
         let zones = self.collect_zones();
@@ -1828,9 +1831,26 @@ impl PcbEngine {
             vias,
             ratsnest,
             pours,
+            teardrops,
             zones,
             stackup,
         }
+    }
+
+    /// Collect the teardrops: the copper the checker measures, as polygons.
+    fn collect_teardrops(&mut self) -> Vec<TeardropInfo> {
+        let held = cypcb_world::teardrop::teardrop_copper(&mut self.world);
+        held.into_iter()
+            .map(|(_, copper, net)| TeardropInfo {
+                net: self
+                    .world
+                    .net_name(net)
+                    .map(|name| name.to_string())
+                    .unwrap_or_default(),
+                layer_mask: copper.layer.to_copper_mask(),
+                points: copper.outline.iter().map(|p| [p.x.0, p.y.0]).collect(),
+            })
+            .collect()
     }
 
     /// Collect the zones as the design states them.
@@ -2825,6 +2845,7 @@ mod tests {
             vias: vec![],
             ratsnest: vec![],
             pours: vec![],
+            teardrops: vec![],
             zones: vec![],
             stackup: None,
         };

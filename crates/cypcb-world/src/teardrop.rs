@@ -149,7 +149,10 @@ pub struct TeardropCopper {
     /// reverses when it hands out indices that were freed a moment before.
     pub order: u32,
     /// The part whose land it grows from and that land's pad number, for the
-    /// board that built it. A teardrop read from a file names no pad.
+    /// copper the builder made. `None` is copper that came from a file - a
+    /// KiCad teardrop zone - which the builder leaves alone when it rebuilds,
+    /// because the polygon in the file is the polygon, and which the checker's
+    /// comparison of the board against its tracks does not account for.
     pub land: Option<(bevy_ecs::entity::Entity, String)>,
 }
 
@@ -166,24 +169,25 @@ impl TeardropCopper {
         bounds
     }
 
-    /// Whether the point is inside the outline or on its edge. The outline of a
-    /// teardrop is convex, which is what this assumes.
+    /// Whether the point is inside the outline or on its edge.
+    ///
+    /// Any simple polygon: a teardrop KiCad draws curved has sides that bow
+    /// inwards, so the shape is not convex and a test that assumes it is would
+    /// be wrong for exactly the copper that arrives from a KiCad board.
     pub fn contains(&self, p: Point) -> bool {
+        polygon_contains(&self.outline, p)
+    }
+
+    /// Twice the area of the outline, in nm squared: the shoelace sum, taken
+    /// absolute. Twice, so that it stays an integer.
+    pub fn double_area(&self) -> i128 {
         let n = self.outline.len();
-        let mut sign = 0i32;
+        let mut sum: i128 = 0;
         for i in 0..n {
             let (a, b) = (self.outline[i], self.outline[(i + 1) % n]);
-            let cross = (b.x.0 - a.x.0) as i128 * (p.y.0 - a.y.0) as i128
-                - (b.y.0 - a.y.0) as i128 * (p.x.0 - a.x.0) as i128;
-            let s = cross.signum() as i32;
-            if s != 0 {
-                if sign != 0 && s != sign {
-                    return false;
-                }
-                sign = s;
-            }
+            sum += a.x.0 as i128 * b.y.0 as i128 - b.x.0 as i128 * a.y.0 as i128;
         }
-        n >= 3
+        sum.abs()
     }
 }
 
@@ -277,4 +281,39 @@ pub fn teardrop_copper(
             .collect();
     all.sort_by_key(|(_, copper, _)| copper.order);
     all
+}
+
+/// Whether `p` is inside the polygon or on its edge: even-odd, with the edge
+/// itself counted in.
+pub fn polygon_contains(outline: &[Point], p: Point) -> bool {
+    let n = outline.len();
+    if n < 3 {
+        return false;
+    }
+    let (px, py) = (p.x.0 as i128, p.y.0 as i128);
+    let mut inside = false;
+    for i in 0..n {
+        let (a, b) = (outline[i], outline[(i + 1) % n]);
+        let (ax, ay, bx, by) = (a.x.0 as i128, a.y.0 as i128, b.x.0 as i128, b.y.0 as i128);
+        // On this edge: collinear and between its ends.
+        let cross = (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+        if cross == 0
+            && px >= ax.min(bx)
+            && px <= ax.max(bx)
+            && py >= ay.min(by)
+            && py <= ay.max(by)
+        {
+            return true;
+        }
+        // A ray towards -x from the point crosses this edge.
+        if (ay > py) != (by > py) {
+            // x of the crossing, compared without division: sign of the cross
+            // product says which side of the edge the point is on.
+            let right_of = if by > ay { cross < 0 } else { cross > 0 };
+            if right_of {
+                inside = !inside;
+            }
+        }
+    }
+    inside
 }

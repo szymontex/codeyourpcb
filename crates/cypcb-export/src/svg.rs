@@ -182,6 +182,23 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
         }
     }
 
+    // Teardrops: the copper the board holds where a track meets a land, one
+    // polygon each, in the ink of the layer.
+    for (_, teardrop, _) in cypcb_world::teardrop::teardrop_copper(world) {
+        if teardrop.layer != layer {
+            continue;
+        }
+        let points: Vec<String> = teardrop
+            .outline
+            .iter()
+            .map(|p| format!("{},{}", mm(p.x), mm(p.y)))
+            .collect();
+        body.push_str(&format!(
+            "  <polygon points=\"{}\" fill=\"{ink}\"/>\n",
+            points.join(" ")
+        ));
+    }
+
     // Vias: the ring, and the hole through it.
     let vias: Vec<Via> = {
         let mut query = world.ecs_mut().query::<&Via>();
