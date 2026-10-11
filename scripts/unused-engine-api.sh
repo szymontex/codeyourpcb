@@ -27,7 +27,10 @@ set -euo pipefail
 # files and matched the native `.routes` loader by name only. The session file
 # now goes through the engine's `load_ses`, and `load_routes` shows as what it
 # always was, a loader the browser never calls.
-BASELINE=12
+# 14 since 2026-10-11: `parse_only` and `parse_kicad_only` read a design and
+# nothing else, so that the timing spec can say how long reading takes. The
+# editor always loads, so it never calls them, and that is what they are for.
+BASELINE=14
 
 cd "$(dirname "$0")/.."
 

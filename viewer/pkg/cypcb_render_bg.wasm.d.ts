@@ -24,6 +24,8 @@ export const pcbengine_load_source: (a: number, b: number, c: number, d: number)
 export const pcbengine_load_source_with_imports: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
 export const pcbengine_min_trace_width_for_current_ma: (a: number, b: number) => number;
 export const pcbengine_new: () => number;
+export const pcbengine_parse_kicad_only: (a: number, b: number, c: number, d: number) => void;
+export const pcbengine_parse_only: (a: number, b: number, c: number, d: number) => void;
 export const pcbengine_query_point: (a: number, b: number, c: bigint, d: bigint) => void;
 export const pcbengine_register_3d_model: (a: number, b: number, c: number, d: number, e: number) => void;
 export const pcbengine_register_footprint: (a: number, b: number, c: number, d: number, e: number, f: number) => void;

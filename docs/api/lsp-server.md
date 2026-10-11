@@ -316,23 +316,21 @@ The stdio server `cypcb-lsp` does not wait. It parses the document and rebuilds 
 
 ### Parse and DRC time
 
-Measured 2026-09-27 on the build machine: release build, quiet host (load average 2.6), 50 runs per board after one warm-up. Times are in milliseconds, median / max. Parse is the reader alone; whole load is what the editor pays after the wait.
+Measured 2026-10-11 on the build machine: release build, 50 runs per board after one warm-up, on a host that was not quiet: the load average was 17.98 before the native run and 17.83 after the browser run (12 cores, other builds running). Read the figures as the cost on a busy host. Times are in milliseconds, median / max. Parse is the reader alone; whole load is what the editor pays after the wait.
 
-The WASM columns are the engine the browser runs, measured the same day: the module in `viewer/pkg` (the `wasm-release` profile) in headless Chromium under Playwright, on the viewer's dev server, 20 runs per board after one warm-up. The WASM engine has no call that parses alone, so it has no parse column. The browser rounds `performance.now()` to a tenth of a millisecond, which is why those cells end in zero.
+The WASM columns are the engine the browser runs, measured the same day: the module in `viewer/pkg` (the `wasm-release` profile) in headless Chromium under Playwright, on the viewer's dev server, 20 runs per board after one warm-up. The WASM parse column is `PcbEngine::parse_only` (`parse_kicad_only` for a KiCad board): the reader alone, with no imports, no board and no DRC. The browser reads `.cypcb` with the Rust reader and the native column with the tree-sitter parser, so those two columns are two readers, not one. The browser rounds `performance.now()` to a tenth of a millisecond, which is why those cells end in zero.
 
-| Board | Lines | Components | Parse | DRC | Whole load | WASM DRC | WASM whole load |
-|-------|------:|-----------:|------:|----:|-----------:|---------:|----------------:|
-| `examples/blink.cypcb` | 112 | 9 | 0.01 / 0.02 | 0.21 / 0.32 | 0.30 / 0.34 | 1.40 / 1.70 | 1.30 / 1.70 |
-| `examples/mains-sequencer.cypcb` | 404 | 33 | 0.08 / 0.11 | 1.23 / 1.36 | 1.55 / 1.97 | 3.60 / 4.90 | 3.90 / 4.90 |
-| `tests/fixtures/benchmark/esp32_starter.cypcb` | 476 | 18 | 0.09 / 0.11 | 1.44 / 1.59 | 1.85 / 2.14 | 3.90 / 4.00 | 4.40 / 4.60 |
-| `tests/fixtures/benchmark/led_blink.kicad_pcb` | 152 | 7 | 0.16 / 0.25 | 0.18 / 0.23 | 0.38 / 0.55 | 0.50 / 0.80 | 1.50 / 3.00 |
-| `tests/fixtures/benchmark/plane_board.kicad_pcb` | 212 | 12 | 0.27 / 0.31 | 0.49 / 0.54 | 0.94 / 1.29 | 1.80 / 2.10 | 2.20 / 3.10 |
-| `tests/fixtures/benchmark/qfp_fanout.kicad_pcb` | 379 | 19 | 0.56 / 0.66 | 1.33 / 1.84 | 2.08 / 2.31 | 3.30 / 3.90 | 5.20 / 5.80 |
-| `tests/fixtures/benchmark/stm32_breakout.kicad_pcb` | 456 | 29 | 0.58 / 0.86 | 1.33 / 1.73 | 1.85 / 2.22 | 2.80 / 3.10 | 4.60 / 5.20 |
-| `tests/fixtures/benchmark/shift_driver.kicad_pcb` | 688 | 55 | 0.70 / 0.78 | 2.14 / 2.83 | 2.86 / 3.93 | 5.00 / 6.20 | 7.20 / 7.80 |
-| `tests/fixtures/benchmark/multi_ic.kicad_pcb` | 905 | 52 | 0.90 / 1.00 | 2.50 / 3.57 | 3.54 / 4.55 | 6.00 / 6.50 | 9.20 / 9.70 |
-
-The `esp32_starter` row counts 476 lines, since its four footprints were redrawn on 2026-10-11. Its times are those measured on 2026-09-27 on the 436-line file and have not been taken again: the host was busy when this was checked, and every other row would have moved with it.
+| Board | Lines | Components | Parse | DRC | Whole load | WASM Parse | WASM DRC | WASM whole load |
+|-------|------:|-----------:|------:|----:|-----------:|-----------:|---------:|----------------:|
+| `examples/blink.cypcb` | 112 | 9 | 0.01 / 0.02 | 0.30 / 0.44 | 0.45 / 0.65 | 0.10 / 0.20 | 1.50 / 2.10 | 1.60 / 2.20 |
+| `examples/mains-sequencer.cypcb` | 404 | 33 | 0.13 / 0.20 | 1.87 / 5.53 | 2.18 / 2.92 | 0.30 / 0.40 | 4.90 / 5.80 | 5.30 / 6.00 |
+| `tests/fixtures/benchmark/esp32_starter.cypcb` | 476 | 18 | 0.14 / 0.32 | 2.09 / 11.53 | 2.53 / 3.64 | 0.30 / 0.40 | 4.30 / 5.60 | 5.20 / 6.70 |
+| `tests/fixtures/benchmark/led_blink.kicad_pcb` | 152 | 7 | 0.21 / 0.28 | 0.26 / 0.32 | 0.52 / 0.67 | 0.80 / 1.30 | 0.60 / 0.80 | 1.20 / 1.90 |
+| `tests/fixtures/benchmark/plane_board.kicad_pcb` | 212 | 12 | 0.41 / 0.45 | 0.79 / 4.83 | 1.18 / 1.75 | 1.10 / 1.20 | 1.40 / 1.80 | 2.70 / 3.20 |
+| `tests/fixtures/benchmark/qfp_fanout.kicad_pcb` | 379 | 19 | 0.71 / 2.27 | 2.09 / 5.09 | 3.13 / 7.71 | 2.00 / 2.20 | 3.40 / 4.30 | 5.10 / 6.90 |
+| `tests/fixtures/benchmark/stm32_breakout.kicad_pcb` | 456 | 29 | 0.79 / 3.81 | 1.77 / 2.44 | 2.77 / 4.03 | 1.90 / 2.20 | 3.40 / 4.00 | 5.30 / 6.70 |
+| `tests/fixtures/benchmark/shift_driver.kicad_pcb` | 688 | 55 | 1.02 / 1.34 | 2.99 / 3.54 | 3.90 / 9.20 | 2.40 / 2.90 | 5.60 / 7.30 | 8.40 / 10.30 |
+| `tests/fixtures/benchmark/multi_ic.kicad_pcb` | 905 | 52 | 1.48 / 3.75 | 3.75 / 9.44 | 5.04 / 7.99 | 3.20 / 3.70 | 6.80 / 7.70 | 10.40 / 14.40 |
 
 The slowest board, `multi_ic`, in each build and on a busy host. Busy is a `cargo build --release -j3` of the workspace running beside it (three `rustc` processes, load average 6.1).
 

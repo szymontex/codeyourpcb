@@ -234,6 +234,26 @@ export class PcbEngine {
      */
     constructor();
     /**
+     * Read a KiCad board and say what the reader found wrong, and do nothing
+     * else: the parse-only call for `.kicad_pcb`, as `load_kicad` is for
+     * `load_source`. Empty when the text reads.
+     */
+    parse_kicad_only(source: string): string;
+    /**
+     * Read a `.cypcb` design and say what the reader found wrong, and do
+     * nothing else.
+     *
+     * `load_source` is parse, imports, board model and the whole DRC in one
+     * call, so a host that wants to know only whether a text reads - or how
+     * long reading it takes - had no way to ask. This is the first step of
+     * `load_source` on its own: no import is resolved, no board is built and
+     * the engine keeps the board, the diagnostics and the violations it had.
+     *
+     * Returns an empty string when the text reads, and the reader's messages
+     * joined by newlines otherwise, the form `load_source` answers in.
+     */
+    parse_only(source: string): string;
+    /**
      * Query components at a specific point.
      *
      * Returns reference designator strings.
@@ -341,6 +361,8 @@ export interface InitOutput {
     readonly pcbengine_load_source_with_imports: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly pcbengine_min_trace_width_for_current_ma: (a: number, b: number) => number;
     readonly pcbengine_new: () => number;
+    readonly pcbengine_parse_kicad_only: (a: number, b: number, c: number, d: number) => void;
+    readonly pcbengine_parse_only: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_query_point: (a: number, b: number, c: bigint, d: bigint) => void;
     readonly pcbengine_register_3d_model: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly pcbengine_register_footprint: (a: number, b: number, c: number, d: number, e: number, f: number) => void;

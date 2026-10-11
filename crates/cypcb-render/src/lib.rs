@@ -356,6 +356,40 @@ impl PcbEngine {
         )
     }
 
+    /// Read a `.cypcb` design and say what the reader found wrong, and do
+    /// nothing else.
+    ///
+    /// `load_source` is parse, imports, board model and the whole DRC in one
+    /// call, so a host that wants to know only whether a text reads - or how
+    /// long reading it takes - had no way to ask. This is the first step of
+    /// `load_source` on its own: no import is resolved, no board is built and
+    /// the engine keeps the board, the diagnostics and the violations it had.
+    ///
+    /// Returns an empty string when the text reads, and the reader's messages
+    /// joined by newlines otherwise, the form `load_source` answers in.
+    #[cfg(any(feature = "native", feature = "wasm"))]
+    #[must_use = "the errors of a text that did not read are in this string"]
+    pub fn parse_only(&self, source: &str) -> String {
+        parse_source_text(source)
+            .errors
+            .iter()
+            .map(|e| format!("{e}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Read a KiCad board and say what the reader found wrong, and do nothing
+    /// else: the parse-only call for `.kicad_pcb`, as `load_kicad` is for
+    /// `load_source`. Empty when the text reads.
+    #[cfg(any(feature = "native", feature = "wasm"))]
+    #[must_use = "the reader's message for a text that did not read is in this string"]
+    pub fn parse_kicad_only(&self, source: &str) -> String {
+        match cypcb_kicad::pcb_parser::parse_kicad_pcb_str(source) {
+            Ok(_) => String::new(),
+            Err(e) => format!("{e}"),
+        }
+    }
+
     #[cfg(any(feature = "native", feature = "wasm"))]
     fn load_source_resolving(
         &mut self,
