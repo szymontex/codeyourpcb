@@ -8,7 +8,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Via;
 use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
-use cypcb_world::BoardWorld;
+use cypcb_world::{in_build_order, BoardWorld};
 
 use crate::coords::{nm_to_decimal, CoordinateFormat};
 use crate::gerber::copper::{place_pad_millideg, ExportError};
@@ -306,11 +306,9 @@ fn collect_drill_hits(
     let mut hits = Vec::new();
 
     // Collect from component pads (through-hole)
-    let mut query = world
-        .ecs_mut()
-        .query::<(&Position, &FootprintRef, &Rotation)>();
-
-    for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
+    for (position, footprint_ref, rotation) in
+        in_build_order::<(&Position, &FootprintRef, &Rotation)>(world.ecs_mut())
+    {
         // Look up footprint in library
         let footprint = library
             .get(&footprint_ref.0)
@@ -359,8 +357,7 @@ fn collect_drill_hits(
     }
 
     // Collect from vias
-    let mut via_query = world.ecs_mut().query::<&Via>();
-    for via in via_query.iter(world.ecs()) {
+    for via in in_build_order::<&Via>(world.ecs_mut()) {
         hits.push(DrillHit {
             position: via.position,
             slot_end: None, // A via is drilled, never milled.

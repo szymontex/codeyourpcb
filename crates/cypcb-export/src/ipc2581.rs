@@ -253,8 +253,10 @@ pub fn export_ipc2581_with(
     // itself. A drill file carries the hole today and says nothing about the
     // copper around it; this document carries both, which is the point.
     let vias: Vec<Via> = {
-        let mut query = world.ecs_mut().query::<&Via>();
-        query.iter(world.ecs()).copied().collect()
+        in_build_order::<&Via>(world.ecs_mut())
+            .into_iter()
+            .copied()
+            .collect()
     };
     for via in &vias {
         let id = format!("circle_{}", mm(via.outer_diameter).replace('.', "_"));

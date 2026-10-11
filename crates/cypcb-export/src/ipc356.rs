@@ -36,8 +36,8 @@ use cypcb_core::Nm;
 use cypcb_world::components::trace::Via;
 use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
-use cypcb_world::BoardWorld;
 use cypcb_world::Layer;
+use cypcb_world::{in_build_order, BoardWorld};
 
 /// A placed component, flattened out of the world before its pads are read.
 ///
@@ -258,8 +258,10 @@ pub fn export_ipc356(
     // Vias. A tester probes a through via and cannot reach a buried one, and
     // the format says which is which with a different operation code.
     let vias: Vec<Via> = {
-        let mut query = world.ecs_mut().query::<&Via>();
-        query.iter(world.ecs()).cloned().collect()
+        in_build_order::<&Via>(world.ecs_mut())
+            .into_iter()
+            .cloned()
+            .collect()
     };
     for via in vias {
         let through = via.is_through_hole();

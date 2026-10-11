@@ -277,9 +277,7 @@ fn export_vias(
     format: &CoordinateFormat,
 ) {
     // Query all vias
-    let mut query = world.ecs_mut().query::<&Via>();
-
-    for via in query.iter(world.ecs()) {
+    for via in in_build_order::<&Via>(world.ecs_mut()) {
         // The same answer the checks get, so the file carries the copper
         // they measured.
         if via.copper_mask() & layer.to_copper_mask() == 0 {
