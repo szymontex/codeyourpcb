@@ -158,6 +158,8 @@ const REACHED_BY: Record<keyof WasmPcbEngine, keyof PcbEngine | { unreached: str
   load_source: 'load_source',
   load_source_with_imports: 'load_source_with_imports',
   load_kicad: 'load_kicad',
+  parse_only: { unreached: 'only the timing spec reads a design alone; the editor always loads it' },
+  parse_kicad_only: { unreached: 'the same, for a KiCad board' },
   load_ses: 'load_ses',
   load_snapshot: { unreached: 'the host sent a parsed snapshot before the engine had a reader; nothing sends one now' },
   get_snapshot: 'get_snapshot',

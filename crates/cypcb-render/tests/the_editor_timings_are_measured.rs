@@ -177,6 +177,40 @@ fn every_board_in_the_table_has_the_lines_and_parts_it_states() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// The WASM engine reads alone since `parse_only`, so the table has a column
+/// for it and no row leaves it empty. The browser spec measures the cells and
+/// holds that the call answers; this holds that the page carries one for every
+/// board, and no longer says the call does not exist.
+#[test]
+fn every_board_states_a_wasm_parse_time() {
+    let section = performance_section();
+    assert!(
+        section.contains("| WASM Parse |"),
+        "the table has no WASM parse column"
+    );
+    assert!(
+        !section.contains("no call that parses alone"),
+        "the page still says the WASM engine cannot read alone"
+    );
+    let mut empty = Vec::new();
+    for line in section.lines().filter(|line| line.starts_with("| `")) {
+        let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+        let stated = cells.get(7).is_some_and(|cell| {
+            let mut halves = cell.split(" / ");
+            let number = |half: Option<&str>| {
+                half.is_some_and(|h| h.parse::<f64>().is_ok_and(|v| v >= 0.0 && h.contains('.')))
+            };
+            number(halves.next()) && number(halves.next()) && halves.next().is_none()
+        });
+        // A cell of zeros is the placeholder, not a reading.
+        let placeholder = cells.get(7).is_some_and(|cell| *cell == "0.00 / 0.00");
+        if !stated || placeholder {
+            empty.push(cells[1].to_owned());
+        }
+    }
+    assert!(empty.is_empty(), "no WASM parse time for {empty:?}");
+}
+
 /// Every figure in milliseconds on `text`'s lines outside a table.
 fn milliseconds_in_prose(text: &str) -> Vec<(usize, u64)> {
     let mut found = Vec::new();

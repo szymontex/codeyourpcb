@@ -341,6 +341,11 @@ export interface WasmPcbEngine {
   load_source_with_imports(source: string, files_json: string): string;
   /** Read a `.kicad_pcb` and build the board from it. */
   load_kicad(source: string): string;
+  /** The reader of `load_source` on its own: no imports, no board, no DRC.
+   *  Returns what the reader reports, empty when the text reads. */
+  parse_only(source: string): string;
+  /** The same for a `.kicad_pcb`. */
+  parse_kicad_only(source: string): string;
   load_ses(ses: string): string;
   load_snapshot(snapshot: BoardSnapshot): string;
   get_snapshot(): BoardSnapshot;

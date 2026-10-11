@@ -558,6 +558,64 @@ export class PcbEngine {
         return this;
     }
     /**
+     * Read a KiCad board and say what the reader found wrong, and do nothing
+     * else: the parse-only call for `.kicad_pcb`, as `load_kicad` is for
+     * `load_source`. Empty when the text reads.
+     * @param {string} source
+     * @returns {string}
+     */
+    parse_kicad_only(source) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.pcbengine_parse_kicad_only(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Read a `.cypcb` design and say what the reader found wrong, and do
+     * nothing else.
+     *
+     * `load_source` is parse, imports, board model and the whole DRC in one
+     * call, so a host that wants to know only whether a text reads - or how
+     * long reading it takes - had no way to ask. This is the first step of
+     * `load_source` on its own: no import is resolved, no board is built and
+     * the engine keeps the board, the diagnostics and the violations it had.
+     *
+     * Returns an empty string when the text reads, and the reader's messages
+     * joined by newlines otherwise, the form `load_source` answers in.
+     * @param {string} source
+     * @returns {string}
+     */
+    parse_only(source) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.pcbengine_parse_only(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * Query components at a specific point.
      *
      * Returns reference designator strings.

@@ -16,7 +16,8 @@ import { fileURLToPath } from 'url';
  * The times and the megabytes are a measurement with a date on the page, so
  * nothing here holds them. What is held is what does not move with the
  * machine: every board in the table loads in the browser with the parts the
- * table states, and the page builds the editor without being asked.
+ * table states, reads alone through `parse_only` / `parse_kicad_only`, states
+ * a WASM parse cell, and the page builds the editor without being asked.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +36,8 @@ function performanceSection(): string {
 interface Row {
   board: string;
   parts: number;
+  /** The row's WASM parse cell, as the page states it. */
+  wasmParse: string;
 }
 
 function boardRows(): Row[] {
@@ -43,7 +46,7 @@ function boardRows(): Row[] {
     .filter((line) => line.startsWith('| `'))
     .map((line) => {
       const cells = line.split('|').map((cell) => cell.trim());
-      return { board: cells[1].replace(/`/g, ''), parts: Number(cells[3]) };
+      return { board: cells[1].replace(/`/g, ''), parts: Number(cells[3]), wasmParse: cells[7] };
     });
 }
 
@@ -76,6 +79,11 @@ test.describe('the WASM timings on the page are measured', () => {
   test('every board in the table loads in the browser with the parts it states', async ({ page }) => {
     const rows = boardRows();
     expect(rows.length, 'the table is being read').toBeGreaterThanOrEqual(9);
+    // The parse column is the one the engine could not measure until it had a
+    // call that reads alone; every row states one, in the form of the others.
+    for (const row of rows) {
+      expect(row.wasmParse, `${row.board} states a WASM parse time`).toMatch(/^\d+\.\d{2} \/ \d+\.\d{2}$/);
+    }
     const library = libraryJson();
     await ready(page);
 
@@ -102,20 +110,27 @@ test.describe('the WASM timings on the page are measured', () => {
             return [taken[Math.floor(runs / 2)], taken[runs - 1]];
           };
           const engine = new wasm.PcbEngine();
+          // The reader alone: no imports, no board, no DRC.
+          const read = () => (kicad ? engine.parse_kicad_only(source) : engine.parse_only(source));
+          const readSaid: string = read();
           const said: string = load(engine);
           const parts: number = engine.get_snapshot()?.components?.length ?? 0;
+          const parse = time(() => read());
           const drc = time(() => engine.run_drc_incremental());
           const fresh = new wasm.PcbEngine();
           const whole = time(() => load(fresh));
           engine.free();
           fresh.free();
-          return { said, parts, drc, whole };
+          return { said, readSaid, parts, parse, drc, whole };
         },
         { source, kicad, library, runs: RUNS },
       );
       expect(measured.said, `${row.board} loads in the browser`).toBe('');
+      expect(measured.readSaid, `${row.board} reads in the browser`).toBe('');
       loaded.push(`${row.board}: ${measured.parts} parts`);
-      console.log(`| \`${row.board}\` | ${measured.parts} | ${cell(measured.drc)} | ${cell(measured.whole)} |`);
+      console.log(
+        `| \`${row.board}\` | ${measured.parts} | ${cell(measured.parse)} | ${cell(measured.drc)} | ${cell(measured.whole)} |`,
+      );
     }
     expect(loaded, 'the browser loads the parts the table states').toEqual(
       rows.map((row) => `${row.board}: ${row.parts} parts`),
