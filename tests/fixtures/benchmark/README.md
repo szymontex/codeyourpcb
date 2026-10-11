@@ -109,7 +109,7 @@ To regenerate: `python3 tests/fixtures/benchmark/make_qfp_fanout.py`
 - **Layers:** 2 (F.Cu, B.Cu)
 - **Board size:** 34x50 mm
 - **Traces:** none - the router lays them
-- **Guarded by:** `cargo test -p cypcb-cli --test the_esp32_starter_is_a_board` - it parses, every part has a footprint, the module, receptacle and regulator pins are on the nets their datasheets name, and it routes
+- **Guarded by:** `cargo test -p cypcb-cli --test the_esp32_starter_is_a_board` - it parses, every part has a footprint, the module, receptacle and regulator pins are on the nets their datasheets name, and it routes. `cargo test -p cypcb-render --test esp32_starter_footprints_follow_their_datasheets` holds the four footprints to the figures of the pages the header cites, and `--test esp32_starter_routes_all_but_one_pin` holds the router to at most one open pin
 
 ## Usage
 

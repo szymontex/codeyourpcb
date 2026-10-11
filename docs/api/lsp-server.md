@@ -324,13 +324,15 @@ The WASM columns are the engine the browser runs, measured the same day: the mod
 |-------|------:|-----------:|------:|----:|-----------:|---------:|----------------:|
 | `examples/blink.cypcb` | 112 | 9 | 0.01 / 0.02 | 0.21 / 0.32 | 0.30 / 0.34 | 1.40 / 1.70 | 1.30 / 1.70 |
 | `examples/mains-sequencer.cypcb` | 404 | 33 | 0.08 / 0.11 | 1.23 / 1.36 | 1.55 / 1.97 | 3.60 / 4.90 | 3.90 / 4.90 |
-| `tests/fixtures/benchmark/esp32_starter.cypcb` | 436 | 18 | 0.09 / 0.11 | 1.44 / 1.59 | 1.85 / 2.14 | 3.90 / 4.00 | 4.40 / 4.60 |
+| `tests/fixtures/benchmark/esp32_starter.cypcb` | 476 | 18 | 0.09 / 0.11 | 1.44 / 1.59 | 1.85 / 2.14 | 3.90 / 4.00 | 4.40 / 4.60 |
 | `tests/fixtures/benchmark/led_blink.kicad_pcb` | 152 | 7 | 0.16 / 0.25 | 0.18 / 0.23 | 0.38 / 0.55 | 0.50 / 0.80 | 1.50 / 3.00 |
 | `tests/fixtures/benchmark/plane_board.kicad_pcb` | 212 | 12 | 0.27 / 0.31 | 0.49 / 0.54 | 0.94 / 1.29 | 1.80 / 2.10 | 2.20 / 3.10 |
 | `tests/fixtures/benchmark/qfp_fanout.kicad_pcb` | 379 | 19 | 0.56 / 0.66 | 1.33 / 1.84 | 2.08 / 2.31 | 3.30 / 3.90 | 5.20 / 5.80 |
 | `tests/fixtures/benchmark/stm32_breakout.kicad_pcb` | 456 | 29 | 0.58 / 0.86 | 1.33 / 1.73 | 1.85 / 2.22 | 2.80 / 3.10 | 4.60 / 5.20 |
 | `tests/fixtures/benchmark/shift_driver.kicad_pcb` | 688 | 55 | 0.70 / 0.78 | 2.14 / 2.83 | 2.86 / 3.93 | 5.00 / 6.20 | 7.20 / 7.80 |
 | `tests/fixtures/benchmark/multi_ic.kicad_pcb` | 905 | 52 | 0.90 / 1.00 | 2.50 / 3.57 | 3.54 / 4.55 | 6.00 / 6.50 | 9.20 / 9.70 |
+
+The `esp32_starter` row counts 476 lines, since its four footprints were redrawn on 2026-10-11. Its times are those measured on 2026-09-27 on the 436-line file and have not been taken again: the host was busy when this was checked, and every other row would have moved with it.
 
 The slowest board, `multi_ic`, in each build and on a busy host. Busy is a `cargo build --release -j3` of the workspace running beside it (three `rustc` processes, load average 6.1).
 
