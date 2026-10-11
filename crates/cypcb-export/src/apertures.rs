@@ -35,6 +35,14 @@ pub enum ApertureShape {
         height: i64,
         millideg: i32,
     },
+    /// A rounded rectangle stood at an angle (millidegrees counterclockwise)
+    /// that the unturned macro cannot state.
+    TurnedRoundRect {
+        width: i64,
+        height: i64,
+        corner_ratio: u8,
+        millideg: i32,
+    },
     /// An oblong stood at an angle (millidegrees counterclockwise) that a
     /// plain `O` aperture cannot state.
     TurnedOblong {
@@ -207,6 +215,28 @@ impl ApertureManager {
                     ));
                     format!("%ADD{dcode}TR{dcode}*%\n")
                 }
+                ApertureShape::TurnedRoundRect {
+                    width,
+                    height,
+                    corner_ratio,
+                    millideg,
+                } => {
+                    // The rounded rectangle of above, stood at its slope: the
+                    // two body rectangles turn by the primitive's own rotation
+                    // parameter about the macro origin, which is their centre,
+                    // and the four corner circles are centred where the slope
+                    // puts them, so no circle depends on a reader applying a
+                    // rotation to it (see `turned_round_rect_macro`).
+                    macros.push_str(&turned_round_rect_macro(
+                        dcode,
+                        *width,
+                        *height,
+                        *corner_ratio,
+                        *millideg,
+                        format,
+                    ));
+                    format!("%ADD{dcode}TQ{dcode}*%\n")
+                }
                 ApertureShape::TurnedOblong {
                     width,
                     height,
@@ -325,8 +355,12 @@ pub fn aperture_for_pad(pad: &PadOutline) -> ApertureShape {
             width: width.0,
             height: height.0,
         },
-        // A rounded rectangle stood at an angle has no aperture yet: it is
-        // flashed unturned, the way every pad was before the angle was kept.
+        WorldPadShape::RoundRect { corner_ratio } if slope != 0 => ApertureShape::TurnedRoundRect {
+            width: width.0,
+            height: height.0,
+            corner_ratio,
+            millideg: slope,
+        },
         WorldPadShape::RoundRect { corner_ratio } => ApertureShape::RoundRect {
             width: width.0,
             height: height.0,
@@ -386,6 +420,91 @@ pub fn round_rect_macro(
         (-(width / 2 - radius), -(height / 2 - radius)),
     ] {
         text.push_str(&format!("1,1,{},{},{},0*\n", d(2 * radius), d(x), d(y)));
+    }
+    text.push_str("%\n");
+    text
+}
+
+/// One aperture macro drawing a rounded rectangle stood at an angle, named
+/// after its D-code.
+///
+/// The shape of [`round_rect_macro`] with its slope: the two body rectangles
+/// are centre-line primitives centred on the macro origin, so their rotation
+/// parameter turns them in place (revision 2026.05, section 4.5.1.5; read
+/// 2026-10-07), and the four corner circles are centred where the slope puts
+/// them, through [`rotate_about_origin`](cypcb_world::components::rotate_about_origin),
+/// the one place a point is turned. KiCad's plotter turns a rounded rectangle
+/// the same way for the same reason: its `RoundRect` macro carries no
+/// rotation, `AM_ROUND_RECT` in `GERBER_PLOTTER::writeApertureList` turns the
+/// four corner centres with `RotatePoint` before writing them, and the header
+/// of `gbr_plotter_aperture_macros.h` says readers break on shapes whose whole
+/// rotation they have to apply (`common/plotters/GERBER_plotter.cpp`,
+/// `include/plotters/gbr_plotter_aperture_macros.h`; KiCad master, read
+/// 2026-10-11). The corner order is the unturned macro's.
+///
+/// ```
+/// use cypcb_export::apertures::turned_round_rect_macro;
+/// use cypcb_export::coords::CoordinateFormat;
+/// use cypcb_core::Nm;
+///
+/// // 2.0 by 1.0mm at 25%: radius 0.25mm, corner centres at (0.75, 0.25).
+/// // Turned 90 degrees they sit at (-0.25, 0.75) and so on.
+/// let text = turned_round_rect_macro(
+///     12u16,
+///     Nm::from_mm(2.0).0,
+///     Nm::from_mm(1.0).0,
+///     25,
+///     90_000,
+///     &CoordinateFormat::FORMAT_MM_2_6,
+/// );
+/// assert!(text.starts_with("%AMTQ12*\n21,1,2.000000,0.500000,0,0,90.000*\n"));
+/// assert!(text.contains("1,1,0.500000,-0.250000,0.750000,0*\n"));
+/// ```
+pub fn turned_round_rect_macro(
+    dcode: u16,
+    width: i64,
+    height: i64,
+    corner_ratio: u8,
+    millideg: i32,
+    format: &CoordinateFormat,
+) -> String {
+    let radius = width.min(height) * i64::from(corner_ratio) / 100;
+    let d = |value: i64| nm_to_decimal(value, format);
+    let degrees = f64::from(millideg) / 1000.0;
+
+    let mut text = format!("%AMTQ{dcode}*\n");
+    // The body, as two rectangles that overlap in the middle, each turned in
+    // place by the primitive's rotation parameter.
+    text.push_str(&format!(
+        "21,1,{},{},0,0,{}*\n",
+        d(width),
+        d(height - 2 * radius),
+        millideg_to_decimal(millideg)
+    ));
+    text.push_str(&format!(
+        "21,1,{},{},0,0,{}*\n",
+        d(width - 2 * radius),
+        d(height),
+        millideg_to_decimal(millideg)
+    ));
+    // A circle on each corner, centred a radius in from both edges and then
+    // turned, in the order of the unturned macro.
+    for (x, y) in [
+        (width / 2 - radius, height / 2 - radius),
+        (-(width / 2 - radius), height / 2 - radius),
+        (width / 2 - radius, -(height / 2 - radius)),
+        (-(width / 2 - radius), -(height / 2 - radius)),
+    ] {
+        let turned = rotate_about_origin(
+            cypcb_core::Point::new(cypcb_core::Nm(x), cypcb_core::Nm(y)),
+            degrees,
+        );
+        text.push_str(&format!(
+            "1,1,{},{},{},0*\n",
+            d(2 * radius),
+            d(turned.x.0),
+            d(turned.y.0)
+        ));
     }
     text.push_str("%\n");
     text

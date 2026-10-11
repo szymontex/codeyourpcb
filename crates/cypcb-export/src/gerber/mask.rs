@@ -403,6 +403,17 @@ fn apply_expansion(shape: ApertureShape, expansion: Nm) -> ApertureShape {
             height: height + (expansion.0 * 2),
             millideg,
         },
+        ApertureShape::TurnedRoundRect {
+            width,
+            height,
+            corner_ratio,
+            millideg,
+        } => ApertureShape::TurnedRoundRect {
+            width: width + (expansion.0 * 2),
+            height: height + (expansion.0 * 2),
+            corner_ratio,
+            millideg,
+        },
         ApertureShape::TurnedOblong {
             width,
             height,
@@ -453,6 +464,17 @@ fn apply_reduction(shape: ApertureShape, reduction: f64) -> ApertureShape {
         } => ApertureShape::TurnedRect {
             width: ((width as f64) * factor) as i64,
             height: ((height as f64) * factor) as i64,
+            millideg,
+        },
+        ApertureShape::TurnedRoundRect {
+            width,
+            height,
+            corner_ratio,
+            millideg,
+        } => ApertureShape::TurnedRoundRect {
+            width: ((width as f64) * factor) as i64,
+            height: ((height as f64) * factor) as i64,
+            corner_ratio,
             millideg,
         },
         ApertureShape::TurnedOblong {
