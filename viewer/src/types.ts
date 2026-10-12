@@ -203,6 +203,12 @@ export interface PadInfo {
   drill_nm: number | null;
   /** `[width, height]` when the hole is a slot, milled rather than drilled. */
   slot_nm?: [number, number] | null;
+  /**
+   * Where the hole is from the pad's middle, `[dx, dy]` in nanometres in the
+   * footprint's frame (y up) - absent when the hole is in the middle of its
+   * copper, which is nearly every hole.
+   */
+  hole_offset_nm?: [number, number] | null;
 }
 
 export interface NetInfo {

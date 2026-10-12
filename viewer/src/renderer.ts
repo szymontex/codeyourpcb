@@ -1277,6 +1277,11 @@ export function drawPad(
     const slot = pad.slot_nm && pad.slot_nm[0] !== pad.slot_nm[1] ? pad.slot_nm : null;
     const drillRadius = pad.drill_nm * vp.scale / 2;
     if (drillRadius > 0.5) {
+      // The hole is where the pad states it, which is not always the middle
+      // of the copper: the offset is in the footprint's frame with y up, and
+      // the canvas runs y down.
+      const [holeDx, holeDy] = pad.hole_offset_nm ?? [0, 0];
+      ctx.translate(holeDx * vp.scale, -holeDy * vp.scale);
       ctx.fillStyle = LAYER_COLORS.drill;
       if (slot) {
         const holeWidth = slot[0] * vp.scale;

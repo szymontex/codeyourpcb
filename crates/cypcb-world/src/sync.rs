@@ -2280,6 +2280,7 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
             .map(|p| {
                 let is_tht = p.drill.is_some();
                 FootprintPadDef {
+                    hole_offset: None,
                     number: p.number.to_string(),
                     shape: convert_pad_shape(p.shape, p.corner_ratio),
                     position: Point::new(p.x.to_nm(), p.y.to_nm()),

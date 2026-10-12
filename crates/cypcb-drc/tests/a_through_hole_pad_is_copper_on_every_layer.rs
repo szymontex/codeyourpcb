@@ -32,6 +32,7 @@ const OTHER_NET: NetId = NetId::new(2);
 fn pad(through_hole: bool) -> PadDef {
     let size = Nm::from_mm(1.7);
     PadDef {
+        hole_offset: None,
         number: "1".to_string(),
         shape: PadShape::Circle,
         position: Point::ORIGIN,

@@ -112,6 +112,7 @@ pub fn gullwing_footprint(
         let y = y_offset - Nm(i as i64 * pitch.0);
 
         pads.push(PadDef {
+            hole_offset: None,
             number: pin_num.to_string(),
             shape: PadShape::Rect,
             position: Point::new(-half_span, y),
@@ -130,6 +131,7 @@ pub fn gullwing_footprint(
         let y = Nm(i as i64 * pitch.0) - y_offset;
 
         pads.push(PadDef {
+            hole_offset: None,
             number: pin_num.to_string(),
             shape: PadShape::Rect,
             position: Point::new(half_span, y),
@@ -266,6 +268,7 @@ pub fn sot23() -> Footprint {
         pads: vec![
             // Pin 1: left side, top
             PadDef {
+                hole_offset: None,
                 number: "1".into(),
                 shape: PadShape::Rect,
                 position: Point::new(Nm::from_mm(-1.0), Nm::from_mm(0.95)),
@@ -278,6 +281,7 @@ pub fn sot23() -> Footprint {
             },
             // Pin 2: left side, bottom
             PadDef {
+                hole_offset: None,
                 number: "2".into(),
                 shape: PadShape::Rect,
                 position: Point::new(Nm::from_mm(-1.0), Nm::from_mm(-0.95)),
@@ -290,6 +294,7 @@ pub fn sot23() -> Footprint {
             },
             // Pin 3: right side, centre
             PadDef {
+                hole_offset: None,
                 number: "3".into(),
                 shape: PadShape::Rect,
                 position: Point::new(Nm::from_mm(1.0), Nm::ZERO),
@@ -354,6 +359,7 @@ pub fn sot23_5() -> Footprint {
         pads: vec![
             // Pins 1-3: left side, top to bottom
             PadDef {
+                hole_offset: None,
                 number: "1".into(),
                 shape: PadShape::Rect,
                 position: Point::new(-half_span, pitch),
@@ -365,6 +371,7 @@ pub fn sot23_5() -> Footprint {
                 rotation: Rotation::ZERO,
             },
             PadDef {
+                hole_offset: None,
                 number: "2".into(),
                 shape: PadShape::Rect,
                 position: Point::new(-half_span, Nm::ZERO),
@@ -376,6 +383,7 @@ pub fn sot23_5() -> Footprint {
                 rotation: Rotation::ZERO,
             },
             PadDef {
+                hole_offset: None,
                 number: "3".into(),
                 shape: PadShape::Rect,
                 position: Point::new(-half_span, -pitch),
@@ -388,6 +396,7 @@ pub fn sot23_5() -> Footprint {
             },
             // Pins 4-5: right side, bottom to top
             PadDef {
+                hole_offset: None,
                 number: "4".into(),
                 shape: PadShape::Rect,
                 position: Point::new(half_span, -pitch),
@@ -399,6 +408,7 @@ pub fn sot23_5() -> Footprint {
                 rotation: Rotation::ZERO,
             },
             PadDef {
+                hole_offset: None,
                 number: "5".into(),
                 shape: PadShape::Rect,
                 position: Point::new(half_span, pitch),
@@ -474,6 +484,7 @@ pub fn tqfp32() -> Footprint {
     let mut side = |pads: &mut Vec<PadDef>, at: &dyn Fn(Nm) -> Point, size: (Nm, Nm)| {
         for i in 0..pins_per_side {
             pads.push(PadDef {
+                hole_offset: None,
                 number: pin_num.to_string(),
                 shape: PadShape::Rect,
                 position: at(Nm(i as i64 * pitch.0)),

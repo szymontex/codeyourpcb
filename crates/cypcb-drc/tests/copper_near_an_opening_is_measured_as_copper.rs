@@ -227,6 +227,7 @@ fn board_with_a_slot() -> (BoardWorld, FootprintLibrary) {
     library.register_design(Footprint {
         name: "latch".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Oblong,
             position: Point::ORIGIN,
@@ -292,6 +293,7 @@ fn board_with_a_hole() -> (BoardWorld, FootprintLibrary) {
         name: "MOUNT-M3".to_string(),
         description: "M3 mounting hole".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: String::new(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,

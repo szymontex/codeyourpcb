@@ -189,6 +189,84 @@ else
     echo "no-private-paths: no binary file names a private path"
 fi
 
+# Symlinks, which neither half above can see. `grep` reads the file a link
+# points at, not the link, so a tracked link to a directory outside the checkout
+# names that directory in the repository as plainly as a path in a file does and
+# passes every scan here. One did: a build checkout links its dependency
+# directory to the main checkout's, and `git add -A viewer` committed the link
+# (found in review, 2026-10-12; `.gitignore` said `node_modules/`, which with
+# its trailing slash matches directories and not links).
+#
+# A link is fine when it stays inside the checkout. It is a leak when its target
+# is absolute, or climbs out of the repository by `..`. The target is not
+# printed: it is what is being kept out of a log that is itself shared. Tracked links are read
+# from the index, so a link deleted from the working tree is still found, and
+# links nothing ignores are read from disk, so it is caught before it is added.
+escaping_links() {
+    local repo root path target resolved
+    repo=$1
+    root=$(realpath "$repo")
+    {
+        git -C "$repo" ls-files -s | grep -a '^120000 ' | cut -f2-
+        git -C "$repo" ls-files --others --exclude-standard | while IFS= read -r path; do
+            [ -L "$repo/$path" ] && printf '%s\n' "$path"
+        done
+    } | sort -u | while IFS= read -r path; do
+        if [ -L "$repo/$path" ]; then
+            target=$(readlink "$repo/$path")
+        else
+            target=$(git -C "$repo" show ":$path")
+        fi
+        case $target in
+            /*)
+                printf '%s (absolute target)\n' "$path"
+                continue
+                ;;
+        esac
+        resolved=$(realpath -m --relative-to="$root" "$root/$(dirname "$path")/$target")
+        case $resolved in
+            ..|../*) printf '%s (climbs out of the checkout)\n' "$path" ;;
+        esac
+    done
+}
+
+# The control, on a repository built for it: a link to an absolute path and a
+# link that climbs out of the repository from its own directory must be found,
+# and a link that stays inside must not be.
+# Without it a check that finds nothing and a check that cannot find anything
+# print the same line.
+link_probe=$(mktemp -d)
+git init -q "$link_probe"
+mkdir -p "$link_probe/inner"
+: > "$link_probe/inner/real"
+ln -s "${SL}etc${SL}hostname" "$link_probe/absolute"
+ln -s "../../outside" "$link_probe/inner/climbs"
+ln -s "real" "$link_probe/inner/stays"
+ln -s "inner/real" "$link_probe/also-stays"
+git -C "$link_probe" add -A
+link_caught=$(escaping_links "$link_probe" | wc -l)
+link_names=$(escaping_links "$link_probe" | cut -d' ' -f1 | sort | tr '\n' ' ')
+rm -rf "$link_probe"
+if [ "$link_caught" -ne 2 ] || [ "$link_names" != "absolute inner/climbs " ]; then
+    echo "no-private-paths: the symlink check itself is broken and proves nothing"
+    echo "  links caught : $link_caught (want 2: absolute, inner/climbs)"
+    echo "  which        : $link_names"
+    exit 1
+fi
+
+LINKS=$(escaping_links .)
+if [ -n "$LINKS" ]; then
+    echo "no-private-paths: a symlink points outside the checkout"
+    echo "$LINKS" | head -20
+    echo ""
+    echo "  A link to a path outside the repository names that path in a public"
+    echo "  file. Untrack it (git rm --cached) and ignore it; ignore patterns"
+    echo "  need no trailing slash to match a link."
+    status=1
+else
+    echo "no-private-paths: no symlink points outside the checkout"
+fi
+
 if [ -f "$DENYLIST" ]; then
     NAMES=$(grep -vE '^\s*(#|$)' "$DENYLIST")
     if [ -z "$NAMES" ]; then

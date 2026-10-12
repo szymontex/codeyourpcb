@@ -1113,6 +1113,7 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     let mut written_name: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
     let mut taken: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut offset_holes = 0usize;
     for name in &used {
         if builtin.contains(name) {
             written_name.insert(name.clone(), name.clone());
@@ -1159,6 +1160,9 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
         }
         let _ = writeln!(out);
         for pad in &footprint.pads {
+            if pad.hole_offset.is_some() {
+                offset_holes += 1;
+            }
             let shape = match pad.shape {
                 crate::components::PadShape::Circle => "circle",
                 crate::components::PadShape::Rect => "rect",
@@ -1524,6 +1528,16 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     if off_the_legend > 0 {
         not_written.push(format!(
             "{off_the_legend} text(s) written on the top legend instead of their own layer"
+        ));
+    }
+
+    // A hole off the middle of its pad. The language puts the hole of a pad
+    // where its copper is, so a footprint that states an offset is written with
+    // the hole moved back to the middle: the copper stays, and the drill file
+    // of the board read back is not the one it was sent with.
+    if offset_holes > 0 {
+        not_written.push(format!(
+            "{offset_holes} pad(s) with the hole off the middle of the copper written with it in the middle"
         ));
     }
 

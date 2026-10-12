@@ -42,6 +42,7 @@ fn board_with_hole(
     library.register_design(Footprint {
         name: "jack".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Oblong,
             position: Point::ORIGIN,

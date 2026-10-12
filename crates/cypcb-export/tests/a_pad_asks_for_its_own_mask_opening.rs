@@ -39,6 +39,7 @@ fn mask_of(margin: Option<Nm>) -> String {
         courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,

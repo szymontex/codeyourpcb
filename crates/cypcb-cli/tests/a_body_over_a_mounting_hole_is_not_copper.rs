@@ -37,6 +37,7 @@ fn board_with_hole_and_part(pad_gap_mm: f64, body_half_mm: f64) -> BoardWorld {
         courtyard: Rect::from_points(Point::from_mm(-1.6, -1.6), Point::from_mm(1.6, 1.6)),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,
@@ -59,6 +60,7 @@ fn board_with_hole_and_part(pad_gap_mm: f64, body_half_mm: f64) -> BoardWorld {
         ),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

@@ -41,6 +41,7 @@ fn board() -> BoardWorld {
 
 fn pad(shape: PadShape, width_mm: f64, height_mm: f64) -> PadDef {
     PadDef {
+        hole_offset: None,
         number: "1".to_string(),
         shape,
         position: Point::ORIGIN,

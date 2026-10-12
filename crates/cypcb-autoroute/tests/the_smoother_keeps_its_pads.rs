@@ -33,6 +33,7 @@ const OTHER: NetId = NetId::new(2);
 /// `R_0402_1005Metric` places them.
 fn part(width: f64, height: f64) -> Footprint {
     let pad = |number: &str, x: f64| PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::RoundRect { corner_ratio: 25 },
         position: Point::from_mm(x, 0.0),

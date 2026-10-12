@@ -32,6 +32,7 @@ use crate::components::{place_pad, rotate_about_origin, Layer, PadShape, Rotatio
 ///     layers: vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask],
 ///     mask_margin: None,
 ///     rotation: Rotation::ZERO,
+///     hole_offset: None,
 /// };
 ///
 /// // Through-hole pad (with drill)
@@ -45,6 +46,7 @@ use crate::components::{place_pad, rotate_about_origin, Layer, PadShape, Rotatio
 ///     layers: vec![Layer::TopCopper, Layer::BottomCopper],
 ///     mask_margin: None,
 ///     rotation: Rotation::ZERO,
+///     hole_offset: None,
 /// };
 /// ```
 #[derive(Debug, Clone)]
@@ -104,6 +106,25 @@ pub struct PadDef {
     /// four 1.524 by 3.048 pads 2.54 apart lying long in x, each one running
     /// 0.508 into the next (measured 2026-09-26).
     pub rotation: Rotation,
+    /// Where the hole is in the pad, as its centre minus the pad's centre,
+    /// in the pad's own frame before the pad's turn - the frame the slot is
+    /// stated in. `None` is the hole in the middle of its copper, which is
+    /// nearly every hole.
+    ///
+    /// Not every land has its hole in the middle: a TO-92 for hand soldering
+    /// puts the hole 0.4mm off the middle of a 1.1 by 1.8mm land, and the
+    /// hole is what the drill, the annular ring and the neighbouring hole
+    /// all measure from. EasyEDA states it as `holeCenter`, the hole's own
+    /// coordinates (the format document, read 2026-10-11). KiCad states the
+    /// opposite thing, the copper's offset from the hole: `(drill 0.75
+    /// (offset 0 0.4))` leaves the hole at the pad's `(at)` and puts the copper
+    /// at `at` plus the offset turned by the pad's angle (`PAD::ShapePos`,
+    /// `pcbnew/pad.cpp`; KiCad master, read 2026-10-11), so the importer keeps
+    /// the copper where it stands and records this as the offset negated.
+    /// Dropped by both importers until now: the Gerber copper of a KiCad pad
+    /// with one landed on the hole, 0.4mm from where the board has it, and
+    /// the drill file of an EasyEDA one put the hole in the middle of the pad.
+    pub hole_offset: Option<Point>,
 }
 
 /// One pad as it lands on the board: where, what shape, and how big along the
@@ -247,6 +268,25 @@ impl PadDef {
         }
     }
 
+    /// The hole's centre in the footprint's frame: the pad's position, moved
+    /// by [`hole_offset`](Self::hole_offset) turned by the pad's own
+    /// [`rotation`](Self::rotation). The one place the offset is applied - the
+    /// drill writers, the documents that place a hole and the checker all read
+    /// it from here, directly or through [`hole`](Self::hole).
+    #[inline]
+    pub fn hole_centre(&self) -> Point {
+        match self.hole_offset {
+            None => self.position,
+            Some(offset) => {
+                let turned = rotate_about_origin(offset, self.rotation.to_degrees());
+                Point::new(
+                    Nm(self.position.x.0 + turned.x.0),
+                    Nm(self.position.y.0 + turned.y.0),
+                )
+            }
+        }
+    }
+
     /// Half the distance the milling bit travels, in the footprint's frame.
     ///
     /// A slot `(w, h)` is cut with a bit the width of its narrow dimension
@@ -261,19 +301,25 @@ impl PadDef {
     /// about how close it is to anything.
     #[inline]
     pub fn slot_half_travel(&self) -> Option<Point> {
+        Some(rotate_about_origin(
+            self.slot_half_travel_in_the_pad_frame()?,
+            self.rotation.to_degrees(),
+        ))
+    }
+
+    /// The same half travel along the pad's own axes, before the pad's own
+    /// turn: the frame [`hole_offset`](Self::hole_offset) and the pad's size
+    /// are stated in.
+    pub fn slot_half_travel_in_the_pad_frame(&self) -> Option<Point> {
         let (width, height) = self.slot?;
         if width == height {
             return None;
         }
-        let along_the_pad = if width > height {
+        Some(if width > height {
             Point::new(Nm((width.0 - height.0) / 2), Nm(0))
         } else {
             Point::new(Nm(0), Nm((height.0 - width.0) / 2))
-        };
-        Some(rotate_about_origin(
-            along_the_pad,
-            self.rotation.to_degrees(),
-        ))
+        })
     }
 
     /// The hole as the path of the bit's centre, in the footprint's frame,
@@ -287,7 +333,8 @@ impl PadDef {
     pub fn hole(&self) -> Option<(Point, Point, Nm)> {
         let drill = self.drill?;
         let half = self.slot_half_travel().unwrap_or(Point::ORIGIN);
-        let (x, y) = (self.position.x.0, self.position.y.0);
+        let centre = self.hole_centre();
+        let (x, y) = (centre.x.0, centre.y.0);
         Some((
             Point::new(Nm(x - half.x.0), Nm(y - half.y.0)),
             Point::new(Nm(x + half.x.0), Nm(y + half.y.0)),
@@ -813,6 +860,8 @@ pub fn mirrored_to_bottom(footprint: &Footprint) -> Footprint {
                 mask_margin: None,
                 // A mirror runs a turn the other way.
                 rotation: Rotation((-pad.rotation.0).rem_euclid(360_000)),
+                // The flip runs the offset the same way it runs the position.
+                hole_offset: pad.hole_offset.map(mirror_point),
             })
             .collect(),
         bounds: mirror_rect(footprint.bounds),
@@ -1018,6 +1067,7 @@ mod tests {
     #[test]
     fn test_pad_def_is_smd() {
         let smd = PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,
@@ -1032,6 +1082,7 @@ mod tests {
         assert!(!smd.is_through_hole());
 
         let tht = PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,
@@ -1117,6 +1168,7 @@ mod tests {
     /// footprint, the way `fab-1X04` states its pads.
     fn header_pad(rotation: Rotation) -> PadDef {
         PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Oblong,
             position: Point::from_mm(2.54, 0.0),

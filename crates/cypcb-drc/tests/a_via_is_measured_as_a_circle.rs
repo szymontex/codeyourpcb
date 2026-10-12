@@ -186,6 +186,7 @@ fn round_pad_part(world: &mut BoardWorld, at_nm: i64) {
         name: "ROUND".to_string(),
         description: "one circular pad".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,
@@ -248,6 +249,7 @@ fn net_through_a_via(end_nm: f64) -> Vec<cypcb_drc::DrcViolation> {
         name: "PAD".to_string(),
         description: "one square pad".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Rect,
             position: Point::ORIGIN,

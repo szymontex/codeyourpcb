@@ -317,20 +317,18 @@ fn collect_drill_hits(
         // Iterate over pads with drill holes
         for pad in &footprint.pads {
             if let Some(drill_diameter) = pad.drill {
-                // Calculate absolute position (component position + rotated pad offset)
-                let abs_pos = place_pad_millideg(position.0, pad.position, rotation.0);
+                // The hole, not the copper: a pad can state its hole off the
+                // middle of its land, and the drill goes where the hole is.
+                let hole = pad.hole_centre();
 
-                // A slot's two ends are two pad offsets, so the same rotation
-                // that places the pad places both of them.
+                // Calculate absolute position (component position + rotated hole offset)
+                let abs_pos = place_pad_millideg(position.0, hole, rotation.0);
+
+                // A slot's two ends are two offsets from the hole's middle, so
+                // the same rotation that places the hole places both of them.
                 let slot_end = pad.slot_half_travel().map(|half| {
-                    let start = Point::new(
-                        Nm(pad.position.x.0 - half.x.0),
-                        Nm(pad.position.y.0 - half.y.0),
-                    );
-                    let end = Point::new(
-                        Nm(pad.position.x.0 + half.x.0),
-                        Nm(pad.position.y.0 + half.y.0),
-                    );
+                    let start = Point::new(Nm(hole.x.0 - half.x.0), Nm(hole.y.0 - half.y.0));
+                    let end = Point::new(Nm(hole.x.0 + half.x.0), Nm(hole.y.0 + half.y.0));
                     (
                         place_pad_millideg(position.0, start, rotation.0),
                         place_pad_millideg(position.0, end, rotation.0),

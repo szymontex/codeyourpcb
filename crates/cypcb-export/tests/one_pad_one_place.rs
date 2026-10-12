@@ -46,6 +46,7 @@ fn board() -> (BoardWorld, FootprintLibrary) {
     library.register_design(Footprint {
         name: "pin".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Circle,
             position: Point::from_mm(1.0, 0.0),

@@ -58,6 +58,7 @@ pub fn axial_300mil() -> Footprint {
         description: "Axial component 300mil (7.62mm) lead spacing".into(),
         pads: vec![
             PadDef {
+                hole_offset: None,
                 number: "1".into(),
                 shape: PadShape::Circle,
                 position: Point::new(-half_spacing, Nm::ZERO),
@@ -69,6 +70,7 @@ pub fn axial_300mil() -> Footprint {
                 rotation: Rotation::ZERO,
             },
             PadDef {
+                hole_offset: None,
                 number: "2".into(),
                 shape: PadShape::Circle,
                 position: Point::new(half_spacing, Nm::ZERO),
@@ -124,6 +126,7 @@ pub fn dip8() -> Footprint {
         let pin_num = i + 1;
         let y_offset = Nm::from_mil(150.0 - (i as f64 * 100.0)); // 150, 50, -50, -150 mils
         pads.push(PadDef {
+            hole_offset: None,
             number: pin_num.to_string(),
             shape: PadShape::Oblong,
             position: Point::new(-half_row, y_offset),
@@ -141,6 +144,7 @@ pub fn dip8() -> Footprint {
         let pin_num = i + 5;
         let y_offset = Nm::from_mil(-150.0 + (i as f64 * 100.0)); // -150, -50, 50, 150 mils
         pads.push(PadDef {
+            hole_offset: None,
             number: pin_num.to_string(),
             shape: PadShape::Oblong,
             position: Point::new(half_row, y_offset),
@@ -186,6 +190,7 @@ pub fn pin_header_1x2() -> Footprint {
         description: "1x2 pin header, 100mil (2.54mm) pitch".into(),
         pads: vec![
             PadDef {
+                hole_offset: None,
                 number: "1".into(),
                 shape: PadShape::Rect, // Square pad for pin 1
                 position: Point::new(-half_pitch, Nm::ZERO),
@@ -197,6 +202,7 @@ pub fn pin_header_1x2() -> Footprint {
                 rotation: Rotation::ZERO,
             },
             PadDef {
+                hole_offset: None,
                 number: "2".into(),
                 shape: PadShape::Circle,
                 position: Point::new(half_pitch, Nm::ZERO),

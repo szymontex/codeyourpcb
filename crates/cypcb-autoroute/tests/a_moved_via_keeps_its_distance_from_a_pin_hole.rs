@@ -49,6 +49,7 @@ fn footprint(
         courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: if drill.is_some() {
                 PadShape::Circle

@@ -45,6 +45,7 @@ fn board_with_slots(positions: &[(f64, f64)]) -> BoardWorld {
     library.register_design(Footprint {
         name: "latch".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Oblong,
             position: Point::ORIGIN,

@@ -130,6 +130,7 @@ mod tests {
         library.register_design(Footprint {
             name: "pin".to_string(),
             pads: vec![PadDef {
+                hole_offset: None,
                 number: "1".to_string(),
                 shape: PadShape::Circle,
                 position: pad,
@@ -239,6 +240,7 @@ mod tests {
         library.register_design(Footprint {
             name: "usbc_pad".to_string(),
             pads: vec![PadDef {
+                hole_offset: None,
                 number: "A1".to_string(),
                 shape: PadShape::Rect,
                 position: Point::ORIGIN,

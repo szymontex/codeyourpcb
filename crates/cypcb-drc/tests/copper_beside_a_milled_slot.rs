@@ -47,6 +47,7 @@ fn board_with_a_slot_rotated(x: f64, y: f64, rotation: Rotation) -> (BoardWorld,
     library.register_design(Footprint {
         name: "latch".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Oblong,
             position: Point::ORIGIN,

@@ -1,0 +1,40 @@
+[
+  {
+    "number": "1",
+    "x_nm": 0,
+    "y_nm": 0,
+    "width_nm": 1999996,
+    "height_nm": 2999994,
+    "shape": "rect",
+    "layer_mask": 3,
+    "drill_nm": 799998,
+    "hole_offset_nm": [
+      499999,
+      -499999
+    ]
+  },
+  {
+    "number": "2",
+    "x_nm": 2540000,
+    "y_nm": 0,
+    "width_nm": 2999994,
+    "height_nm": 1999996,
+    "shape": "rect",
+    "layer_mask": 3,
+    "drill_nm": 799998,
+    "hole_offset_nm": [
+      499999,
+      -499999
+    ]
+  },
+  {
+    "number": "3",
+    "x_nm": 5080000,
+    "y_nm": 0,
+    "width_nm": 1999996,
+    "height_nm": 2999994,
+    "shape": "rect",
+    "layer_mask": 3,
+    "drill_nm": 799998
+  }
+]

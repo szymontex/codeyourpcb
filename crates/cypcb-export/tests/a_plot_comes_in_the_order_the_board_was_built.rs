@@ -30,6 +30,7 @@ fn land() -> Footprint {
         name: "LAND".to_string(),
         description: "one round through-hole land".to_string(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,

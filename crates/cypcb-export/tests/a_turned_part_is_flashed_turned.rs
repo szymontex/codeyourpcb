@@ -31,6 +31,7 @@ const FORMAT: CoordinateFormat = CoordinateFormat::FORMAT_MM_2_6;
 /// An 0805 land: two pads 1.0 wide and 1.45 tall, 1.9 apart along x.
 fn chip() -> Footprint {
     let pad = |number: &str, x: f64| PadDef {
+        hole_offset: None,
         number: number.to_string(),
         shape: PadShape::Rect,
         position: Point::from_mm(x, 0.0),

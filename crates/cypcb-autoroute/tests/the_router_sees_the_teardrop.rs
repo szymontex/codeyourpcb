@@ -34,6 +34,7 @@ fn board(asked: bool) -> (BoardWorld, FootprintLibrary) {
         courtyard: Rect::from_center_size(Point::ORIGIN, (size, size)),
         silk: Vec::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".into(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,

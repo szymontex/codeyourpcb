@@ -18,6 +18,13 @@ import type { PadInfo, SilkShape } from './types';
 const EEDA_TO_NM = 254_000;
 
 /**
+ * The most two coordinates in a file can differ by and still be the same point
+ * written twice: the format prints four decimals of a 10 mil unit, and this is
+ * ten times that.
+ */
+const HOLE_CENTRE_RESOLUTION = 0.001;
+
+/**
  * An EasyEDA point as a footprint point, in nanometres from the origin.
  *
  * EasyEDA draws on an SVG canvas, and its Y grows down the screen. A
@@ -228,6 +235,15 @@ function parseLIBBlock(
  * 18/12/23), the slot the drawing gives as 0.60 x 1.70mm arrives as HOLER
  * 1.378 (0.35mm) and HOLELENGTH 6.6929 (1.70mm).
  *
+ * HOLECENTER (the twentieth field, "孔中心坐标" in the format document read
+ * 2026-10-11) is the hole's own `x,y`, in the same absolute coordinates as
+ * the pad's - the example the document gives, `PAD~ELLIPSE~4020~3308.5~6~6~11
+ * ~~1~1.8~~0~gge5~0~~Y~0~~~4020,3308.5`, states the pad's centre again. It is
+ * not an offset. A pad whose hole is not in the middle of its copper states
+ * another point, and the hole is `holeCenter` less the pad's centre, turned
+ * into this project's frame like every other point. It was read by nothing: a
+ * drill file made from such a pad put the hole in the middle of the land.
+ *
  * ROTATION turns the pad about its centre. The format document
  * (docs.easyeda.com EasyEDA-Format-Standard, read 2026-09-26) gives no
  * direction for it, so only the quarter turns are read: a rectangle, an oval
@@ -255,6 +271,7 @@ function parsePADShape(
   const holeR = parseFloat(fields[9]) || 0;
   const rotation = parseFloat(fields[11]) || 0;
   const holeLength = parseFloat(fields[13]) || 0;
+  const holeCentre = fields[19] ?? '';
 
   if (isNaN(absX) || isNaN(absY) || isNaN(width) || isNaN(height)) return null;
   if (!number) return null;
@@ -276,6 +293,22 @@ function parsePADShape(
     slotNm = heightNm > widthNm
       ? [drillNm, lengthNm]
       : [lengthNm, drillNm];
+  }
+
+  // Where the hole is from the pad's middle: the file's `holeCenter` less the
+  // pad's own centre, both absolute, so the pad's turn does not enter into it.
+  // The file prints four decimals, so a difference under ten times that is
+  // the rounding of the same point written twice, not an offset.
+  let holeOffsetNm: [number, number] | null = null;
+  if (drillNm && holeCentre) {
+    const [holeX, holeY] = holeCentre.split(',').map(parseFloat);
+    if (
+      Number.isFinite(holeX) && Number.isFinite(holeY) &&
+      (Math.abs(holeX - absX) > HOLE_CENTRE_RESOLUTION || Math.abs(holeY - absY) > HOLE_CENTRE_RESOLUTION)
+    ) {
+      const [holeRelX, holeRelY] = footprintPoint(holeX, holeY, originX, originY);
+      holeOffsetNm = [Math.round(holeRelX - relX), Math.round(holeRelY - relY)];
+    }
   }
 
   const quarterTurns = ((Math.round(rotation / 90) % 4) + 4) % 4;
@@ -336,6 +369,7 @@ function parsePADShape(
     layer_mask: layerMask,
     drill_nm: drillNm ? Math.round(drillNm) : null,
     ...(slotNm ? { slot_nm: [Math.round(slotNm[0]), Math.round(slotNm[1])] as [number, number] } : {}),
+    ...(holeOffsetNm ? { hole_offset_nm: holeOffsetNm } : {}),
   };
 }
 

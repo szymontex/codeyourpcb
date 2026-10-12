@@ -488,6 +488,7 @@ mod tests {
     fn create_test_footprint() -> Footprint {
         // Simple 2-pad footprint
         let pad1 = PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             position: Point::from_mm(-1.0, 0.0),
             shape: PadShape::Circle,
@@ -500,6 +501,7 @@ mod tests {
         };
 
         let pad2 = PadDef {
+            hole_offset: None,
             number: "2".to_string(),
             position: Point::from_mm(1.0, 0.0),
             shape: PadShape::Circle,
@@ -658,6 +660,7 @@ mod tests {
 
         // Create footprint with bottom-side pads
         let pad = PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             position: Point::ORIGIN,
             shape: PadShape::Circle,

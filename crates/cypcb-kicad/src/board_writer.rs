@@ -642,15 +642,30 @@ fn write_footprints(
             } else {
                 format!(" {}", on_board as f64 / 1000.0)
             };
+            // KiCad's `(at)` is the hole - the anchor - and the copper is
+            // where `(drill ... (offset x y))` puts it from there, so a pad
+            // whose hole is not in the middle of its copper is written at its
+            // hole with the offset of its copper (`PAD::ShapePos`,
+            // `pcbnew/pad.cpp`; KiCad master, read 2026-10-11).
+            let anchor = pad.hole_centre();
             let _ = write!(
                 out,
                 "    (pad \"{}\" {kind} {shape} (at {} {}{angle}) (size {} {}) (layers {layers})",
                 pad.number,
-                mm(pad.position.x),
-                local_y(pad.position.y),
+                mm(anchor.x),
+                local_y(anchor.y),
                 mm(pad.size.0),
                 mm(pad.size.1),
             );
+            // The copper from the hole, in the pad's own frame: the hole from
+            // the copper negated, in KiCad's frame where y points down.
+            let copper_from_hole = pad.hole_offset.map(|hole| {
+                format!(
+                    " (offset {} {})",
+                    mm(cypcb_core::Nm(-hole.x.0)),
+                    local_y(cypcb_core::Nm(-hole.y.0))
+                )
+            });
             if let Some(ratio) = corner_ratio {
                 let _ = write!(out, " (roundrect_rratio {})", ratio as f64 / 100.0);
             }
@@ -660,10 +675,21 @@ fn write_footprints(
             // fitting.
             match (pad.slot, pad.drill) {
                 (Some((width, height)), _) if pad.is_slot() => {
-                    let _ = write!(out, " (drill oval {} {})", mm(width), mm(height));
+                    let _ = write!(
+                        out,
+                        " (drill oval {} {}{})",
+                        mm(width),
+                        mm(height),
+                        copper_from_hole.as_deref().unwrap_or("")
+                    );
                 }
                 (_, Some(drill)) => {
-                    let _ = write!(out, " (drill {})", mm(drill));
+                    let _ = write!(
+                        out,
+                        " (drill {}{})",
+                        mm(drill),
+                        copper_from_hole.as_deref().unwrap_or("")
+                    );
                 }
                 (_, None) => {}
             }

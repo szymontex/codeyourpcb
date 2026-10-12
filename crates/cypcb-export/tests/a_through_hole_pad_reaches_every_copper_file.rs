@@ -39,6 +39,7 @@ fn board(through_hole: bool) -> (BoardWorld, FootprintLibrary) {
         name: "PAD".to_string(),
         description: String::new(),
         pads: vec![PadDef {
+            hole_offset: None,
             number: "1".to_string(),
             shape: PadShape::Circle,
             position: Point::ORIGIN,
