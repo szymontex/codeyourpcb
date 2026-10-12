@@ -145,4 +145,33 @@ describe('a part fetched from EasyEDA', () => {
     })!;
     expect(fp.silk).toEqual(contract('easyeda-quarter-arc-silk.json'));
   });
+
+  it('writes the legend of a real part exactly as the engine reads it, with no layer', () => {
+    // The engine refuses a field it does not name, `layer` among them: it keeps
+    // one legend per footprint and prints it on the part's side. Four lines and
+    // the pin-1 arc of the AP2112K, from the supplier's own drawing.
+    const silk = parseEasyEDAFootprint(ap2112k)!.silk;
+    expect(silk).toEqual(contract('easyeda-ap2112k-silk.json'));
+    expect(silk).toHaveLength(5);
+    for (const shape of silk) expect(Object.keys(shape)).not.toContain('layer');
+  });
+
+  it('control: a shape on the bottom legend layer reads the same, with no layer', () => {
+    // Layer 4 is the bottom legend. The shape is kept and says nothing of it.
+    const fp = parseEasyEDAFootprint({
+      result: {
+        packageDetail: {
+          dataStr: {
+            head: { x: '4000', y: '3000' },
+            shape: [
+              'PAD~RECT~4000~3000~4~4~1~~1~0~~0~gge1',
+              'TRACK~1~4~~4000 3000 4010 3000~gge2~0',
+            ],
+          },
+        },
+      },
+    })!;
+    expect(fp.silk).toHaveLength(1);
+    expect(Object.keys(fp.silk[0])).not.toContain('layer');
+  });
 });

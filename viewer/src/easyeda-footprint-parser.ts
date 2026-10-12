@@ -417,11 +417,17 @@ function parseHOLEShape(holeStr: string, originX: number, originY: number): PadI
 // Silkscreen shape parsers
 // ---------------------------------------------------------------------------
 
-/** Map EasyEDA layer ID to silk layer. Returns null if not a silk layer. */
-function silkLayer(layerId: string): 'top' | 'bottom' | null {
-  if (layerId === '3') return 'top';
-  if (layerId === '4') return 'bottom';
-  return null;
+/**
+ * Whether an EasyEDA layer ID is a silkscreen layer: 3 is the top legend, 4
+ * the bottom one.
+ *
+ * The shape does not keep which. The engine holds one legend per footprint and
+ * prints all of it on the face the part is on, so a shape drawn on layer 4 of
+ * a part placed on the top is printed on the top - and said nothing about it
+ * here until 2026-10-12, when the field that pretended to carry it was removed.
+ */
+function isSilkLayer(layerId: string): boolean {
+  return layerId === '3' || layerId === '4';
 }
 
 /**
@@ -432,8 +438,7 @@ function parseSilkTRACK(trackStr: string, ox: number, oy: number): SilkShape[] {
   const fields = trackStr.split('~');
   if (fields.length < 5) return [];
 
-  const layer = silkLayer(fields[2]);
-  if (!layer) return [];
+  if (!isSilkLayer(fields[2])) return [];
 
   const width = parseFloat(fields[1]) * EEDA_TO_NM;
   const coords = fields[4].trim().split(/\s+/).map(Number);
@@ -449,7 +454,6 @@ function parseSilkTRACK(trackStr: string, ox: number, oy: number): SilkShape[] {
         x1: Math.round(x1), y1: Math.round(y1),
         x2: Math.round(x2), y2: Math.round(y2),
         width: Math.round(width),
-        layer,
       });
     }
   }
@@ -466,8 +470,7 @@ function parseSilkCIRCLE(circleStr: string, ox: number, oy: number): SilkShape |
   if (fields.length < 6) return null;
 
   // CIRCLE fields: [0]=CIRCLE [1]=cx [2]=cy [3]=radius [4]=width [5]=layer
-  const layer = silkLayer(fields[5]);
-  if (!layer) return null;
+  if (!isSilkLayer(fields[5])) return null;
 
   const [cx, cy] = footprintPoint(parseFloat(fields[1]), parseFloat(fields[2]), ox, oy);
   const radius = parseFloat(fields[3]) * EEDA_TO_NM;
@@ -480,7 +483,6 @@ function parseSilkCIRCLE(circleStr: string, ox: number, oy: number): SilkShape |
     cx: Math.round(cx), cy: Math.round(cy),
     radius: Math.round(radius),
     width: Math.round(width),
-    layer,
   };
 }
 
@@ -493,8 +495,7 @@ function parseSilkARC(arcStr: string, ox: number, oy: number): SilkShape | null 
   const fields = arcStr.split('~');
   if (fields.length < 5) return null;
 
-  const layer = silkLayer(fields[2]);
-  if (!layer) return null;
+  if (!isSilkLayer(fields[2])) return null;
 
   const width = parseFloat(fields[1]) * EEDA_TO_NM;
   const pathData = fields[4];
@@ -532,7 +533,6 @@ function parseSilkARC(arcStr: string, ox: number, oy: number): SilkShape | null 
     startAngle,
     endAngle,
     width: Math.round(width),
-    layer,
   };
 }
 
