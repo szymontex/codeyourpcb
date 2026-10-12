@@ -225,6 +225,7 @@ fn board_with_a_slot() -> (BoardWorld, FootprintLibrary) {
         .expect("the library has an 0402")
         .clone();
     library.register_design(Footprint {
+        placement_origin: None,
         name: "latch".to_string(),
         pads: vec![PadDef {
             hole_offset: None,
@@ -290,6 +291,7 @@ fn board_with_a_hole() -> (BoardWorld, FootprintLibrary) {
     let drill = Nm::from_mm(HOLE_DRILL);
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "MOUNT-M3".to_string(),
         description: "M3 mounting hole".to_string(),
         pads: vec![PadDef {

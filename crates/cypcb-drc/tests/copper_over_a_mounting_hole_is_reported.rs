@@ -35,6 +35,7 @@ use cypcb_world::BoardWorld;
 fn mounting_hole() -> Footprint {
     let drill = Nm::from_mm(3.2);
     Footprint {
+        placement_origin: None,
         name: "MOUNT-M3".to_string(),
         description: "M3 mounting hole".to_string(),
         pads: vec![PadDef {
@@ -198,6 +199,7 @@ fn a_plated_hole_is_not_measured_by_this_rule() {
     let mut library = FootprintLibrary::new();
     let drill = Nm::from_mm(1.0);
     library.register(Footprint {
+        placement_origin: None,
         name: "PIN".to_string(),
         description: "one plated pin".to_string(),
         pads: vec![PadDef {

@@ -47,6 +47,7 @@ fn pad(number: &str, x_mm: f64) -> PadDef {
 fn bar() -> Footprint {
     let courtyard = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(7.0), Nm::from_mm(1.0)));
     Footprint {
+        placement_origin: None,
         name: "BAR".to_string(),
         description: "two pads 6mm apart".to_string(),
         pads: vec![pad("1", -3.0), pad("2", 3.0)],
@@ -60,6 +61,7 @@ fn bar() -> Footprint {
 /// its first pin states one: pad 2 stands outside the box the index holds.
 fn short_bar() -> Footprint {
     Footprint {
+        placement_origin: None,
         name: "SHORT-BAR".to_string(),
         courtyard: Rect::from_center_size(
             Point::from_mm(-3.0, 0.0),
@@ -73,6 +75,7 @@ fn short_bar() -> Footprint {
 fn mounting_hole() -> Footprint {
     let drill = Nm::from_mm(3.2);
     Footprint {
+        placement_origin: None,
         name: "MOUNT-M3".to_string(),
         description: "M3 mounting hole".to_string(),
         pads: vec![PadDef {
@@ -100,6 +103,7 @@ fn latch(library: &FootprintLibrary) -> Footprint {
         .expect("the library has an 0402")
         .clone();
     Footprint {
+        placement_origin: None,
         name: "latch".to_string(),
         pads: vec![PadDef {
             hole_offset: None,

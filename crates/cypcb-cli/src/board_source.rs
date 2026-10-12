@@ -96,6 +96,12 @@ pub fn load_kicad(path: &Path) -> Result<LoadedBoard> {
     for approximation in &parsed.metadata.pad_approximations {
         eprintln!("warning: {approximation}");
     }
+    // A footprint that asks for a point to be placed by and was not understood
+    // is placed by the default for its kind, and the placement file says
+    // nothing of it.
+    for note in &parsed.metadata.placement_notes {
+        eprintln!("warning: {note}");
+    }
 
     let mut world = parsed.world;
     let library = parsed.library;

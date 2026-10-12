@@ -56,6 +56,7 @@ fn two_pin_header() -> Footprint {
     };
 
     Footprint {
+        placement_origin: None,
         name: "PinHeader_1x02".to_string(),
         description: "two drilled pads".to_string(),
         pads: vec![pad("1", 0.0), pad("2", 2.54)],

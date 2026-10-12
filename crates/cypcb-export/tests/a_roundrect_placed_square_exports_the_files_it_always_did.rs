@@ -29,6 +29,7 @@ const FORMAT: CoordinateFormat = CoordinateFormat::FORMAT_MM_2_6;
 fn footprint(name: &str, w: f64, h: f64, ratio: u8, margin: Option<f64>) -> Footprint {
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(w + 1.0), Nm::from_mm(h + 1.0)));
     Footprint {
+        placement_origin: None,
         name: name.to_string(),
         description: String::new(),
         pads: vec![PadDef {

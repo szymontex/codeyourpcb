@@ -444,6 +444,7 @@ mod tests {
         // Create a simple footprint with one pad
         let mut library = FootprintLibrary::new();
         let footprint = Footprint {
+            placement_origin: None,
             name: "test_fp".into(),
             description: "Test footprint".into(),
             bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),

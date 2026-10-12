@@ -183,6 +183,7 @@ fn a_trace_across_a_via_is_still_a_short() {
 fn round_pad_part(world: &mut BoardWorld, at_nm: i64) {
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "ROUND".to_string(),
         description: "one circular pad".to_string(),
         pads: vec![PadDef {
@@ -246,6 +247,7 @@ fn net_through_a_via(end_nm: f64) -> Vec<cypcb_drc::DrcViolation> {
     let net = NetId::new(1);
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD".to_string(),
         description: "one square pad".to_string(),
         pads: vec![PadDef {

@@ -29,6 +29,7 @@ fn drill_file(offset: Option<Point>) -> String {
     let mut library = FootprintLibrary::new();
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(8.0), Nm::from_mm(8.0)));
     library.register(Footprint {
+        placement_origin: None,
         name: "S".to_string(),
         description: String::new(),
         pads: vec![PadDef {

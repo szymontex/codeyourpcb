@@ -514,6 +514,7 @@ mod tests {
         };
 
         Footprint {
+            placement_origin: None,
             name: "TEST_0402".to_string(),
             description: "Test footprint".to_string(),
             pads: vec![pad1, pad2],
@@ -673,6 +674,7 @@ mod tests {
         };
 
         let footprint = Footprint {
+            placement_origin: None,
             name: "BOTTOM_COMP".to_string(),
             description: "Bottom component".to_string(),
             pads: vec![pad],

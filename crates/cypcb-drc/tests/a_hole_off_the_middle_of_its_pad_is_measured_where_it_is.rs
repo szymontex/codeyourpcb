@@ -53,6 +53,7 @@ fn board(mut pads: Vec<PadDef>, own: Rotation) -> BoardWorld {
     let mut library = FootprintLibrary::new();
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(8.0), Nm::from_mm(6.0)));
     library.register_design(Footprint {
+        placement_origin: None,
         name: "held".to_string(),
         description: String::new(),
         pads,

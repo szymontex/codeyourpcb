@@ -28,6 +28,7 @@ fn board(asked: bool) -> (BoardWorld, FootprintLibrary) {
     let size = Nm::from_mm(1.6);
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "LAND".into(),
         description: String::new(),
         bounds: Rect::from_center_size(Point::ORIGIN, (size, size)),

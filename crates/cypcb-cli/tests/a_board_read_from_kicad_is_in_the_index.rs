@@ -109,6 +109,7 @@ fn two_pads_with_no_net_are_compared_to_each_other() {
 
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "square".to_string(),
         description: String::new(),
         bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),

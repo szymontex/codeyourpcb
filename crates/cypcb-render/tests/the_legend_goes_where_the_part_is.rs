@@ -58,6 +58,7 @@ fn gerber(source: &str, side: Side) -> String {
     let bounds = Rect::new(Point::from_mm(-6.0, -6.0), Point::from_mm(6.0, 6.0));
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "FETCHED".to_string(),
         description: String::new(),
         pads: vec![],

@@ -24,6 +24,7 @@ fn board(locked: bool) -> (BoardWorld, cypcb_world::footprint::FootprintLibrary)
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD1".into(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
@@ -129,6 +130,7 @@ fn a_net_a_hand_trace_already_joins_is_not_routed_again() {
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD1".into(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
@@ -198,6 +200,7 @@ fn copper_on_another_layer_does_not_count_as_a_connection() {
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD1".into(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
@@ -267,6 +270,7 @@ fn a_via_joins_two_traces_into_one_piece_of_copper() {
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD1".into(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
@@ -359,6 +363,7 @@ fn a_ground_plane_connects_the_pins_that_sit_in_it() {
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD1".into(),
         description: String::new(),
         bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
@@ -435,6 +440,7 @@ fn a_net_crosses_its_own_hand_trace_to_reach_its_pad() {
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD1".into(),
         description: String::new(),
         bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
@@ -536,6 +542,7 @@ fn strip_board(layer_count: u8) -> (BoardWorld, cypcb_world::footprint::Footprin
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     for (name, layer) in [("TOP1", Layer::TopCopper), ("BOT1", Layer::BottomCopper)] {
         library.register(Footprint {
+            placement_origin: None,
             name: name.into(),
             description: String::new(),
             bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),

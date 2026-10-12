@@ -1044,6 +1044,7 @@ mod tests {
         let courtyard = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(7.0), Nm::from_mm(1.0)));
         let mut library = FootprintLibrary::new();
         library.register(Footprint {
+            placement_origin: None,
             name: "BAR".to_string(),
             description: "two pads 6mm apart".to_string(),
             pads: vec![pad("1", -3.0), pad("2", 3.0)],

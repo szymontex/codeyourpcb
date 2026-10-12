@@ -46,6 +46,7 @@ fn part(width: f64, height: f64) -> Footprint {
     };
     let size = (Nm::from_mm(1.0 + width), Nm::from_mm(height));
     Footprint {
+        placement_origin: None,
         name: "PART".to_string(),
         description: String::new(),
         pads: vec![pad("1", -0.48), pad("2", 0.48)],

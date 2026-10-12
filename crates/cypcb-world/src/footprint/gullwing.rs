@@ -147,6 +147,7 @@ pub fn gullwing_footprint(
     // Courtyard: body + 0.5mm margin (0.25mm each side per IPC-7351B)
 
     Footprint {
+        placement_origin: None,
         name: name.into(),
         description: description.into(),
         pads,
@@ -263,6 +264,7 @@ pub fn sot23() -> Footprint {
     let layers = smd_layers();
 
     Footprint {
+        placement_origin: None,
         name: "SOT-23".into(),
         description: "Small Outline Transistor, 3 pins".into(),
         pads: vec![
@@ -354,6 +356,7 @@ pub fn sot23_5() -> Footprint {
     let half_span = Nm::from_mm(1.2); // row_span / 2 = 2.4 / 2
 
     Footprint {
+        placement_origin: None,
         name: "SOT-23-5".into(),
         description: "Small Outline Transistor, 5 pins".into(),
         pads: vec![
@@ -527,6 +530,7 @@ pub fn tqfp32() -> Footprint {
     );
 
     Footprint {
+        placement_origin: None,
         name: "TQFP-32".into(),
         description: "Thin Quad Flat Package, 32 pins, 0.8mm pitch".into(),
         pads,

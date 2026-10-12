@@ -16,6 +16,7 @@ use cypcb_world::footprint::{mirrored_to_bottom, Footprint, PadDef};
 fn footprint(rotation: Rotation) -> Footprint {
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(8.0), Nm::from_mm(8.0)));
     Footprint {
+        placement_origin: None,
         name: "P".to_string(),
         description: String::new(),
         pads: vec![PadDef {

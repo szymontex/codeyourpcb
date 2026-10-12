@@ -37,6 +37,7 @@ fn two_pad_footprint() -> Footprint {
     };
 
     Footprint {
+        placement_origin: None,
         name: "R_0402".to_string(),
         description: "two pads and a body".to_string(),
         pads: vec![pad("1", -0.5), pad("2", 0.5)],

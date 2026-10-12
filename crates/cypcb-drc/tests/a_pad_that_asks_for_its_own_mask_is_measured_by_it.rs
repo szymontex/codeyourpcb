@@ -44,6 +44,7 @@ fn board(margin: Option<Nm>) -> BoardWorld {
 
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "chip".to_string(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),

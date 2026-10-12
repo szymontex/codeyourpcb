@@ -31,6 +31,7 @@ fn mounting_hole(name: &str, screw: &str, drill: Nm) -> Footprint {
     let outer = drill + HEAD_CLEARANCE + HEAD_CLEARANCE;
 
     Footprint {
+        placement_origin: None,
         name: name.into(),
         description: format!(
             "{screw} mounting hole, {:.1}mm clearance drill, not plated",

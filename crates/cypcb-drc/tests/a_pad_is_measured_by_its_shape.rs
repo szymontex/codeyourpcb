@@ -77,6 +77,7 @@ impl Parts {
         net: Option<NetId>,
     ) {
         self.library.register(Footprint {
+            placement_origin: None,
             name: refdes.to_string(),
             description: "one pad".to_string(),
             pads: vec![pad],

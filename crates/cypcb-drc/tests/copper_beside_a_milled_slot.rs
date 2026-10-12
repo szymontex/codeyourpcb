@@ -45,6 +45,7 @@ fn board_with_a_slot_rotated(x: f64, y: f64, rotation: Rotation) -> (BoardWorld,
         .expect("the library has an 0402")
         .clone();
     library.register_design(Footprint {
+        placement_origin: None,
         name: "latch".to_string(),
         pads: vec![PadDef {
             hole_offset: None,
