@@ -53,6 +53,7 @@ fn board_with_mounting_hole(x_mm: f64) -> BoardWorld {
         .expect("the library has an 0402")
         .clone();
     library.register_design(Footprint {
+        placement_origin: None,
         name: "screw".to_string(),
         pads: vec![PadDef {
             hole_offset: None,

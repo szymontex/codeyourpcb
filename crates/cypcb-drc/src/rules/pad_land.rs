@@ -128,6 +128,7 @@ mod tests {
             .expect("the library has an 0402")
             .clone();
         library.register_design(Footprint {
+            placement_origin: None,
             name: "pin".to_string(),
             pads: vec![PadDef {
                 hole_offset: None,
@@ -238,6 +239,7 @@ mod tests {
             .expect("the library has an 0402")
             .clone();
         library.register_design(Footprint {
+            placement_origin: None,
             name: "usbc_pad".to_string(),
             pads: vec![PadDef {
                 hole_offset: None,

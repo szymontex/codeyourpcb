@@ -62,6 +62,7 @@ fn chip_footprint(
     let smd_layers = vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask];
 
     Footprint {
+        placement_origin: None,
         name: name.into(),
         description: description.into(),
         pads: vec![

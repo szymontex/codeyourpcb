@@ -117,6 +117,7 @@ fn board_with_pad_and_body(gap_mm: f64, courtyard_half_mm: f64) -> BoardWorld {
 
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "square".to_string(),
         description: String::new(),
         bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),

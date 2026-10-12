@@ -33,6 +33,7 @@ fn mask_of(margin: Option<Nm>) -> String {
 
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "pad".to_string(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),

@@ -24,6 +24,7 @@ fn board_with_pour(pad_at: Point, cut: bool) -> BoardWorld {
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD1".into(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),

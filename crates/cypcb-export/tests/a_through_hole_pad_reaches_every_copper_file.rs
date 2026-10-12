@@ -36,6 +36,7 @@ fn board(through_hole: bool) -> (BoardWorld, FootprintLibrary) {
     let size = Nm::from_mm(1.7);
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "PAD".to_string(),
         description: String::new(),
         pads: vec![PadDef {

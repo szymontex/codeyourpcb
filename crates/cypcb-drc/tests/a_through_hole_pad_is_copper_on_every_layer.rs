@@ -65,6 +65,7 @@ fn board(through_hole: bool, track: (NetId, Layer, Point, Point)) -> BoardWorld 
     let size = Nm::from_mm(1.7);
     for (name, through_hole) in [("PAD", through_hole), ("START", true)] {
         library.register(Footprint {
+            placement_origin: None,
             name: name.to_string(),
             description: String::new(),
             pads: vec![pad(through_hole)],

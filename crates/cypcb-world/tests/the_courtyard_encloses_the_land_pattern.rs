@@ -111,6 +111,7 @@ fn a_part_with_no_pads_still_gets_a_courtyard_around_its_body() {
     // land pattern. It still occupies space on the board.
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(4.0), Nm::from_mm(4.0)));
     let mechanical = Footprint {
+        placement_origin: None,
         name: "spacer".into(),
         description: "no copper".into(),
         pads: Vec::new(),

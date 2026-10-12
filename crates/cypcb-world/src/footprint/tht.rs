@@ -54,6 +54,7 @@ pub fn axial_300mil() -> Footprint {
     let pad_size = Nm::from_mm(1.6);
 
     Footprint {
+        placement_origin: None,
         name: "AXIAL-300".into(),
         description: "Axial component 300mil (7.62mm) lead spacing".into(),
         pads: vec![
@@ -161,6 +162,7 @@ pub fn dip8() -> Footprint {
     let body_height = Nm::from_mil(400.0); // 4 pins * 100mil pitch
 
     Footprint {
+        placement_origin: None,
         name: "DIP-8".into(),
         description: "8-pin DIP, 300mil row spacing".into(),
         pads,
@@ -186,6 +188,7 @@ pub fn pin_header_1x2() -> Footprint {
     let pad_size = Nm::from_mm(1.7);
 
     Footprint {
+        placement_origin: None,
         name: "PIN-HDR-1x2".into(),
         description: "1x2 pin header, 100mil (2.54mm) pitch".into(),
         pads: vec![

@@ -41,6 +41,7 @@ fn board(spacing_mm: f64, rotation: Rotation) -> BoardWorld {
         .expect("the library has an 0402")
         .clone();
     library.register_design(Footprint {
+        placement_origin: None,
         name: "chip".to_string(),
         pads: vec![pad("1", -0.95), pad("2", 0.95)],
         ..base

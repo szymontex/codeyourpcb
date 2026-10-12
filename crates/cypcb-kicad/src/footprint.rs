@@ -25,7 +25,7 @@ use std::path::Path;
 
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_world::components::Rotation;
-use cypcb_world::footprint::{Footprint, PadDef};
+use cypcb_world::footprint::{Footprint, PadDef, PlacementOrigin};
 use symbolic_expressions::Sexp;
 use thiserror::Error;
 
@@ -83,7 +83,21 @@ pub fn import_footprint(path: &Path) -> Result<Footprint, KicadImportError> {
 /// Import a KiCad footprint from a string.
 ///
 /// This is useful for testing or when the content is already in memory.
+///
+/// What the file says that this reader could not act on is dropped here; use
+/// [`import_footprint_noted_from_str`] to be told.
 pub fn import_footprint_from_str(content: &str) -> Result<Footprint, KicadImportError> {
+    import_footprint_noted_from_str(content).map(|(footprint, _)| footprint)
+}
+
+/// Import a KiCad footprint from a string, and the notes the file earned.
+///
+/// A note is something the file states that the footprint could not take as
+/// stated, for a person to read: a `FT Origin` field that asks for neither
+/// `Anchor` nor `Center`.
+pub fn import_footprint_noted_from_str(
+    content: &str,
+) -> Result<(Footprint, Vec<String>), KicadImportError> {
     let sexp = symbolic_expressions::parser::parse_str(content)
         .map_err(|e| KicadImportError::ParseError(format!("{e}")))?;
     footprint_from_sexp(&sexp)
@@ -110,7 +124,7 @@ pub fn import_footprint_from_str(content: &str) -> Result<Footprint, KicadImport
 /// answer to what a KiCad file says rather than two. What is read here is what
 /// a footprint file holds and a board file does not repeat: the name, the
 /// description, the pads, and the courtyard drawn on `F.CrtYd` or `B.CrtYd`.
-fn footprint_from_sexp(sexp: &Sexp) -> Result<Footprint, KicadImportError> {
+fn footprint_from_sexp(sexp: &Sexp) -> Result<(Footprint, Vec<String>), KicadImportError> {
     let list = sexp
         .list()
         .map_err(|e| KicadImportError::ParseError(format!("{e}")))?;
@@ -152,6 +166,7 @@ fn footprint_from_sexp(sexp: &Sexp) -> Result<Footprint, KicadImportError> {
     }
 
     let bounds = calculate_pad_bounds(&pads);
+    let (placement_origin, placement_note) = placement_origin_of(list, &name);
 
     // Use courtyard if found, otherwise add IPC-7351B margin (0.5mm)
     let courtyard = courtyard_bounds.unwrap_or_else(|| {
@@ -162,14 +177,73 @@ fn footprint_from_sexp(sexp: &Sexp) -> Result<Footprint, KicadImportError> {
         )
     });
 
-    Ok(Footprint {
+    let footprint = Footprint {
+        placement_origin,
         name,
         description,
         pads,
         bounds,
         courtyard,
         silk: Vec::new(),
-    })
+    };
+    Ok((footprint, placement_note.into_iter().collect()))
+}
+
+/// The point a footprint asks a pick-and-place file to place it by, from the
+/// custom fields the Fabrication Toolkit reads.
+///
+/// `FT Origin` first and `Origin` when it is absent, matched by exact name:
+/// the plugin's `_get_origin_from_footprint` loops over those two keys, takes
+/// the first the footprint has, and applies its value only "if
+/// origin_type_override in ['Anchor', 'Center']" after `.strip().capitalize()`
+/// (`plugins/process.py` at commit 642b069c, read 2026-10-12). A field with
+/// any other text asks for nothing, and the second key is not tried then.
+///
+/// KiCad 7 and later write a custom field as `(property "name" "value" ...)`.
+/// `items` is the footprint's children; the legacy `fp_text` forms carry the
+/// kind of text where a property carries its name, and are not fields.
+pub(crate) fn placement_origin_of(
+    items: &[Sexp],
+    footprint: &str,
+) -> (Option<PlacementOrigin>, Option<String>) {
+    let mut ft_origin: Option<String> = None;
+    let mut origin: Option<String> = None;
+    for child in items {
+        if list_name(child).as_deref() != Some("property") {
+            continue;
+        }
+        let Ok(list) = child.list() else { continue };
+        if list.len() < 3 {
+            continue;
+        }
+        let name = get_string(&list[1]).unwrap_or_default();
+        let value = get_string(&list[2]).unwrap_or_default();
+        match name.as_str() {
+            "FT Origin" => ft_origin = Some(value),
+            "Origin" => origin = Some(value),
+            _ => {}
+        }
+    }
+    let (key, text) = match (ft_origin, origin) {
+        (Some(text), _) => ("FT Origin", text),
+        (None, Some(text)) => ("Origin", text),
+        (None, None) => return (None, None),
+    };
+    match PlacementOrigin::from_field(&text) {
+        Some(origin) => (Some(origin), None),
+        // The plugin goes on without it, and so does this. Said, because a
+        // field called `Origin` is a name anybody might have used for
+        // something else, and a person who meant `Center` and misspelt it
+        // would otherwise get a placement file that ignores them.
+        None => (
+            None,
+            Some(format!(
+                "`{footprint}` states `{key}` = {text:?}, which is neither `Anchor` nor \
+                 `Center`; it is placed by the default for its kind - a surface-mount \
+                 part by its origin, a through-hole part by the middle of its pads"
+            )),
+        ),
+    }
 }
 
 /// The pad shapes this project has a shape for.

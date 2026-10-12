@@ -52,6 +52,7 @@ fn board_with_pad_gap(gap_mm: f64, drilled: bool) -> BoardWorld {
         .expect("the library has an 0402")
         .clone();
     library.register_design(Footprint {
+        placement_origin: None,
         name: "pair".to_string(),
         pads: vec![pad("1", -offset), pad("2", offset)],
         ..base

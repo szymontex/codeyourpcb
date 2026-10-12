@@ -27,6 +27,7 @@ use cypcb_world::BoardWorld;
 fn footprint(name: &str, turn: Rotation) -> Footprint {
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.0), Nm::from_mm(2.0)));
     Footprint {
+        placement_origin: None,
         name: name.to_string(),
         description: String::new(),
         pads: vec![PadDef {

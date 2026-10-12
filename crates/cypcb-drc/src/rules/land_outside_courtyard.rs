@@ -116,6 +116,7 @@ mod tests {
         let courtyard =
             Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(width_mm), Nm::from_mm(1.0)));
         Footprint {
+            placement_origin: None,
             name: name.to_string(),
             description: String::new(),
             pads: vec![pad("1", -3.0), pad("2", 3.0)],

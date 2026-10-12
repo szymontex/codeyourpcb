@@ -159,6 +159,7 @@ fn a_footprint_out_of_kicad_keeps_the_opening_it_asked_for() {
     );
     let mut library = FootprintLibrary::new();
     library.register(cypcb_world::footprint::Footprint {
+        placement_origin: None,
         name: "header".to_string(),
         ..footprint
     });

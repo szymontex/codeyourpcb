@@ -290,6 +290,7 @@ mod tests {
 
         let mut library = FootprintLibrary::new();
         library.register(Footprint {
+            placement_origin: None,
             name: "PAD1".into(),
             description: String::new(),
             bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),

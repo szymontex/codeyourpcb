@@ -2355,6 +2355,7 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
         .unwrap_or_else(|| bounds.expand(Nm::from_mm(0.5)));
 
     Footprint {
+        placement_origin: None,
         name: fp_def.name.value.clone(),
         description: fp_def.description.clone().unwrap_or_default(),
         pads,

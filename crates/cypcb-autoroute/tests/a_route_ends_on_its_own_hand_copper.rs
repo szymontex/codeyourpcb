@@ -36,6 +36,7 @@ fn board_with_j2_on(
     let mut library = FootprintLibrary::new();
     for (name, layer) in [("PAD1", Layer::TopCopper), ("PAD2", j2_layer)] {
         library.register(Footprint {
+            placement_origin: None,
             name: name.into(),
             description: String::new(),
             bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),

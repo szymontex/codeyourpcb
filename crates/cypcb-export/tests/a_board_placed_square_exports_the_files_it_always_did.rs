@@ -42,6 +42,7 @@ fn pad(number: &str, x: f64, shape: PadShape, w: f64, h: f64) -> PadDef {
 fn footprint(name: &str, shape: PadShape, w: f64, h: f64) -> Footprint {
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(w + 1.0), Nm::from_mm(h + 1.0)));
     Footprint {
+        placement_origin: None,
         name: name.to_string(),
         description: String::new(),
         pads: vec![pad("1", -0.95, shape, w, h), pad("2", 0.95, shape, w, h)],

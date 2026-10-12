@@ -542,6 +542,11 @@ impl PcbEngine {
                 .push(SourceDiagnostic::from_span(refusal.clone(), source, 0, 0));
         }
 
+        for note in &parsed.metadata.placement_notes {
+            self.diagnostics
+                .push(SourceDiagnostic::from_span(note.clone(), source, 0, 0));
+        }
+
         self.world = parsed.world;
         self.footprint_lib = parsed.library;
         self.world.set_footprints(self.footprint_lib.clone());
@@ -1504,6 +1509,7 @@ impl PcbEngine {
         );
 
         Footprint {
+            placement_origin: None,
             name: name.to_string(),
             description: format!("Reconstructed from snapshot: {}", name),
             pads: pad_defs,

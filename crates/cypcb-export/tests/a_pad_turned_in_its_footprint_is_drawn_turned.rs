@@ -31,6 +31,7 @@ const FORMAT: CoordinateFormat = CoordinateFormat::FORMAT_MM_2_6;
 fn board(part: Rotation, pad: Rotation) -> (BoardWorld, FootprintLibrary) {
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.048), Nm::from_mm(3.048)));
     let footprint = Footprint {
+        placement_origin: None,
         name: "HDR".to_string(),
         description: String::new(),
         pads: vec![PadDef {

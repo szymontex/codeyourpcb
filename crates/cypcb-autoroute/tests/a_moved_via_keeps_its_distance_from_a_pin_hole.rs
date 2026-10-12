@@ -43,6 +43,7 @@ fn footprint(
     slot: Option<(f64, f64)>,
 ) -> Footprint {
     Footprint {
+        placement_origin: None,
         name: name.into(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),

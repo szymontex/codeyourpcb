@@ -31,7 +31,7 @@ use crate::frame;
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
 use cypcb_world::components::zone::Zone;
 use cypcb_world::components::{BoardOutline, EdgeConnector, Layer, PadShape, Side, StackupSheet};
-use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
+use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef, PlacementOrigin};
 use cypcb_world::{
     BoardWorld, FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation,
     Stackup, StackupLayer, StackupLayerKind, Value,
@@ -149,6 +149,12 @@ pub struct KicadPcbMetadata {
     /// for a reason. Silence here put a rectangle through the checker, the
     /// router and the Gerber writer as though it were the shape in the file.
     pub pad_approximations: Vec<String>,
+    /// Footprints that state a point to be placed by and were not understood.
+    ///
+    /// A `FT Origin` or `Origin` field that asks for neither `Anchor` nor
+    /// `Center` is ignored, as the plugin that reads it ignores it - and said,
+    /// because the placement file is then not the one the person asked for.
+    pub placement_notes: Vec<String>,
 }
 
 /// Complete result of parsing a KiCad PCB file.
@@ -474,6 +480,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     let mut library = FootprintLibrary::new();
     let mut component_count = 0usize;
     let mut pad_approximations: Vec<String> = Vec::new();
+    let mut placement_notes: Vec<String> = Vec::new();
 
     for elem in elements {
         if let Some(name) = list_name(elem) {
@@ -486,6 +493,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
                         &kicad_net_map,
                         board_origin,
                         &mut pad_approximations,
+                        &mut placement_notes,
                     )?;
                     component_count += 1;
                 }
@@ -619,6 +627,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
 
     let metadata = KicadPcbMetadata {
         pad_approximations,
+        placement_notes,
         zone_count,
         teardrop_count,
         zone_refusals,
@@ -1223,12 +1232,21 @@ fn coordinate(value: &Sexp, what: &str) -> Result<f64, KicadPcbError> {
 /// name gets a home of its own rather than silently inheriting the first.
 ///
 /// Pads are compared as written - number, shape, position, size, drill, the
-/// hole's offset and layers - because those are what the router and the checker read. Two parts
+/// hole's offset and layers - because those are what the router and the checker read.
+/// The point a part is placed by is compared too: the same pads asking for a
+/// different point are placed at a different point in the pick-and-place file.
+/// Two parts
 /// that differ only in rotation are the same footprint placed differently and
 /// share a key, which is what the `rotation` on the component is for.
-fn resolve_library_key(library: &FootprintLibrary, name: &str, pads: &[PadDef]) -> String {
+fn resolve_library_key(
+    library: &FootprintLibrary,
+    name: &str,
+    pads: &[PadDef],
+    placement_origin: Option<PlacementOrigin>,
+) -> String {
     let same = |existing: &Footprint| -> bool {
-        existing.pads.len() == pads.len()
+        existing.placement_origin == placement_origin
+            && existing.pads.len() == pads.len()
             && existing.pads.iter().zip(pads).all(|(a, b)| {
                 a.number == b.number
                     && a.shape == b.shape
@@ -1267,6 +1285,7 @@ fn parse_footprint(
     kicad_net_map: &NetIndex,
     board_origin_mm: (f64, f64),
     approximations: &mut Vec<String>,
+    placement_notes: &mut Vec<String>,
 ) -> Result<(), KicadPcbError> {
     // First element is the library link name (e.g., "Resistor_SMD:R_0402")
     let lib_link = if !elements.is_empty() {
@@ -1355,6 +1374,17 @@ fn parse_footprint(
         }
     }
 
+    // The point the part asks a pick-and-place file to place it by, from the
+    // custom fields of this one footprint.
+    let (placement_origin, placement_note) =
+        crate::footprint::placement_origin_of(children, &fp_name);
+    // Said once per library entry: forty parts of one footprint share one note.
+    if let Some(note) = placement_note {
+        if !placement_notes.contains(&note) {
+            placement_notes.push(note);
+        }
+    }
+
     // Use a unique fp_name based on lib_link to avoid collisions
     let library_key = if lib_link.is_empty() {
         fp_name.clone()
@@ -1413,7 +1443,7 @@ fn parse_footprint(
     // whichever came first, and the model then disagreed with the file about
     // where the copper is. Found on `qfp_fanout`, where two of four headers
     // ran off the board in the model and nowhere near it in the file.
-    let library_key = resolve_library_key(library, &library_key, &pad_defs);
+    let library_key = resolve_library_key(library, &library_key, &pad_defs, placement_origin);
 
     if !library.contains(&library_key) {
         // The courtyard has to be derived: KiCad keeps it as `F.CrtYd`
@@ -1433,6 +1463,7 @@ fn parse_footprint(
         );
 
         library.register(Footprint {
+            placement_origin,
             name: library_key.clone(),
             description: String::new(),
             pads: pad_defs,

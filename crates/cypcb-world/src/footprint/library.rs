@@ -442,6 +442,52 @@ pub struct Footprint {
     /// ink the exporter draws is the courtyard outline. A part fetched from a
     /// supplier arrives with real artwork, and this is where it survives.
     pub silk: Vec<SilkShape>,
+    /// The point a pick-and-place file gives for this part, when the
+    /// footprint says which and does not leave it to the kind of part.
+    ///
+    /// `None` is what nearly every footprint has: a surface-mount part is
+    /// placed by its origin and a through-hole part by the middle of its pads
+    /// (see [`Footprint::placement_centre`]). A footprint that states one is
+    /// placed by that, whichever kind it is.
+    pub placement_origin: Option<PlacementOrigin>,
+}
+
+/// Which point of a footprint a pick-and-place file places the part by.
+///
+/// The two answers the Fabrication Toolkit for KiCad lets a footprint give in
+/// its `FT Origin` field (`plugins/process.py` at commit 642b069c, read
+/// 2026-10-12): `Anchor` and `Center`. The plugin takes the field's text
+/// stripped and capitalised, so `center`, `CENTER` and ` Center ` all count,
+/// and anything else is ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlacementOrigin {
+    /// The footprint's origin, whatever the pads are doing.
+    Anchor,
+    /// The middle of the box the pads span.
+    PadsCentre,
+}
+
+impl PlacementOrigin {
+    /// The origin a field's text asks for, if it asks for one.
+    ///
+    /// Read the way the plugin reads it: stripped, then compared as
+    /// `Anchor` or `Center` once capitalised.
+    pub fn from_field(text: &str) -> Option<PlacementOrigin> {
+        let text = text.trim().to_lowercase();
+        match text.as_str() {
+            "anchor" => Some(PlacementOrigin::Anchor),
+            "center" => Some(PlacementOrigin::PadsCentre),
+            _ => None,
+        }
+    }
+
+    /// The field text that states this origin, as the plugin spells it.
+    pub fn field_text(self) -> &'static str {
+        match self {
+            PlacementOrigin::Anchor => "Anchor",
+            PlacementOrigin::PadsCentre => "Center",
+        }
+    }
 }
 
 /// Courtyard excess per side, per IPC-7351B nominal density.
@@ -508,13 +554,34 @@ impl Footprint {
     ///   through-hole part's origin sits on pin 1 (KLC F7.2), not in its
     ///   middle.
     /// - With no pads the plugin falls back to the origin.
+    /// - A footprint can override both: "origin_type_override" is read from
+    ///   its `FT Origin` field (then `Origin`) and applied "if
+    ///   origin_type_override in ['Anchor', 'Center']". That is
+    ///   [`Footprint::placement_origin`], and it wins over the kind of part.
+    ///   The plugin's `FT Position Offset` field, which moves the point by a
+    ///   figure, is not carried.
     ///
     /// Which kind a part is comes from [`Footprint::is_surface_mount`], not
     /// from a stored attribute. The box is every pad's `size` rectangle about
     /// its centre, holes without copper included, as the plugin's `Pads()`
     /// includes them.
     pub fn placement_centre(&self) -> Point {
-        if self.is_surface_mount() || self.pads.is_empty() {
+        let by_pads = match self.placement_origin {
+            Some(PlacementOrigin::Anchor) => false,
+            Some(PlacementOrigin::PadsCentre) => true,
+            None => !self.is_surface_mount(),
+        };
+        if by_pads {
+            self.pads_centre()
+        } else {
+            Point::ORIGIN
+        }
+    }
+
+    /// The middle of the box every pad's `size` rectangle spans, about its
+    /// centre; the origin when there are no pads.
+    fn pads_centre(&self) -> Point {
+        if self.pads.is_empty() {
             return Point::ORIGIN;
         }
         let mut min_x = i64::MAX;
@@ -684,6 +751,7 @@ impl FootprintLibrary {
     /// let empty = Rect::new(Point::ORIGIN, Point::ORIGIN);
     /// let mut lib = FootprintLibrary::new();
     /// lib.register_design(Footprint {
+    ///     placement_origin: None,
     ///     name: "MY_PART".to_string(),
     ///     description: String::new(),
     ///     pads: Vec::new(),
@@ -844,6 +912,8 @@ impl FootprintLibrary {
 /// disagree about which side a part is on.
 pub fn mirrored_to_bottom(footprint: &Footprint) -> Footprint {
     Footprint {
+        // A mirror turns the part over; it is still placed by the same point.
+        placement_origin: footprint.placement_origin,
         name: bottom_name(&footprint.name),
         description: format!("{} (bottom side)", footprint.description),
         pads: footprint
@@ -976,6 +1046,7 @@ mod tests {
         let initial_count = lib.len();
 
         let custom = Footprint {
+            placement_origin: None,
             name: "CUSTOM-1".into(),
             description: "Custom test footprint".into(),
             pads: vec![],
@@ -995,6 +1066,7 @@ mod tests {
         let initial_count = lib.len();
 
         lib.register_design(Footprint {
+            placement_origin: None,
             name: "DESIGN-1".into(),
             description: String::new(),
             pads: vec![],
@@ -1003,6 +1075,7 @@ mod tests {
             courtyard: Rect::default(),
         });
         lib.register(Footprint {
+            placement_origin: None,
             name: "MANUAL-1".into(),
             description: String::new(),
             pads: vec![],
@@ -1031,6 +1104,7 @@ mod tests {
         // A design may redefine a built-in name. Dropping the design footprint
         // has to bring the built-in back, not delete it.
         lib.register_design(Footprint {
+            placement_origin: None,
             name: "0402".into(),
             description: "redefined by the design".into(),
             pads: vec![],
@@ -1051,6 +1125,7 @@ mod tests {
 
         for description in ["first", "second"] {
             lib.register_design(Footprint {
+                placement_origin: None,
                 name: "0603".into(),
                 description: description.into(),
                 pads: vec![],
@@ -1202,6 +1277,7 @@ mod tests {
     #[test]
     fn a_pad_turned_on_the_top_turns_the_other_way_on_the_bottom() {
         let footprint = Footprint {
+            placement_origin: None,
             name: "HDR".into(),
             description: String::new(),
             pads: vec![header_pad(Rotation::DEG_90)],

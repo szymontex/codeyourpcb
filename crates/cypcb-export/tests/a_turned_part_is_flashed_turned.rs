@@ -44,6 +44,7 @@ fn chip() -> Footprint {
     };
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.9), Nm::from_mm(1.45)));
     Footprint {
+        placement_origin: None,
         name: "CHIP".to_string(),
         description: String::new(),
         pads: vec![pad("1", -0.95), pad("2", 0.95)],

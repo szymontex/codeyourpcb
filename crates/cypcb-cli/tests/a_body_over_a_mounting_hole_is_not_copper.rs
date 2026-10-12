@@ -31,6 +31,7 @@ fn board_with_hole_and_part(pad_gap_mm: f64, body_half_mm: f64) -> BoardWorld {
     let mut library = FootprintLibrary::new();
     // An M3 mounting hole: drilled, unplated, no copper of its own.
     library.register(Footprint {
+        placement_origin: None,
         name: "mount".to_string(),
         description: String::new(),
         bounds: Rect::from_points(Point::from_mm(-1.6, -1.6), Point::from_mm(1.6, 1.6)),
@@ -51,6 +52,7 @@ fn board_with_hole_and_part(pad_gap_mm: f64, body_half_mm: f64) -> BoardWorld {
         }],
     });
     library.register(Footprint {
+        placement_origin: None,
         name: "part".to_string(),
         description: String::new(),
         bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),

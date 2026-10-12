@@ -53,6 +53,7 @@ fn board(second_pad_nm: i64, via_net: NetId, turned: bool) -> BoardWorld {
     world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(40.0)), 2);
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "two".to_string(),
         description: "two pads".to_string(),
         pads: vec![pad("1", 0), pad("2", second_pad_nm)],

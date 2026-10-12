@@ -16,7 +16,9 @@ use cypcb_export::cpl::export_cpl;
 use cypcb_world::components::{
     FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation, Value,
 };
-use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
+use cypcb_world::footprint::{
+    mirrored_to_bottom, Footprint, FootprintLibrary, PadDef, PlacementOrigin,
+};
 use cypcb_world::BoardWorld;
 
 /// Pin 1 to the middle of the header, straight down in footprint terms.
@@ -45,6 +47,7 @@ fn pin_header_1x12() -> Footprint {
         })
         .collect();
     Footprint {
+        placement_origin: None,
         name: "PINHDR_1X12".into(),
         description: "Pin header 1x12, 2.54mm, vertical".into(),
         pads,
@@ -89,6 +92,7 @@ fn module_on_its_body(peg: bool) -> Footprint {
         });
     }
     Footprint {
+        placement_origin: None,
         name: "MODULE".into(),
         description: "Module with its pads along one edge".into(),
         pads,
@@ -189,4 +193,81 @@ fn a_surface_mount_part_is_placed_by_its_origin() {
 #[test]
 fn a_hole_without_copper_leaves_a_surface_mount_part_on_its_origin() {
     assert_on_origin(true);
+}
+
+// A footprint can say which point it is placed by. The Fabrication Toolkit
+// reads that from the `FT Origin` field, and it wins over the kind of part.
+
+fn stated(mut footprint: Footprint, origin: PlacementOrigin) -> Footprint {
+    footprint.placement_origin = Some(origin);
+    footprint
+}
+
+#[test]
+fn a_through_hole_footprint_that_asks_for_its_anchor_is_placed_by_pin_1() {
+    let (x, y) = written_with(stated(pin_header_1x12(), PlacementOrigin::Anchor), 0.0);
+    assert!(
+        (x - AT.0).abs() <= 0.0005 && (y - AT.1).abs() <= 0.0005,
+        "the file places the header at {x}, {y}; pin 1 is at {}, {}",
+        AT.0,
+        AT.1
+    );
+}
+
+#[test]
+fn a_surface_mount_footprint_that_asks_for_its_pads_is_placed_by_their_middle() {
+    // The module's pads sit 3mm below its origin; turned a quarter, that is
+    // 3mm to the left of where it stands.
+    let (x, y) = written_with(
+        stated(module_on_its_body(false), PlacementOrigin::PadsCentre),
+        90.0,
+    );
+    assert!(
+        (x - (AT.0 - 3.0)).abs() <= 0.0005 && (y - AT.1).abs() <= 0.0005,
+        "the file places the module at {x}, {y}; its pads' middle is at {}, {}",
+        AT.0 - 3.0,
+        AT.1
+    );
+}
+
+#[test]
+fn control_a_footprint_that_states_nothing_is_placed_as_before() {
+    assert_eq!(pin_header_1x12().placement_origin, None);
+    assert_middle(0.0);
+    assert_on_origin(false);
+}
+
+#[test]
+fn the_stated_point_survives_the_flip_to_the_bottom() {
+    let flipped = mirrored_to_bottom(&stated(
+        module_on_its_body(false),
+        PlacementOrigin::PadsCentre,
+    ));
+    assert_eq!(flipped.placement_origin, Some(PlacementOrigin::PadsCentre));
+    // Without it the flip is a plain surface-mount part again.
+    let plain = mirrored_to_bottom(&module_on_its_body(false));
+    assert_eq!(plain.placement_origin, None);
+}
+
+#[test]
+fn a_field_asks_for_a_point_the_way_the_plugin_reads_it() {
+    // `.strip().capitalize()` and a comparison with `Anchor` and `Center`.
+    for (text, want) in [
+        ("Anchor", Some(PlacementOrigin::Anchor)),
+        ("anchor", Some(PlacementOrigin::Anchor)),
+        ("  ANCHOR ", Some(PlacementOrigin::Anchor)),
+        ("Center", Some(PlacementOrigin::PadsCentre)),
+        ("center", Some(PlacementOrigin::PadsCentre)),
+        ("Centre", None),
+        ("", None),
+        ("middle", None),
+    ] {
+        assert_eq!(PlacementOrigin::from_field(text), want, "{text:?}");
+    }
+    for origin in [PlacementOrigin::Anchor, PlacementOrigin::PadsCentre] {
+        assert_eq!(
+            PlacementOrigin::from_field(origin.field_text()),
+            Some(origin)
+        );
+    }
 }

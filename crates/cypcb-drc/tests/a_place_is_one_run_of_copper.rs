@@ -55,6 +55,7 @@ fn part(world: &mut BoardWorld, pads: Vec<PadDef>) {
     }
     let box_ = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.0), Nm::from_mm(1.0)));
     library.register(Footprint {
+        placement_origin: None,
         name: "PART".to_string(),
         description: "pads in a row".to_string(),
         pads,

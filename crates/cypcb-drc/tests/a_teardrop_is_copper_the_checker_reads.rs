@@ -35,6 +35,7 @@ use cypcb_world::BoardWorld;
 fn land() -> Footprint {
     let size = Nm::from_mm(1.6);
     Footprint {
+        placement_origin: None,
         name: "LAND".to_string(),
         description: "one round land".to_string(),
         pads: vec![PadDef {

@@ -1114,6 +1114,7 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
         std::collections::HashMap::new();
     let mut taken: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut offset_holes = 0usize;
+    let mut placed_by_field = 0usize;
     for name in &used {
         if builtin.contains(name) {
             written_name.insert(name.clone(), name.clone());
@@ -1138,6 +1139,9 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
         }
         written_name.insert(name.clone(), identifier.clone());
         let _ = writeln!(out);
+        if footprint.placement_origin.is_some() {
+            placed_by_field += 1;
+        }
         let _ = writeln!(out, "footprint {} {{", net_name_as_written(&identifier));
         let (cw, ch) = (footprint.courtyard.width(), footprint.courtyard.height());
         let _ = write!(
@@ -1538,6 +1542,18 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     if offset_holes > 0 {
         not_written.push(format!(
             "{offset_holes} pad(s) with the hole off the middle of the copper written with it in the middle"
+        ));
+    }
+
+    // The point a footprint asks the pick-and-place file to place it by. The
+    // language has no word for it, so the footprint is written without, and
+    // the placement file of the board read back is the default for the kind of
+    // part: the origin of a surface-mount one, the middle of the pads of a
+    // through-hole one.
+    if placed_by_field > 0 {
+        not_written.push(format!(
+            "{placed_by_field} footprint(s) that state the point they are placed by in the \
+             pick-and-place file written without it"
         ));
     }
 

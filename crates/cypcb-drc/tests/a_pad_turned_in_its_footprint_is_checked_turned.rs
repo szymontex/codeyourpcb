@@ -30,6 +30,7 @@ fn board(part: Rotation, pad: Rotation) -> BoardWorld {
     let mut library = FootprintLibrary::new();
     let square = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.9), Nm::from_mm(2.9)));
     library.register_design(Footprint {
+        placement_origin: None,
         name: "land".to_string(),
         pads: vec![PadDef {
             hole_offset: None,

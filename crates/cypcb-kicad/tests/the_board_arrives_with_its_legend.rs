@@ -51,6 +51,7 @@ fn board_with_artwork() -> BoardWorld {
         .expect("the library has an 0402")
         .clone();
     library.register_design(Footprint {
+        placement_origin: None,
         name: "drawn".to_string(),
         silk: vec![
             SilkShape::Segment {

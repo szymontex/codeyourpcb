@@ -40,6 +40,7 @@ fn board_with_hole(
         .expect("the library has an 0402")
         .clone();
     library.register_design(Footprint {
+        placement_origin: None,
         name: "jack".to_string(),
         pads: vec![PadDef {
             hole_offset: None,

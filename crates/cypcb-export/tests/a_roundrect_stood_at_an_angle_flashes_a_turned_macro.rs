@@ -45,6 +45,7 @@ fn board(
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "P".to_string(),
         description: String::new(),
         pads: vec![PadDef {

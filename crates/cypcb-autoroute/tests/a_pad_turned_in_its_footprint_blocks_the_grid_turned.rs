@@ -24,6 +24,7 @@ fn free_cells(part: Rotation, pad: Rotation) -> Vec<bool> {
     world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "P".into(),
         description: String::new(),
         bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),

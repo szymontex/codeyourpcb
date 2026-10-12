@@ -116,6 +116,7 @@ fn the_slot_rule_speaks_when_foreign_copper_is_beside_a_slot() {
 
     let mut library = FootprintLibrary::new();
     library.register(Footprint {
+        placement_origin: None,
         name: "anchor".to_string(),
         description: String::new(),
         bounds: Rect::from_points(Point::from_mm(-1.6, -0.9), Point::from_mm(1.6, 0.9)),
@@ -137,6 +138,7 @@ fn the_slot_rule_speaks_when_foreign_copper_is_beside_a_slot() {
         }],
     });
     library.register(Footprint {
+        placement_origin: None,
         name: "square".to_string(),
         description: String::new(),
         bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),
