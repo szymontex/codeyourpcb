@@ -260,6 +260,21 @@ impl ClearanceField {
                 }
             }
         }
+
+        // The keepouts drawn as a polygon: the cells the outline reaches.
+        for (_entity, zone, outline) in world.outlined_zones() {
+            if !zone.is_keepout() {
+                continue;
+            }
+            let cells = grid.cells_meeting(&outline, 0);
+            for layer_idx in 0..self.layer_count {
+                if zone.on_layer(layer_idx) {
+                    for &(gx, gy) in &cells {
+                        self.seed(gx, gy, layer_idx as usize);
+                    }
+                }
+            }
+        }
     }
 
     fn seed_copper(&mut self, world: &mut BoardWorld, grid: &RoutingGrid) {

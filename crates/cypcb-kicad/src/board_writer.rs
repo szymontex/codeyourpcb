@@ -25,7 +25,7 @@ use std::fmt::Write as _;
 
 use cypcb_core::Nm;
 use cypcb_world::components::trace::{Trace, Via};
-use cypcb_world::components::zone::{Zone, ZoneKind};
+use cypcb_world::components::zone::{Zone, ZoneKind, ZoneOutline};
 use cypcb_world::components::{
     EdgeConnector, FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation,
     Stackup, StackupLayerKind, Value,
@@ -811,13 +811,16 @@ fn write_zones(
     rules: Option<&KicadDesignRules>,
     out: &mut String,
 ) {
-    let zones: Vec<Zone> = {
+    let zones: Vec<(Zone, Option<ZoneOutline>)> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&Zone>();
-        query.iter(ecs).cloned().collect()
+        let mut query = ecs.query::<(&Zone, Option<&ZoneOutline>)>();
+        query
+            .iter(ecs)
+            .map(|(zone, outline)| (zone.clone(), outline.cloned()))
+            .collect()
     };
 
-    for zone in zones {
+    for (zone, outline) in zones {
         // A flex region is not copper. It says which part of the board bends,
         // which KiCad has no area for - and writing it as a pour made it one
         // netless `(zone ...)` per copper layer, 32 of them for a region
@@ -918,18 +921,25 @@ fn write_zones(
                 }
             }
             let _ = writeln!(out, "    (polygon");
-            let _ = writeln!(
-                out,
-                "      (pts (xy {} {}) (xy {} {}) (xy {} {}) (xy {} {}))",
-                on_sheet(origin, zone.bounds.min.x, zone.bounds.min.y).0,
-                on_sheet(origin, zone.bounds.min.x, zone.bounds.min.y).1,
-                on_sheet(origin, zone.bounds.max.x, zone.bounds.min.y).0,
-                on_sheet(origin, zone.bounds.max.x, zone.bounds.min.y).1,
-                on_sheet(origin, zone.bounds.max.x, zone.bounds.max.y).0,
-                on_sheet(origin, zone.bounds.max.x, zone.bounds.max.y).1,
-                on_sheet(origin, zone.bounds.min.x, zone.bounds.max.y).0,
-                on_sheet(origin, zone.bounds.min.x, zone.bounds.max.y).1,
-            );
+            // The corners of the zone: the ring it was drawn as, or the four
+            // corners of its box when it is a rectangle.
+            let ring: Vec<cypcb_core::Point> = match &outline {
+                Some(outline) => outline.corners().to_vec(),
+                None => vec![
+                    zone.bounds.min,
+                    cypcb_core::Point::new(zone.bounds.max.x, zone.bounds.min.y),
+                    zone.bounds.max,
+                    cypcb_core::Point::new(zone.bounds.min.x, zone.bounds.max.y),
+                ],
+            };
+            let xys: Vec<String> = ring
+                .iter()
+                .map(|corner| {
+                    let (x, y) = on_sheet(origin, corner.x, corner.y);
+                    format!("(xy {x} {y})")
+                })
+                .collect();
+            let _ = writeln!(out, "      (pts {})", xys.join(" "));
             let _ = writeln!(out, "    )");
             let _ = writeln!(out, "  )");
         }

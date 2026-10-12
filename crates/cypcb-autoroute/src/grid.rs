@@ -12,10 +12,11 @@
 
 use std::collections::HashMap;
 
-use cypcb_core::{Nm, Point};
+use cypcb_core::{Nm, Point, Rect};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::components::rotate_about_origin;
 use cypcb_world::components::trace::Via;
+use cypcb_world::components::ZoneOutline;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Layer, NetId};
 
@@ -434,6 +435,22 @@ impl RoutingGrid {
                 }
             }
         }
+
+        // The keepouts drawn as a polygon: the cells the outline reaches and
+        // not the cells of its box.
+        for (_entity, zone, outline) in world.outlined_zones() {
+            if !zone.is_keepout() {
+                continue;
+            }
+            let cells = self.cells_meeting(&outline, clearance_cells);
+            for layer_idx in 0..self.layer_count {
+                if zone.on_layer(layer_idx) {
+                    for &(gx, gy) in &cells {
+                        self.set_cell(gx, gy, layer_idx as usize, CELL_ZONE);
+                    }
+                }
+            }
+        }
     }
 
     /// Populate locked trace obstacles.
@@ -804,6 +821,41 @@ impl RoutingGrid {
     #[inline]
     pub fn grid_to_nm_x(&self, gx: u32) -> i64 {
         self.origin_x + (gx as i64) * self.resolution + self.resolution / 2
+    }
+
+    /// The cells that a polygon zone reaches, grown by `grow` cells each way.
+    ///
+    /// A cell is the half-open square it covers, and one is chosen when that
+    /// square - taken `grow` cells wider on every side - shares a point with the
+    /// outline. A notch of a concave outline stays free beyond `grow` cells from
+    /// its edges, which the cells of the outline's box would not.
+    pub fn cells_meeting(&self, outline: &ZoneOutline, grow: u32) -> Vec<(u32, u32)> {
+        let bounds = outline.bounds();
+        let first_x = self.nm_to_grid_x(bounds.min.x.raw()).saturating_sub(grow);
+        let first_y = self.nm_to_grid_y(bounds.min.y.raw()).saturating_sub(grow);
+        let last_x =
+            (self.nm_to_grid_x(bounds.max.x.raw()) + grow).min(self.width.saturating_sub(1));
+        let last_y =
+            (self.nm_to_grid_y(bounds.max.y.raw()) + grow).min(self.height.saturating_sub(1));
+        let reach = i64::from(grow) * self.resolution;
+        let mut cells = Vec::new();
+        for gy in first_y..=last_y {
+            for gx in first_x..=last_x {
+                let x0 = self.origin_x + i64::from(gx) * self.resolution;
+                let y0 = self.origin_y + i64::from(gy) * self.resolution;
+                let square = Rect::new(
+                    Point::new(Nm::new(x0 - reach), Nm::new(y0 - reach)),
+                    Point::new(
+                        Nm::new(x0 + self.resolution - 1 + reach),
+                        Nm::new(y0 + self.resolution - 1 + reach),
+                    ),
+                );
+                if outline.meets(square) {
+                    cells.push((gx, gy));
+                }
+            }
+        }
+        cells
     }
 
     /// Convert a grid Y index back to nanometers (center of cell).

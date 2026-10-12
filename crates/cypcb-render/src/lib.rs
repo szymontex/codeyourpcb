@@ -1878,10 +1878,22 @@ impl PcbEngine {
     fn collect_zones(&mut self) -> Vec<ZoneInfo> {
         use cypcb_world::components::zone::ZoneKind;
 
-        self.world
+        // The zones that are rectangles first, then the ones drawn as a polygon.
+        let outlined = self.world.outlined_zones();
+        let rows: Vec<_> = self
+            .world
             .zones()
             .into_iter()
-            .map(|(_, zone)| ZoneInfo {
+            .map(|(_, zone)| (zone, None))
+            .chain(
+                outlined
+                    .into_iter()
+                    .map(|(_, zone, outline)| (zone, Some(outline))),
+            )
+            .collect();
+
+        rows.into_iter()
+            .map(|(zone, outline)| ZoneInfo {
                 name: zone.name.clone().unwrap_or_default(),
                 kind: match zone.kind {
                     ZoneKind::CopperPour => "pour".to_string(),
@@ -1903,6 +1915,8 @@ impl PcbEngine {
                     zone.bounds.max.x.0,
                     zone.bounds.max.y.0,
                 ],
+                outline: outline
+                    .map(|outline| outline.corners().iter().map(|c| [c.x.0, c.y.0]).collect()),
             })
             .collect()
     }

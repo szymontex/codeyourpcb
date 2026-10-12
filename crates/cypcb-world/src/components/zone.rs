@@ -126,6 +126,69 @@ pub struct Hatch {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Stitched;
 
+/// The corners of a zone that is not a rectangle.
+///
+/// A component on the zone's own entity rather than a field of [`Zone`], for
+/// the reason [`StitchPitch`] is one: a zone that is a rectangle is the
+/// ordinary case, and a good many places in this workspace build a `Zone`
+/// literally. A rectangle has no outline component and is its `bounds`; a zone
+/// with one is the ring of corners, and its `bounds` is the box that holds
+/// them.
+///
+/// What that box is not is the zone. A pour read as its box is copper where
+/// the shape was drawn to avoid it, so a reader of `Zone` that does not ask for
+/// the outline has to leave such a zone out and not take the box:
+/// [`BoardWorld::zones`](crate::world::BoardWorld::zones) hands out the
+/// rectangles only, and
+/// [`BoardWorld::outlined_zones`](crate::world::BoardWorld::outlined_zones) is
+/// the call that asks for the others.
+///
+/// Only a keepout or a copper pour has one. The corners are the ring open: the
+/// first corner is not named again at the end.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct ZoneOutline(Vec<cypcb_core::Point>);
+
+impl ZoneOutline {
+    /// The outline of these corners, or `None` when they do not enclose an
+    /// area: fewer than three distinct corners, or all of them on one line.
+    ///
+    /// A first corner named again at the end is dropped, and the rest are kept
+    /// as given, in the order given.
+    pub fn new(corners: Vec<cypcb_core::Point>) -> Option<Self> {
+        let mut ring = corners;
+        if ring.len() > 1 && ring.first() == ring.last() {
+            ring.pop();
+        }
+        let twice_area: i128 = (0..ring.len())
+            .map(|i| {
+                let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+                i128::from(a.x.0) * i128::from(b.y.0) - i128::from(b.x.0) * i128::from(a.y.0)
+            })
+            .sum();
+        (ring.len() >= 3 && twice_area != 0).then_some(ZoneOutline(ring))
+    }
+
+    /// The corners, in order, the ring open.
+    pub fn corners(&self) -> &[cypcb_core::Point] {
+        &self.0
+    }
+
+    /// The box that holds every corner.
+    pub fn bounds(&self) -> Rect {
+        cypcb_core::outline::bounds(&self.0).expect("an outline has corners")
+    }
+
+    /// Whether the point is inside the outline or on its edge.
+    pub fn contains(&self, point: cypcb_core::Point) -> bool {
+        cypcb_core::outline::contains(&self.0, point)
+    }
+
+    /// Whether the outline and the rectangle share a point, a touch included.
+    pub fn meets(&self, rect: Rect) -> bool {
+        cypcb_core::outline::meets_rect(&self.0, rect)
+    }
+}
+
 impl Zone {
     /// Create a new keepout zone.
     ///

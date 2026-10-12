@@ -533,18 +533,26 @@ export function drawKeepout(
   const visible = (onTop && layers.topCopper) || (onBottom && layers.bottomCopper);
   if (!visible) return;
 
-  const [sx1, sy1] = worldToScreen(vp, zone.bounds[0], zone.bounds[1]);
-  const [sx2, sy2] = worldToScreen(vp, zone.bounds[2], zone.bounds[3]);
-  const x = Math.min(sx1, sx2);
-  const y = Math.min(sy1, sy2);
-  const width = Math.abs(sx2 - sx1);
-  const height = Math.abs(sy2 - sy1);
-
   ctx.save();
   ctx.strokeStyle = LAYER_COLORS.keepout;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 4]);
-  ctx.strokeRect(x, y, width, height);
+  if (zone.outline && zone.outline.length >= 3) {
+    // Drawn as the ring it is, not as the box round it: the notch of an L is
+    // a place a part may stand.
+    ctx.beginPath();
+    zone.outline.forEach(([wx, wy], i) => {
+      const [sx, sy] = worldToScreen(vp, wx, wy);
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    const [sx1, sy1] = worldToScreen(vp, zone.bounds[0], zone.bounds[1]);
+    const [sx2, sy2] = worldToScreen(vp, zone.bounds[2], zone.bounds[3]);
+    ctx.strokeRect(Math.min(sx1, sx2), Math.min(sy1, sy2), Math.abs(sx2 - sx1), Math.abs(sy2 - sy1));
+  }
   ctx.restore();
 }
 

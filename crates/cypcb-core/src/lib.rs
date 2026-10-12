@@ -38,9 +38,11 @@
 //! - [`coords`]: Core coordinate types ([`Nm`], [`Point`])
 //! - [`units`]: Unit parsing and conversion ([`Unit`])
 //! - [`geometry`]: Geometric primitives ([`Rect`])
+//! - [`outline`]: A closed ring of points: what it holds, and the box it is in
 
 pub mod coords;
 pub mod geometry;
+pub mod outline;
 pub mod physical_units;
 pub mod pour;
 pub mod units;

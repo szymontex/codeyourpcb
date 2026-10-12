@@ -8,8 +8,8 @@
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_drc::rules::clearance::segment_distance;
 use cypcb_router::types::{RouteSegment, ViaPlacement};
-use cypcb_world::components::rotate_about_origin;
 use cypcb_world::components::trace::{Trace, Via};
+use cypcb_world::components::{rotate_about_origin, ZoneOutline};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, FootprintRef, Layer, NetConnections, NetId, Position, Rotation};
 
@@ -26,6 +26,8 @@ pub struct BoardObstacles {
     pads: Vec<PadCopper>,
     traces: Vec<RouteSegment>,
     keepouts: Vec<(Rect, u32)>,
+    /// The keepouts drawn as a polygon, each with the layers it is on.
+    outlined_keepouts: Vec<(ZoneOutline, u32)>,
 }
 
 /// A pad as the smallest circle that covers it, whatever its shape and
@@ -185,10 +187,18 @@ impl BoardObstacles {
             .map(|(_, zone)| (zone.bounds, zone.layer_mask))
             .collect();
 
+        let outlined_keepouts = world
+            .outlined_zones()
+            .into_iter()
+            .filter(|(_, zone, _)| zone.is_keepout())
+            .map(|(_, zone, outline)| (outline, zone.layer_mask))
+            .collect();
+
         BoardObstacles {
             pads,
             traces,
             keepouts,
+            outlined_keepouts,
         }
     }
 }
@@ -617,7 +627,7 @@ fn keepouts_clear(
     let Some(index) = layer_to_index(layer) else {
         return true;
     };
-    board
+    let rects_clear = board
         .keepouts
         .iter()
         .filter(|(_, mask)| mask & (1 << index) != 0)
@@ -631,7 +641,25 @@ fn keepouts_clear(
                 && (0..4).all(|i| {
                     segment_distance(p1, p2, corners[i], corners[(i + 1) % 4]) >= width.0 / 2
                 })
-        })
+        });
+    // The same question of a polygon: neither end inside it, and every edge of
+    // it at least half the width from the segment.
+    rects_clear
+        && board
+            .outlined_keepouts
+            .iter()
+            .filter(|(_, mask)| mask & (1 << index) != 0)
+            .all(|(outline, _)| {
+                let corners: Vec<[i64; 2]> =
+                    outline.corners().iter().map(|c| [c.x.0, c.y.0]).collect();
+                let at = |p: [i64; 2]| outline.contains(Point::new(Nm(p[0]), Nm(p[1])));
+                !at(p1)
+                    && !at(p2)
+                    && (0..corners.len()).all(|i| {
+                        segment_distance(p1, p2, corners[i], corners[(i + 1) % corners.len()])
+                            >= width.0 / 2
+                    })
+            })
 }
 
 /// The pads of the pair's own net that the run between the two vias reaches
@@ -1405,6 +1433,72 @@ mod tests {
         let (_, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.15), Nm(0));
 
         assert_eq!(opt_vias.len(), 2);
+    }
+
+    fn triangle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> ZoneOutline {
+        ZoneOutline::new(vec![
+            Point::from_mm(a.0, a.1),
+            Point::from_mm(b.0, b.1),
+            Point::from_mm(c.0, c.1),
+        ])
+        .expect("a triangle")
+    }
+
+    #[test]
+    fn a_polygon_keepout_across_the_path_keeps_the_pair() {
+        let (segments, vias) = straight_pair();
+        let board = BoardObstacles {
+            outlined_keepouts: vec![(triangle((7.0, -1.0), (8.0, -1.0), (7.5, 1.0)), 0b1)],
+            ..BoardObstacles::default()
+        };
+
+        let (_, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.15), Nm(0));
+
+        assert_eq!(opt_vias.len(), 2, "the direct run would cross the triangle");
+    }
+
+    #[test]
+    fn a_polygon_keepout_round_the_path_keeps_the_pair() {
+        let (segments, vias) = straight_pair();
+        // The whole direct run is inside it, and no edge of it is near.
+        let board = BoardObstacles {
+            outlined_keepouts: vec![(triangle((3.0, -4.0), (12.0, -4.0), (7.5, 8.0)), 0b1)],
+            ..BoardObstacles::default()
+        };
+
+        let (_, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.15), Nm(0));
+
+        assert_eq!(opt_vias.len(), 2, "the run would lie inside the triangle");
+    }
+
+    #[test]
+    fn a_polygon_keepout_beside_the_path_lets_the_pair_go() {
+        let (segments, vias) = straight_pair();
+        let board = BoardObstacles {
+            outlined_keepouts: vec![(triangle((6.0, 1.0), (9.0, 1.0), (7.5, 3.0)), 0b1)],
+            ..BoardObstacles::default()
+        };
+
+        let (_, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.15), Nm(0));
+
+        assert_eq!(opt_vias.len(), 0, "a millimetre clear of the triangle");
+    }
+
+    #[test]
+    fn a_polygon_keepout_on_the_other_layer_lets_the_pair_go() {
+        let (segments, vias) = straight_pair();
+        let board = BoardObstacles {
+            outlined_keepouts: vec![(triangle((7.0, -1.0), (8.0, -1.0), (7.5, 1.0)), 0b10)],
+            ..BoardObstacles::default()
+        };
+
+        let (_, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.15), Nm(0));
+
+        assert_eq!(
+            opt_vias.len(),
+            0,
+            "the direct run is on the top layer and the keepout is not"
+        );
     }
 
     /// A via beside a pad turned inside its footprint is kept off the pad as
