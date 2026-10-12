@@ -27,26 +27,29 @@ fn board(asked: bool) -> (BoardWorld, FootprintLibrary) {
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
     let size = Nm::from_mm(1.6);
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "LAND".into(),
-        description: String::new(),
-        bounds: Rect::from_center_size(Point::ORIGIN, (size, size)),
-        courtyard: Rect::from_center_size(Point::ORIGIN, (size, size)),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Circle,
-            position: Point::ORIGIN,
-            size: (size, size),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "LAND".into(),
+            description: String::new(),
+            bounds: Rect::from_center_size(Point::ORIGIN, (size, size)),
+            courtyard: Rect::from_center_size(Point::ORIGIN, (size, size)),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Circle,
+                position: Point::ORIGIN,
+                size: (size, size),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .expect_pads_in_courtyard(),
+    );
     world.set_footprints(library.clone());
     let net = world.intern_net("A");
     let mut connections = NetConnections::new();

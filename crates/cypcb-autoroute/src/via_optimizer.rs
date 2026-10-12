@@ -1417,26 +1417,29 @@ mod tests {
             let mut world = BoardWorld::new();
             world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
             let mut library = FootprintLibrary::new();
-            library.register(Footprint {
-                placement_origin: None,
-                name: "P".into(),
-                description: String::new(),
-                bounds: cypcb_core::Rect::new(Point::ORIGIN, Point::ORIGIN),
-                courtyard: cypcb_core::Rect::new(Point::ORIGIN, Point::ORIGIN),
-                silk: Vec::new(),
-                pads: vec![PadDef {
-                    hole_offset: None,
-                    number: "1".into(),
-                    shape: PadShape::Rect,
-                    position: Point::ORIGIN,
-                    size: (Nm::from_mm(1.0), Nm::from_mm(2.0)),
-                    drill: None,
-                    slot: None,
-                    layers: vec![Layer::TopCopper],
-                    mask_margin: None,
-                    rotation: pad,
-                }],
-            });
+            library.register(
+                Footprint {
+                    placement_origin: None,
+                    name: "P".into(),
+                    description: String::new(),
+                    bounds: cypcb_core::Rect::new(Point::ORIGIN, Point::ORIGIN),
+                    courtyard: cypcb_core::Rect::new(Point::ORIGIN, Point::ORIGIN),
+                    silk: Vec::new(),
+                    pads: vec![PadDef {
+                        hole_offset: None,
+                        number: "1".into(),
+                        shape: PadShape::Rect,
+                        position: Point::ORIGIN,
+                        size: (Nm::from_mm(1.0), Nm::from_mm(2.0)),
+                        drill: None,
+                        slot: None,
+                        layers: vec![Layer::TopCopper],
+                        mask_margin: None,
+                        rotation: pad,
+                    }],
+                }
+                .with_courtyard_holding_its_pads(),
+            );
             world.spawn_component(
                 RefDes::new("R1"),
                 Value::new("x"),

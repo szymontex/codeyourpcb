@@ -48,7 +48,7 @@ flex bend {
 
 footprint THT2 {
     description "two drilled pads"
-    courtyard 4mm x 3mm
+    courtyard 4.2mm x 3mm
     pad 1 rect at -1.27mm, 0mm size 1.6mm x 1.6mm drill 0.8mm
     pad 2 rect at 1.27mm, 0mm size 1.6mm x 1.6mm drill 0.8mm
 }

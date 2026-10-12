@@ -54,6 +54,7 @@ fn mounting_hole() -> Footprint {
         courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(7.2), Nm::from_mm(7.2))),
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// A 20 x 20mm board with one M3 hole at its centre.
@@ -198,26 +199,29 @@ fn a_plated_hole_is_not_measured_by_this_rule() {
 
     let mut library = FootprintLibrary::new();
     let drill = Nm::from_mm(1.0);
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PIN".to_string(),
-        description: "one plated pin".to_string(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Circle,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.7), Nm::from_mm(1.7)),
-            drill: Some(drill),
-            slot: None,
-            layers: vec![Layer::TopCopper, Layer::BottomCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-        bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.7), Nm::from_mm(1.7))),
-        courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.2), Nm::from_mm(2.2))),
-        silk: Vec::new(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PIN".to_string(),
+            description: "one plated pin".to_string(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Circle,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.7), Nm::from_mm(1.7)),
+                drill: Some(drill),
+                slot: None,
+                layers: vec![Layer::TopCopper, Layer::BottomCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+            bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.7), Nm::from_mm(1.7))),
+            courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.2), Nm::from_mm(2.2))),
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
 
     let mut nets = NetConnections::new();
     nets.add(cypcb_world::components::PinConnection::new(

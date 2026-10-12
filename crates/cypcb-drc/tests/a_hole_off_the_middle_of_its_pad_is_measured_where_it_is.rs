@@ -52,15 +52,18 @@ fn board(mut pads: Vec<PadDef>, own: Rotation) -> BoardWorld {
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
     let mut library = FootprintLibrary::new();
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(8.0), Nm::from_mm(6.0)));
-    library.register_design(Footprint {
-        placement_origin: None,
-        name: "held".to_string(),
-        description: String::new(),
-        pads,
-        bounds: body,
-        courtyard: body,
-        silk: Vec::new(),
-    });
+    library.register_design(
+        Footprint {
+            placement_origin: None,
+            name: "held".to_string(),
+            description: String::new(),
+            pads,
+            bounds: body,
+            courtyard: body,
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     world.set_footprints(library);
     world.spawn_component(
         RefDes::new("J1"),

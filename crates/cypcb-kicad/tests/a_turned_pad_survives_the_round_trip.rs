@@ -46,6 +46,7 @@ fn footprint(name: &str, turn: Rotation) -> Footprint {
         courtyard: body,
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// J1 square pad on a part turned 90, J2 pad turned 90 on a square part, J3

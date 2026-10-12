@@ -70,6 +70,7 @@ fn footprint(
             rotation: Rotation::ZERO,
         }],
     }
+    .with_courtyard_holding_its_pads()
 }
 
 /// A route on Bottom that hops to Top across the fine-pitch pad U1 at

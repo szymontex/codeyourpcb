@@ -182,26 +182,29 @@ fn a_trace_across_a_via_is_still_a_short() {
 /// One circular pad of 0.6mm at the origin of the part, on net 1.
 fn round_pad_part(world: &mut BoardWorld, at_nm: i64) {
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "ROUND".to_string(),
-        description: "one circular pad".to_string(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Circle,
-            position: Point::ORIGIN,
-            size: (Nm(2 * VIA_RADIUS_NM), Nm(2 * VIA_RADIUS_NM)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-        bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(0.6), Nm::from_mm(0.6))),
-        courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0))),
-        silk: Vec::new(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "ROUND".to_string(),
+            description: "one circular pad".to_string(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Circle,
+                position: Point::ORIGIN,
+                size: (Nm(2 * VIA_RADIUS_NM), Nm(2 * VIA_RADIUS_NM)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+            bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(0.6), Nm::from_mm(0.6))),
+            courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0))),
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     let mut nets = NetConnections::new();
     nets.add(PinConnection::new("1".to_string(), NetId::new(1)));
     world.spawn_component(
@@ -246,26 +249,29 @@ fn net_through_a_via(end_nm: f64) -> Vec<cypcb_drc::DrcViolation> {
     let mut world = board();
     let net = NetId::new(1);
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD".to_string(),
-        description: "one square pad".to_string(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-        bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(0.6), Nm::from_mm(0.6))),
-        courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0))),
-        silk: Vec::new(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD".to_string(),
+            description: "one square pad".to_string(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+            bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(0.6), Nm::from_mm(0.6))),
+            courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0))),
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     for (refdes, x) in [("J1", 4.5), ("J2", 15.5)] {
         let mut nets = NetConnections::new();
         nets.add(PinConnection::new("1".to_string(), net));

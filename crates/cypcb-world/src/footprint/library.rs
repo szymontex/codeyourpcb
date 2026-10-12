@@ -620,6 +620,80 @@ impl Footprint {
         surface_pad && !plated_hole
     }
 
+    /// This footprint with its courtyard grown, only if it has to, until it
+    /// holds every pad.
+    ///
+    /// For a footprint a test builds by hand, whose courtyard was never
+    /// written to enclose anything: the box the test happened to draw is kept
+    /// when it already holds its pads, and widened by no more than the copper
+    /// needs when it does not. It is not [`Footprint::with_ipc_courtyard`],
+    /// which also adds the excess and so changes a courtyard that was fine;
+    /// a test that stands on a courtyard's size asserts on the one it drew.
+    pub fn with_courtyard_holding_its_pads(mut self) -> Self {
+        let mut court = self.courtyard;
+        for pad in &self.pads {
+            let (width, height) = pad.outline(Point::ORIGIN, Rotation::ZERO).size;
+            court = court.union(&Rect::from_center_size(pad.position, (width, height)));
+        }
+        self.courtyard = court;
+        self
+    }
+
+    /// This footprint, after checking that no pad leaves its courtyard.
+    ///
+    /// For a footprint a test builds. The tests of this repository define a
+    /// good many by hand, and the corpus that reads every footprint the
+    /// repository holds in a file cannot see those; a test that builds one
+    /// through this says so at the line that builds it, and
+    /// `every_footprint_a_test_defines_is_accounted_for` fails on a literal
+    /// that goes through neither this nor [`Footprint::pads_outside_courtyard_because`].
+    ///
+    /// # Panics
+    ///
+    /// Naming the footprint and each pad that reaches past the courtyard.
+    #[track_caller]
+    pub fn expect_pads_in_courtyard(self) -> Self {
+        let outside: Vec<String> = self
+            .pads_outside_courtyard()
+            .iter()
+            .map(|(pad, reach)| format!("pad {} by {} nm", pad.number, reach.raw()))
+            .collect();
+        assert!(
+            outside.is_empty(),
+            "footprint {:?} has pads outside its courtyard: {}",
+            self.name,
+            outside.join(", ")
+        );
+        self
+    }
+
+    /// This footprint, for a test whose courtyard is wrong on purpose, after
+    /// checking that it still is.
+    ///
+    /// The reason is the test's own account of why the courtyard is not
+    /// enclosing the copper - usually that the rule under test is the one that
+    /// reports it. Checking that a pad does reach out keeps the account true:
+    /// a courtyard someone later corrects fails here, and the exemption goes
+    /// with it instead of staying behind as a claim nothing reads.
+    ///
+    /// # Panics
+    ///
+    /// When the reason is empty, or when no pad leaves the courtyard.
+    #[track_caller]
+    pub fn pads_outside_courtyard_because(self, reason: &str) -> Self {
+        assert!(
+            !reason.trim().is_empty(),
+            "footprint {:?}: an exemption without a reason",
+            self.name
+        );
+        assert!(
+            !self.pads_outside_courtyard().is_empty(),
+            "footprint {:?} is exempt because {reason:?}, but every pad is inside its courtyard now",
+            self.name
+        );
+        self
+    }
+
     /// Pads whose copper reaches past the courtyard, each with how far it
     /// reaches, in pad order.
     ///
@@ -1053,7 +1127,8 @@ mod tests {
             bounds: Rect::default(),
             silk: Vec::new(),
             courtyard: Rect::default(),
-        };
+        }
+        .expect_pads_in_courtyard();
 
         lib.register(custom);
         assert_eq!(lib.len(), initial_count + 1);
@@ -1065,24 +1140,30 @@ mod tests {
         let mut lib = FootprintLibrary::new();
         let initial_count = lib.len();
 
-        lib.register_design(Footprint {
-            placement_origin: None,
-            name: "DESIGN-1".into(),
-            description: String::new(),
-            pads: vec![],
-            bounds: Rect::default(),
-            silk: Vec::new(),
-            courtyard: Rect::default(),
-        });
-        lib.register(Footprint {
-            placement_origin: None,
-            name: "MANUAL-1".into(),
-            description: String::new(),
-            pads: vec![],
-            bounds: Rect::default(),
-            silk: Vec::new(),
-            courtyard: Rect::default(),
-        });
+        lib.register_design(
+            Footprint {
+                placement_origin: None,
+                name: "DESIGN-1".into(),
+                description: String::new(),
+                pads: vec![],
+                bounds: Rect::default(),
+                silk: Vec::new(),
+                courtyard: Rect::default(),
+            }
+            .expect_pads_in_courtyard(),
+        );
+        lib.register(
+            Footprint {
+                placement_origin: None,
+                name: "MANUAL-1".into(),
+                description: String::new(),
+                pads: vec![],
+                bounds: Rect::default(),
+                silk: Vec::new(),
+                courtyard: Rect::default(),
+            }
+            .expect_pads_in_courtyard(),
+        );
         assert_eq!(lib.len(), initial_count + 2);
 
         lib.clear_design();
@@ -1103,15 +1184,18 @@ mod tests {
 
         // A design may redefine a built-in name. Dropping the design footprint
         // has to bring the built-in back, not delete it.
-        lib.register_design(Footprint {
-            placement_origin: None,
-            name: "0402".into(),
-            description: "redefined by the design".into(),
-            pads: vec![],
-            bounds: Rect::default(),
-            silk: Vec::new(),
-            courtyard: Rect::default(),
-        });
+        lib.register_design(
+            Footprint {
+                placement_origin: None,
+                name: "0402".into(),
+                description: "redefined by the design".into(),
+                pads: vec![],
+                bounds: Rect::default(),
+                silk: Vec::new(),
+                courtyard: Rect::default(),
+            }
+            .expect_pads_in_courtyard(),
+        );
         assert_eq!(lib.get("0402").unwrap().pads.len(), 0);
 
         lib.clear_design();
@@ -1124,15 +1208,18 @@ mod tests {
         let builtin_pads = lib.get("0603").expect("0603 is built in").pads.len();
 
         for description in ["first", "second"] {
-            lib.register_design(Footprint {
-                placement_origin: None,
-                name: "0603".into(),
-                description: description.into(),
-                pads: vec![],
-                bounds: Rect::default(),
-                silk: Vec::new(),
-                courtyard: Rect::default(),
-            });
+            lib.register_design(
+                Footprint {
+                    placement_origin: None,
+                    name: "0603".into(),
+                    description: description.into(),
+                    pads: vec![],
+                    bounds: Rect::default(),
+                    silk: Vec::new(),
+                    courtyard: Rect::default(),
+                }
+                .expect_pads_in_courtyard(),
+            );
         }
 
         lib.clear_design();
@@ -1284,7 +1371,8 @@ mod tests {
             bounds: Rect::from_points(Point::ORIGIN, Point::ORIGIN),
             courtyard: Rect::from_points(Point::ORIGIN, Point::ORIGIN),
             silk: Vec::new(),
-        };
+        }
+        .with_courtyard_holding_its_pads();
         let bottom = mirrored_to_bottom(&footprint);
         assert_eq!(bottom.pads[0].rotation, Rotation::DEG_270);
     }

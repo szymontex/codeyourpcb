@@ -52,25 +52,28 @@ fn board_with_mounting_hole(x_mm: f64) -> BoardWorld {
         .get("0402")
         .expect("the library has an 0402")
         .clone();
-    library.register_design(Footprint {
-        placement_origin: None,
-        name: "screw".to_string(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Circle,
-            position: Point::from_mm(0.0, 0.0),
-            // An M3 clearance hole with no copper: a screw goes through it and
-            // nothing is soldered to it.
-            size: (Nm::from_mm(3.2), Nm::from_mm(3.2)),
-            drill: Some(Nm::from_mm(3.2)),
-            slot: None,
-            layers: Vec::new(),
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-        ..base
-    });
+    library.register_design(
+        Footprint {
+            placement_origin: None,
+            name: "screw".to_string(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Circle,
+                position: Point::from_mm(0.0, 0.0),
+                // An M3 clearance hole with no copper: a screw goes through it and
+                // nothing is soldered to it.
+                size: (Nm::from_mm(3.2), Nm::from_mm(3.2)),
+                drill: Some(Nm::from_mm(3.2)),
+                slot: None,
+                layers: Vec::new(),
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+            ..base
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library);
 
     world.spawn_component(

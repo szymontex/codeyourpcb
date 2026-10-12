@@ -51,12 +51,15 @@ fn board_with_pad_gap(gap_mm: f64, drilled: bool) -> BoardWorld {
         .get("0402")
         .expect("the library has an 0402")
         .clone();
-    library.register_design(Footprint {
-        placement_origin: None,
-        name: "pair".to_string(),
-        pads: vec![pad("1", -offset), pad("2", offset)],
-        ..base
-    });
+    library.register_design(
+        Footprint {
+            placement_origin: None,
+            name: "pair".to_string(),
+            pads: vec![pad("1", -offset), pad("2", offset)],
+            ..base
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library);
 
     world.spawn_component(

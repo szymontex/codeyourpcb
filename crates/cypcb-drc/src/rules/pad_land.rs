@@ -127,23 +127,26 @@ mod tests {
             .get("0402")
             .expect("the library has an 0402")
             .clone();
-        library.register_design(Footprint {
-            placement_origin: None,
-            name: "pin".to_string(),
-            pads: vec![PadDef {
-                hole_offset: None,
-                number: "1".to_string(),
-                shape: PadShape::Circle,
-                position: pad,
-                size: (Nm::from_mm(land_mm), Nm::from_mm(land_mm)),
-                drill: Some(Nm::from_mm(drill_mm)),
-                slot: None,
-                layers: vec![Layer::TopCopper, Layer::BottomCopper],
-                mask_margin: None,
-                rotation: Rotation::ZERO,
-            }],
-            ..base
-        });
+        library.register_design(
+            Footprint {
+                placement_origin: None,
+                name: "pin".to_string(),
+                pads: vec![PadDef {
+                    hole_offset: None,
+                    number: "1".to_string(),
+                    shape: PadShape::Circle,
+                    position: pad,
+                    size: (Nm::from_mm(land_mm), Nm::from_mm(land_mm)),
+                    drill: Some(Nm::from_mm(drill_mm)),
+                    slot: None,
+                    layers: vec![Layer::TopCopper, Layer::BottomCopper],
+                    mask_margin: None,
+                    rotation: Rotation::ZERO,
+                }],
+                ..base
+            }
+            .with_courtyard_holding_its_pads(),
+        );
         world.set_footprints(library);
 
         world.spawn_component(
@@ -238,23 +241,26 @@ mod tests {
             .get("0402")
             .expect("the library has an 0402")
             .clone();
-        library.register_design(Footprint {
-            placement_origin: None,
-            name: "usbc_pad".to_string(),
-            pads: vec![PadDef {
-                hole_offset: None,
-                number: "A1".to_string(),
-                shape: PadShape::Rect,
-                position: Point::ORIGIN,
-                size: (Nm::from_mm(0.25), Nm::from_mm(1.0)),
-                drill: None,
-                slot: None,
-                layers: vec![Layer::TopCopper],
-                mask_margin: None,
-                rotation: Rotation::ZERO,
-            }],
-            ..base
-        });
+        library.register_design(
+            Footprint {
+                placement_origin: None,
+                name: "usbc_pad".to_string(),
+                pads: vec![PadDef {
+                    hole_offset: None,
+                    number: "A1".to_string(),
+                    shape: PadShape::Rect,
+                    position: Point::ORIGIN,
+                    size: (Nm::from_mm(0.25), Nm::from_mm(1.0)),
+                    drill: None,
+                    slot: None,
+                    layers: vec![Layer::TopCopper],
+                    mask_margin: None,
+                    rotation: Rotation::ZERO,
+                }],
+                ..base
+            }
+            .expect_pads_in_courtyard(),
+        );
         world.set_footprints(library);
         world.spawn_component(
             RefDes::new("J9"),

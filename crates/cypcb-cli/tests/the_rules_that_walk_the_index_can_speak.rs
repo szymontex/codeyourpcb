@@ -115,48 +115,54 @@ fn the_slot_rule_speaks_when_foreign_copper_is_beside_a_slot() {
     world.set_board("s".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
 
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "anchor".to_string(),
-        description: String::new(),
-        bounds: Rect::from_points(Point::from_mm(-1.6, -0.9), Point::from_mm(1.6, 0.9)),
-        courtyard: Rect::from_points(Point::from_mm(-2.0, -1.2), Point::from_mm(2.0, 1.2)),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Oblong,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(3.2), Nm::from_mm(1.8)),
-            drill: Some(Nm::from_mm(1.0)),
-            // Milled along its length: 2.4mm of travel on a 1.0mm bit, which
-            // is how a USB shell or a latching header holds itself down.
-            slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
-            layers: vec![Layer::TopCopper, Layer::BottomCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
-    library.register(Footprint {
-        placement_origin: None,
-        name: "square".to_string(),
-        description: String::new(),
-        bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),
-        courtyard: Rect::from_points(Point::from_mm(-0.5, -0.5), Point::from_mm(0.5, 0.5)),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "anchor".to_string(),
+            description: String::new(),
+            bounds: Rect::from_points(Point::from_mm(-1.6, -0.9), Point::from_mm(1.6, 0.9)),
+            courtyard: Rect::from_points(Point::from_mm(-2.0, -1.2), Point::from_mm(2.0, 1.2)),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Oblong,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(3.2), Nm::from_mm(1.8)),
+                drill: Some(Nm::from_mm(1.0)),
+                // Milled along its length: 2.4mm of travel on a 1.0mm bit, which
+                // is how a USB shell or a latching header holds itself down.
+                slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
+                layers: vec![Layer::TopCopper, Layer::BottomCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .expect_pads_in_courtyard(),
+    );
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "square".to_string(),
+            description: String::new(),
+            bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),
+            courtyard: Rect::from_points(Point::from_mm(-0.5, -0.5), Point::from_mm(0.5, 0.5)),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .expect_pads_in_courtyard(),
+    );
 
     let mut anchor_nets = NetConnections::new();
     anchor_nets.add(PinConnection::new("1".to_string(), NetId::new(1)));

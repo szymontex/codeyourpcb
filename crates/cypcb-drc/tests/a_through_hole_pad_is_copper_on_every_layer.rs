@@ -64,15 +64,18 @@ fn board(through_hole: bool, track: (NetId, Layer, Point, Point)) -> BoardWorld 
     let mut library = FootprintLibrary::new();
     let size = Nm::from_mm(1.7);
     for (name, through_hole) in [("PAD", through_hole), ("START", true)] {
-        library.register(Footprint {
-            placement_origin: None,
-            name: name.to_string(),
-            description: String::new(),
-            pads: vec![pad(through_hole)],
-            bounds: Rect::from_center_size(Point::ORIGIN, (size, size)),
-            courtyard: Rect::from_center_size(Point::ORIGIN, (size, size)),
-            silk: Vec::new(),
-        });
+        library.register(
+            Footprint {
+                placement_origin: None,
+                name: name.to_string(),
+                description: String::new(),
+                pads: vec![pad(through_hole)],
+                bounds: Rect::from_center_size(Point::ORIGIN, (size, size)),
+                courtyard: Rect::from_center_size(Point::ORIGIN, (size, size)),
+                silk: Vec::new(),
+            }
+            .expect_pads_in_courtyard(),
+        );
     }
     for (refdes, x, footprint) in [("J1", 10.0, "PAD"), ("J2", 2.0, "START")] {
         let mut nets = NetConnections::new();

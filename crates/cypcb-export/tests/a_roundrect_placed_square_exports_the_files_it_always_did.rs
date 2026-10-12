@@ -50,6 +50,7 @@ fn footprint(name: &str, w: f64, h: f64, ratio: u8, margin: Option<f64>) -> Foot
         courtyard: body,
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 fn board() -> (BoardWorld, FootprintLibrary) {

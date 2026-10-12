@@ -57,15 +57,18 @@ fn gerber(source: &str, side: Side) -> String {
         serde_json::from_str(LINE).expect("the engine reads the viewer's line");
     let bounds = Rect::new(Point::from_mm(-6.0, -6.0), Point::from_mm(6.0, 6.0));
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "FETCHED".to_string(),
-        description: String::new(),
-        pads: vec![],
-        bounds,
-        courtyard: bounds,
-        silk: silk.iter().flat_map(SilkInfo::to_shapes).collect(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "FETCHED".to_string(),
+            description: String::new(),
+            pads: vec![],
+            bounds,
+            courtyard: bounds,
+            silk: silk.iter().flat_map(SilkInfo::to_shapes).collect(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     let parsed = cypcb_parser::parse(source);
     assert!(parsed.errors.is_empty(), "the board does not parse");
     let mut world = BoardWorld::new();

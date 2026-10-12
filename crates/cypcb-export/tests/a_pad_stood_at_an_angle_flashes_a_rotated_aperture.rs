@@ -59,6 +59,7 @@ fn one_pad_footprint(name: &str, shape: PadShape, w: f64, h: f64, own: Rotation)
         courtyard: body,
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// A board with one part on it, registered and placed.

@@ -76,15 +76,21 @@ impl Parts {
         degrees: f64,
         net: Option<NetId>,
     ) {
-        self.library.register(Footprint {
-            placement_origin: None,
-            name: refdes.to_string(),
-            description: "one pad".to_string(),
-            pads: vec![pad],
-            bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0))),
-            courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0))),
-            silk: Vec::new(),
-        });
+        self.library.register(
+            Footprint {
+                placement_origin: None,
+                name: refdes.to_string(),
+                description: "one pad".to_string(),
+                pads: vec![pad],
+                bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0))),
+                courtyard: Rect::from_center_size(
+                    Point::ORIGIN,
+                    (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                ),
+                silk: Vec::new(),
+            }
+            .with_courtyard_holding_its_pads(),
+        );
         let mut nets = NetConnections::new();
         if let Some(net) = net {
             nets.add(PinConnection::new("1".to_string(), net));

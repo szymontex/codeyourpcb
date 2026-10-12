@@ -522,6 +522,7 @@ mod tests {
             courtyard: Rect::new(Point::from_mm(-2.0, -1.0), Point::from_mm(2.0, 1.0)),
             silk: Vec::new(),
         }
+        .expect_pads_in_courtyard()
     }
 
     #[test]
@@ -681,7 +682,8 @@ mod tests {
             bounds: Rect::new(Point::from_mm(-0.75, -0.75), Point::from_mm(0.75, 0.75)),
             courtyard: Rect::new(Point::from_mm(-1.0, -1.0), Point::from_mm(1.0, 1.0)),
             silk: Vec::new(),
-        };
+        }
+        .expect_pads_in_courtyard();
 
         let mut library = FootprintLibrary::new();
         library.register(footprint);

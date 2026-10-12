@@ -35,30 +35,33 @@ fn board(through_hole: bool) -> (BoardWorld, FootprintLibrary) {
     world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 4);
     let size = Nm::from_mm(1.7);
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD".to_string(),
-        description: String::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Circle,
-            position: Point::ORIGIN,
-            size: (size, size),
-            drill: through_hole.then(|| Nm::from_mm(1.0)),
-            slot: None,
-            layers: if through_hole {
-                vec![Layer::TopCopper, Layer::BottomCopper]
-            } else {
-                vec![Layer::TopCopper]
-            },
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-        bounds: Rect::from_center_size(Point::ORIGIN, (size, size)),
-        courtyard: Rect::from_center_size(Point::ORIGIN, (size, size)),
-        silk: Vec::new(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD".to_string(),
+            description: String::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Circle,
+                position: Point::ORIGIN,
+                size: (size, size),
+                drill: through_hole.then(|| Nm::from_mm(1.0)),
+                slot: None,
+                layers: if through_hole {
+                    vec![Layer::TopCopper, Layer::BottomCopper]
+                } else {
+                    vec![Layer::TopCopper]
+                },
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+            bounds: Rect::from_center_size(Point::ORIGIN, (size, size)),
+            courtyard: Rect::from_center_size(Point::ORIGIN, (size, size)),
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     let net = world.intern_net("SIG");
     let mut nets = NetConnections::new();
     nets.add(PinConnection::new("1", net));

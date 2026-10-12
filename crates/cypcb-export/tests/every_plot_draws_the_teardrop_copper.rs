@@ -44,6 +44,7 @@ fn land() -> Footprint {
         courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.4), Nm::from_mm(2.4))),
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 fn board(asked: bool) -> (BoardWorld, FootprintLibrary) {

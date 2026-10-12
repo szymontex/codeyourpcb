@@ -570,7 +570,8 @@ mod tests {
                 mask_margin: None,
                 rotation: Rotation::ZERO,
             }],
-        };
+        }
+        .with_courtyard_holding_its_pads();
         library.register(footprint);
 
         // Spawn component
@@ -629,7 +630,8 @@ mod tests {
                 mask_margin: None,
                 rotation: Rotation::ZERO,
             }],
-        };
+        }
+        .with_courtyard_holding_its_pads();
         library.register(footprint);
 
         // Spawn component

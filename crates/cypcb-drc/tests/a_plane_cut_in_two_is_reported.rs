@@ -23,26 +23,29 @@ fn board_with_pour(pad_at: Point, cut: bool) -> BoardWorld {
     let sig = world.intern_net("SIG");
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD1".into(),
-        description: String::new(),
-        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD1".into(),
+            description: String::new(),
+            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library);
 
     let mut connections = NetConnections::new();

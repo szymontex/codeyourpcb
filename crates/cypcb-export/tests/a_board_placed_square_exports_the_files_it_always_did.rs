@@ -50,6 +50,7 @@ fn footprint(name: &str, shape: PadShape, w: f64, h: f64) -> Footprint {
         courtyard: body,
         silk: Vec::new(),
     }
+    .with_courtyard_holding_its_pads()
 }
 
 fn board() -> (BoardWorld, FootprintLibrary) {
