@@ -919,6 +919,14 @@ mod tests {
 /// viewer's names, defaulted the missing ones, and every arc the viewer sent
 /// became a full circle on the board and in the Gerber. A renamed field is
 /// now an error at the boundary.
+///
+/// A shape names no side. The board model keeps one legend per footprint and
+/// prints it on the face the part is on - the Gerber, the KiCad board and the
+/// checker all read it that way - so a `layer` here had no reader, and the 3D
+/// view that did read it was told nothing, because the engine never sent one.
+/// The part's own `side` in the snapshot is the answer for every shape of it.
+/// A shape that still carries a `layer` is refused like any other unknown
+/// field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
 pub enum SilkInfo {
@@ -934,9 +942,6 @@ pub enum SilkInfo {
         y2: i64,
         /// Stroke width.
         width: i64,
-        /// Which side's legend the viewer drew it on.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        layer: Option<SilkSide>,
     },
     /// A circle outline.
     Circle {
@@ -948,9 +953,6 @@ pub enum SilkInfo {
         radius: i64,
         /// Stroke width.
         width: i64,
-        /// Which side's legend the viewer drew it on.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        layer: Option<SilkSide>,
     },
     /// An arc, approximated as segments on the way into the board model.
     ///
@@ -976,24 +978,7 @@ pub enum SilkInfo {
         /// Where it ends, in radians. Equal to the start means a full turn.
         #[serde(rename = "endAngle")]
         end_angle: f64,
-        /// Which side's legend the viewer drew it on.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        layer: Option<SilkSide>,
     },
-}
-
-/// The side of the board a legend shape is printed on, as the viewer names it.
-///
-/// Named so the boundary can refuse a field it does not know. The footprint
-/// model keeps one legend per footprint and prints it on the side the part
-/// sits on, so the engine does not act on this yet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SilkSide {
-    /// The component side.
-    Top,
-    /// The solder side.
-    Bottom,
 }
 
 impl SilkInfo {
@@ -1019,7 +1004,6 @@ impl SilkInfo {
             width,
             start_angle,
             end_angle,
-            ..
         } = self
         {
             use std::f64::consts::TAU;
@@ -1071,7 +1055,6 @@ impl SilkInfo {
                 x2: end.x.0,
                 y2: end.y.0,
                 width: width.0,
-                layer: None,
             },
             SilkShape::Circle {
                 centre,
@@ -1082,7 +1065,6 @@ impl SilkInfo {
                 cy: centre.y.0,
                 radius: radius.0,
                 width: width.0,
-                layer: None,
             },
         }
     }
@@ -1098,7 +1080,6 @@ impl SilkInfo {
                 x2,
                 y2,
                 width,
-                ..
             } => Some(SilkShape::Segment {
                 start: Point::new(Nm(*x1), Nm(*y1)),
                 end: Point::new(Nm(*x2), Nm(*y2)),
@@ -1109,7 +1090,6 @@ impl SilkInfo {
                 cy,
                 radius,
                 width,
-                ..
             } => Some(SilkShape::Circle {
                 centre: Point::new(Nm(*cx), Nm(*cy)),
                 radius: Nm(*radius),

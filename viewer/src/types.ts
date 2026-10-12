@@ -180,16 +180,16 @@ export interface ComponentInfo {
  * Coordinates in nanometers.
  */
 /**
- * `layer` is optional because nothing requires it: the engine does not send
- * one - the board model keeps a footprint's artwork in footprint coordinates
- * and the part's own side decides where it prints - and the renderer draws
- * every shape in the silkscreen colour without asking. Declaring it required
- * described neither producer.
+ * A shape names no side. The engine keeps one legend per footprint and prints
+ * it on the face the part is on, so the part's `side` decides for every shape
+ * of it - in the Gerber, in the 2D view and in the 3D view alike. A `layer` on
+ * a shape was read by the 3D view alone and sent by nobody the engine hears
+ * from; the engine now refuses the field.
  */
 export type SilkShape =
-  | { type: 'segment'; x1: number; y1: number; x2: number; y2: number; width: number; layer?: 'top' | 'bottom' }
-  | { type: 'circle'; cx: number; cy: number; radius: number; width: number; layer?: 'top' | 'bottom' }
-  | { type: 'arc'; cx: number; cy: number; radius: number; startAngle: number; endAngle: number; width: number; layer?: 'top' | 'bottom' };
+  | { type: 'segment'; x1: number; y1: number; x2: number; y2: number; width: number }
+  | { type: 'circle'; cx: number; cy: number; radius: number; width: number }
+  | { type: 'arc'; cx: number; cy: number; radius: number; startAngle: number; endAngle: number; width: number };
 
 export interface PadInfo {
   number: string;

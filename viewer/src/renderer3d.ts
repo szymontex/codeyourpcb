@@ -112,6 +112,19 @@ export function bodyPlacement(
   };
 }
 
+/**
+ * The face of the board a part's legend is printed on: the face the part is on.
+ *
+ * The engine keeps one legend per footprint and prints all of it on the part's
+ * side - the Gerber does, and the 2D view colours it that way - so this takes
+ * the part's side and nothing from the shapes. It used to read a `layer` off
+ * each shape, which the engine never sends: every legend of a board came back
+ * without one and was built under the board, a top part's included.
+ */
+export function silkFace(side: ComponentInfo['side']): 'top' | 'bottom' {
+  return side === 'bottom' ? 'bottom' : 'top';
+}
+
 // Front copper: sits on board top surface
 let F_COPPER_BOT_Z = BOARD_TOP_Z;
 let F_COPPER_TOP_Z = BOARD_TOP_Z + COPPER_THICKNESS_MM;
@@ -1416,9 +1429,10 @@ export class Renderer3D {
       const cosR = Math.cos(radians);
       const sinR = Math.sin(radians);
 
+      const isTop = silkFace(comp.side) === 'top';
+      const z = isTop ? Z_TOP_SILK : Z_BOTTOM_SILK;
+
       for (const shape of comp.silk) {
-        const isTop = shape.layer === 'top';
-        const z = isTop ? Z_TOP_SILK : Z_BOTTOM_SILK;
         const positions = isTop ? topPositions : bottomPositions;
         const w = Math.max(shape.width * NM_TO_MM, 0.1) / 2; // half-width, min 0.1mm
 

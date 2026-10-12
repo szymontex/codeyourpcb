@@ -124,7 +124,6 @@ fn a_fetched_arc_becomes_ink_instead_of_being_dropped() {
         width: 150_000,
         start_angle: 0.0,
         end_angle: std::f64::consts::FRAC_PI_2,
-        layer: None,
     };
 
     let shapes = quarter.to_shapes();
@@ -159,7 +158,6 @@ fn a_fetched_arc_becomes_ink_instead_of_being_dropped() {
         width: 150_000,
         start_angle: 0.0,
         end_angle: 0.0,
-        layer: None,
     };
     assert_eq!(whole.to_shapes().len(), 32, "a full turn is 32 segments");
 }
