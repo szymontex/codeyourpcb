@@ -676,6 +676,26 @@ struct Contact {
     stretch: [Stretch; 2],
 }
 
+impl Contact {
+    /// How this contact ranks against another in the same place: the deeper
+    /// one, then the lower point, then the lower entities.
+    ///
+    /// Total, so that nothing about the order contacts arrive in, or the order
+    /// a hash map hands them back in, can change which one a row is built
+    /// from. Two contacts equally deep at one point are what a net cut into two
+    /// entities over the same copper produces, and until the entities were
+    /// compared the row named whichever came first.
+    fn rank(&self) -> (i64, i64, i64, u64, u64) {
+        (
+            self.distance,
+            self.at.x.0,
+            self.at.y.0,
+            self.entities.0.to_bits(),
+            self.entities.1.to_bits(),
+        )
+    }
+}
+
 /// A piece of a centreline, from one end to the other.
 type Stretch = ([i64; 2], [i64; 2]);
 
@@ -755,8 +775,11 @@ fn stretch(segment: Stretch, limit: i64, distance: impl Fn([i64; 2]) -> i64) -> 
 /// `esp32_starter` - `IO6` against U1 - where the copper is one unbroken run.
 ///
 /// A place is reported at its worst contact, at the lowest point when two are
-/// equally bad. Nothing here reads an entity, so the rows are the same for any
-/// cut of the same copper into entities.
+/// equally bad, and between two that are equal in both by the lower entities
+/// ([`Contact::rank`]). Where, how deep and how many do not read an entity, so
+/// they are the same for any cut of the same copper into entities; which
+/// entities name the row is the one thing that is not, and it no longer
+/// depends on the order the contacts were found in either.
 fn one_row_per_place(mut found: Vec<Contact>) -> Vec<DrcViolation> {
     found.sort_by_key(|c| (c.sides, c.at.x.0, c.at.y.0, c.distance));
 
@@ -804,12 +827,15 @@ fn one_row_per_place(mut found: Vec<Contact>) -> Vec<DrcViolation> {
             let r = root(&mut parent, i);
             let held = worst.entry(r).or_insert(i);
             let (h, c) = (&group[*held], &group[i]);
-            if (c.distance, c.at.x.0, c.at.y.0) < (h.distance, h.at.x.0, h.at.y.0) {
+            if c.rank() < h.rank() {
                 *held = i;
             }
         }
         let mut places: Vec<&Contact> = worst.values().map(|&i| &group[i]).collect();
-        places.sort_by_key(|c| (c.at.x.0, c.at.y.0));
+        // By position, and by depth and entities where two places share one:
+        // the map above hands them back in an order that changes from one
+        // process to the next.
+        places.sort_by_key(|c| (c.at.x.0, c.at.y.0, c.rank()));
         for c in places {
             rows.push(DrcViolation::clearance(
                 c.entities.0,
@@ -2610,5 +2636,171 @@ mod tests {
             turned_pad.core, square.core,
             "the control: a turn moves the core"
         );
+    }
+
+    // ---- the row of a place does not depend on the order contacts arrive in ----
+
+    fn trace_sides() -> (Side, Side) {
+        (
+            Side::Trace { net: 1, layers: 1 },
+            Side::Trace { net: 2, layers: 1 },
+        )
+    }
+
+    /// A contact between nets 1 and 2 at `(x, y)` mm, `distance` nm deep, whose
+    /// copper is the stretch of `half` nm either side of it along x.
+    fn contact(entities: (u32, u32), x: i64, y: i64, distance: i64, half: i64) -> Contact {
+        let stretch = ([x - half, y], [x + half, y]);
+        Contact {
+            sides: trace_sides(),
+            entities: (Entity::from_raw(entities.0), Entity::from_raw(entities.1)),
+            at: Point::new(Nm(x), Nm(y)),
+            distance,
+            required: Nm(127_000),
+            reach: 0,
+            stretch: [stretch, stretch],
+        }
+    }
+
+    /// The rows as a person reads them: where, how deep, and which entities.
+    fn read(rows: &[DrcViolation]) -> Vec<(i64, i64, i64, u32, u32)> {
+        rows.iter()
+            .map(|v| {
+                (
+                    v.location.x.0,
+                    v.location.y.0,
+                    v.actual.unwrap().0,
+                    v.entity.index(),
+                    v.other_entity.unwrap().index(),
+                )
+            })
+            .collect()
+    }
+
+    /// Every ordering of `items`, each built afresh.
+    fn orderings<T: Clone>(items: &[T]) -> Vec<Vec<T>> {
+        if items.len() <= 1 {
+            return vec![items.to_vec()];
+        }
+        let mut all = Vec::new();
+        for i in 0..items.len() {
+            let mut rest = items.to_vec();
+            let head = rest.remove(i);
+            for mut tail in orderings(&rest) {
+                tail.insert(0, head.clone());
+                all.push(tail);
+            }
+        }
+        all
+    }
+
+    fn rows_for(contacts: &[&dyn Fn() -> Contact], order: &[usize]) -> Vec<DrcViolation> {
+        one_row_per_place(order.iter().map(|&i| contacts[i]()).collect())
+    }
+
+    #[test]
+    fn two_contacts_equally_deep_at_one_point_name_the_same_entities_in_any_order() {
+        // Two entities cut the same net's copper there, so the contact exists
+        // twice: same sides, same point, same depth, different entities. Which
+        // pair names the row was whichever arrived first.
+        let first = || contact((1, 9), 5_000_000, 5_000_000, 50_000, 10_000);
+        let second = || contact((2, 9), 5_000_000, 5_000_000, 50_000, 10_000);
+        let third = || contact((3, 9), 5_000_000, 5_000_000, 50_000, 10_000);
+        // The same first entity as `first` and a lower second one.
+        let fourth = || contact((1, 8), 5_000_000, 5_000_000, 50_000, 10_000);
+        let all: Vec<&dyn Fn() -> Contact> = vec![&first, &second, &third, &fourth];
+
+        let mut seen = std::collections::BTreeSet::new();
+        for order in orderings(&[0usize, 1, 2, 3]) {
+            seen.insert(read(&rows_for(&all, &order)));
+        }
+        assert_eq!(seen.len(), 1, "the rows differ with the order: {seen:?}");
+        let rows = seen.into_iter().next().unwrap();
+        assert_eq!(rows.len(), 1, "one place");
+        assert_eq!(
+            (rows[0].3, rows[0].4),
+            (1, 8),
+            "the lowest entities name it"
+        );
+    }
+
+    #[test]
+    fn control_a_deeper_contact_in_the_place_wins_whatever_its_entities() {
+        // The tie-break is only for ties: the deepest contact is the place's
+        // row even when its entities are the highest.
+        let shallow = || contact((1, 9), 5_000_000, 5_000_000, 60_000, 10_000);
+        let deep = || contact((7, 9), 5_000_100, 5_000_000, 50_000, 10_000);
+        let all: Vec<&dyn Fn() -> Contact> = vec![&shallow, &deep];
+        for order in orderings(&[0usize, 1]) {
+            let rows = read(&rows_for(&all, &order));
+            assert_eq!(rows, vec![(5_000_100, 5_000_000, 50_000, 7, 9)]);
+        }
+    }
+
+    #[test]
+    fn contacts_equally_deep_at_one_point_the_lowest_point_still_decides() {
+        // The rule the comment above `one_row_per_place` states: at the lowest
+        // point when two are equally bad. Entities come after it.
+        let right = || contact((1, 9), 5_000_100, 5_000_000, 50_000, 10_000);
+        let left = || contact((7, 9), 5_000_000, 5_000_000, 50_000, 10_000);
+        let all: Vec<&dyn Fn() -> Contact> = vec![&right, &left];
+        for order in orderings(&[0usize, 1]) {
+            let rows = read(&rows_for(&all, &order));
+            assert_eq!(rows, vec![(5_000_000, 5_000_000, 50_000, 7, 9)]);
+        }
+    }
+
+    #[test]
+    fn two_places_are_listed_in_the_same_order_every_time() {
+        // Places a long way apart are two rows, and the order they come out in
+        // came from a hash map's values. Sorted by position it cannot move; the
+        // hash map is built afresh each call, so many calls are many seeds.
+        let places = || -> Vec<Contact> {
+            // Deeper the further along, so that position and depth disagree
+            // about the order and the test says which of them decides.
+            (0..12)
+                .map(|k| {
+                    contact(
+                        (1, 9),
+                        1_000_000 * (12 - k),
+                        5_000_000,
+                        50_000 + 1_000 * k,
+                        10_000,
+                    )
+                })
+                .collect()
+        };
+        let first = read(&one_row_per_place(places()));
+        assert_eq!(first.len(), 12, "twelve places");
+        assert!(
+            first.windows(2).all(|w| w[0].0 < w[1].0),
+            "by position: {first:?}"
+        );
+        for _ in 0..200 {
+            assert_eq!(read(&one_row_per_place(places())), first);
+        }
+    }
+
+    #[test]
+    fn two_places_at_one_point_are_listed_by_depth_not_by_the_map() {
+        // Not copper that one stretch could reach: two contacts at the same
+        // point whose stretches are far apart are two places, and nothing but
+        // the map's order then decides which row comes first.
+        let mut order_seen = std::collections::BTreeSet::new();
+        for _ in 0..200 {
+            let mut shallow = contact((1, 9), 5_000_000, 5_000_000, 60_000, 10_000);
+            shallow.stretch = [([0, 0], [1, 0]), ([0, 0], [1, 0])];
+            let mut deep = contact((2, 9), 5_000_000, 5_000_000, 50_000, 10_000);
+            deep.stretch = [
+                ([90_000_000, 0], [90_000_001, 0]),
+                ([90_000_000, 0], [90_000_001, 0]),
+            ];
+            let rows = read(&one_row_per_place(vec![shallow, deep]));
+            assert_eq!(rows.len(), 2, "two places");
+            order_seen.insert(rows);
+        }
+        assert_eq!(order_seen.len(), 1, "the order moved: {order_seen:?}");
+        let rows = order_seen.into_iter().next().unwrap();
+        assert_eq!(rows[0].2, 50_000, "the deeper first");
     }
 }
