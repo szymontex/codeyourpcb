@@ -43,23 +43,26 @@ fn board() -> (BoardWorld, FootprintLibrary) {
         .get("0402")
         .expect("the library has an 0402")
         .clone();
-    library.register_design(Footprint {
-        placement_origin: None,
-        name: "pin".to_string(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Circle,
-            position: Point::from_mm(1.0, 0.0),
-            size: (Nm::from_mm(1.8), Nm::from_mm(1.8)),
-            drill: Some(Nm::from_mm(0.9)),
-            slot: None,
-            layers: vec![Layer::TopCopper, Layer::BottomCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-        ..base
-    });
+    library.register_design(
+        Footprint {
+            placement_origin: None,
+            name: "pin".to_string(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Circle,
+                position: Point::from_mm(1.0, 0.0),
+                size: (Nm::from_mm(1.8), Nm::from_mm(1.8)),
+                drill: Some(Nm::from_mm(0.9)),
+                slot: None,
+                layers: vec![Layer::TopCopper, Layer::BottomCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+            ..base
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library.clone());
 
     world.spawn_component(

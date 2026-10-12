@@ -55,15 +55,18 @@ fn pads() -> Vec<PadInfo> {
 fn board(pads: &[PadInfo]) -> (BoardWorld, FootprintLibrary) {
     let bounds = Rect::new(Point::from_mm(-6.0, -6.0), Point::from_mm(12.0, 6.0));
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "FETCHED".to_string(),
-        description: String::new(),
-        pads: pads.iter().map(PadInfo::to_pad_def).collect(),
-        bounds,
-        courtyard: bounds,
-        silk: Vec::new(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "FETCHED".to_string(),
+            description: String::new(),
+            pads: pads.iter().map(PadInfo::to_pad_def).collect(),
+            bounds,
+            courtyard: bounds,
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     let parsed = cypcb_parser::parse(SOURCE);
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors.first());
     let mut world = BoardWorld::new();

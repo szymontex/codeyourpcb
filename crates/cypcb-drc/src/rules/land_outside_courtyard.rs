@@ -111,10 +111,10 @@ mod tests {
         }
     }
 
-    /// Two pads 6mm apart; the courtyard is `width_mm` wide about the origin.
-    fn bar(name: &str, width_mm: f64) -> Footprint {
-        let courtyard =
-            Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(width_mm), Nm::from_mm(1.0)));
+    /// Two pads 6mm apart, in a courtyard 7mm wide about the origin: it holds
+    /// both pads, whose outer edges are at 3.3mm.
+    fn whole(name: &str) -> Footprint {
+        let courtyard = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(7.0), Nm::from_mm(1.0)));
         Footprint {
             placement_origin: None,
             name: name.to_string(),
@@ -124,15 +124,32 @@ mod tests {
             courtyard,
             silk: Vec::new(),
         }
+        .expect_pads_in_courtyard()
+    }
+
+    /// The same two pads in a courtyard 6.4mm wide, which reaches 3.2mm each
+    /// way where a pad's outer edge is at 3.3mm.
+    fn short(name: &str) -> Footprint {
+        let courtyard = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(6.4), Nm::from_mm(1.0)));
+        Footprint {
+            placement_origin: None,
+            name: name.to_string(),
+            description: String::new(),
+            pads: vec![pad("1", -3.0), pad("2", 3.0)],
+            bounds: courtyard,
+            courtyard,
+            silk: Vec::new(),
+        }
+        .pads_outside_courtyard_because("the rule under test reports exactly this")
     }
 
     fn board(parts: &[(&str, &str, f64)]) -> BoardWorld {
         let mut world = BoardWorld::new();
         world.set_board("t".into(), (Nm::from_mm(40.0), Nm::from_mm(40.0)), 2);
         let mut library = FootprintLibrary::new();
-        library.register(bar("WHOLE", 7.0));
+        library.register(whole("WHOLE"));
         // 6.4mm reaches 3.2mm each way; a pad's outer edge is at 3.3mm.
-        library.register(bar("SHORT", 6.4));
+        library.register(short("SHORT"));
         world.set_footprints(library);
         for (i, (refdes, footprint, degrees)) in parts.iter().enumerate() {
             world.spawn_component(

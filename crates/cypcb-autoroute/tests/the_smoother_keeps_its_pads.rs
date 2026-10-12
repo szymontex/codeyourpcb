@@ -54,6 +54,7 @@ fn part(width: f64, height: f64) -> Footprint {
         courtyard: Rect::from_center_size(Point::ORIGIN, size),
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// R8 at 30mm, 45mm with pad 2 on VCC, and R9 whose pad 1 the trunk starts

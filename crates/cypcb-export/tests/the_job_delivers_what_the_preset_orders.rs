@@ -44,6 +44,7 @@ fn two_pad_footprint() -> Footprint {
         courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.0), Nm::from_mm(1.2))),
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 fn board() -> (BoardWorld, FootprintLibrary) {

@@ -44,28 +44,31 @@ fn board(
     let mut world = BoardWorld::new();
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "P".to_string(),
-        description: String::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::RoundRect {
-                corner_ratio: ratio,
-            },
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(w), Nm::from_mm(h)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper, Layer::TopMask, Layer::TopPaste],
-            mask_margin: None,
-            rotation: own,
-        }],
-        bounds: body,
-        courtyard: body,
-        silk: Vec::new(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "P".to_string(),
+            description: String::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::RoundRect {
+                    corner_ratio: ratio,
+                },
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(w), Nm::from_mm(h)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper, Layer::TopMask, Layer::TopPaste],
+                mask_margin: None,
+                rotation: own,
+            }],
+            bounds: body,
+            courtyard: body,
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     world.spawn_component(
         RefDes::new("U1"),
         Value::new("v"),

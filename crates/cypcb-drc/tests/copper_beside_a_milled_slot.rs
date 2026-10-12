@@ -44,23 +44,26 @@ fn board_with_a_slot_rotated(x: f64, y: f64, rotation: Rotation) -> (BoardWorld,
         .get("0402")
         .expect("the library has an 0402")
         .clone();
-    library.register_design(Footprint {
-        placement_origin: None,
-        name: "latch".to_string(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Oblong,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(3.2), Nm::from_mm(1.8)),
-            drill: Some(Nm::from_mm(1.0)),
-            slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
-            layers: vec![Layer::TopCopper, Layer::BottomCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-        ..base
-    });
+    library.register_design(
+        Footprint {
+            placement_origin: None,
+            name: "latch".to_string(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Oblong,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(3.2), Nm::from_mm(1.8)),
+                drill: Some(Nm::from_mm(1.0)),
+                slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
+                layers: vec![Layer::TopCopper, Layer::BottomCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+            ..base
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library);
 
     world.spawn_component(

@@ -50,23 +50,26 @@ fn board_with_artwork() -> BoardWorld {
         .get("0402")
         .expect("the library has an 0402")
         .clone();
-    library.register_design(Footprint {
-        placement_origin: None,
-        name: "drawn".to_string(),
-        silk: vec![
-            SilkShape::Segment {
-                start: Point::from_mm(-1.0, -0.6),
-                end: Point::from_mm(1.0, -0.6),
-                width: Nm::from_mm(0.15),
-            },
-            SilkShape::Circle {
-                centre: Point::from_mm(-1.2, 0.0),
-                radius: Nm::from_mm(0.2),
-                width: Nm::from_mm(0.15),
-            },
-        ],
-        ..base
-    });
+    library.register_design(
+        Footprint {
+            placement_origin: None,
+            name: "drawn".to_string(),
+            silk: vec![
+                SilkShape::Segment {
+                    start: Point::from_mm(-1.0, -0.6),
+                    end: Point::from_mm(1.0, -0.6),
+                    width: Nm::from_mm(0.15),
+                },
+                SilkShape::Circle {
+                    centre: Point::from_mm(-1.2, 0.0),
+                    radius: Nm::from_mm(0.2),
+                    width: Nm::from_mm(0.15),
+                },
+            ],
+            ..base
+        }
+        .expect_pads_in_courtyard(),
+    );
     world.set_footprints(library);
 
     let entity = world

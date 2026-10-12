@@ -58,6 +58,7 @@ fn pin_header_1x12() -> Footprint {
         ),
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// A surface-mount module with its origin on the body and both pads 3mm
@@ -103,6 +104,7 @@ fn module_on_its_body(peg: bool) -> Footprint {
         ),
         silk: Vec::new(),
     }
+    .with_courtyard_holding_its_pads()
 }
 
 /// Mid X and Mid Y of J1 with the header turned `degrees`.

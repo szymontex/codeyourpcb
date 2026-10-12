@@ -28,26 +28,29 @@ fn drill_file(offset: Option<Point>) -> String {
     world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(30.0)), 2);
     let mut library = FootprintLibrary::new();
     let body = Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(8.0), Nm::from_mm(8.0)));
-    library.register(Footprint {
-        placement_origin: None,
-        name: "S".to_string(),
-        description: String::new(),
-        pads: vec![PadDef {
-            number: "1".to_string(),
-            shape: PadShape::Oblong,
-            position: Point::from_mm(1.0, 2.0),
-            size: (Nm::from_mm(3.0), Nm::from_mm(1.6)),
-            drill: Some(Nm::from_mm(1.0)),
-            slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
-            layers: vec![Layer::TopCopper, Layer::BottomCopper],
-            mask_margin: None,
-            rotation: Rotation::DEG_90,
-            hole_offset: offset,
-        }],
-        bounds: body,
-        courtyard: body,
-        silk: Vec::new(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "S".to_string(),
+            description: String::new(),
+            pads: vec![PadDef {
+                number: "1".to_string(),
+                shape: PadShape::Oblong,
+                position: Point::from_mm(1.0, 2.0),
+                size: (Nm::from_mm(3.0), Nm::from_mm(1.6)),
+                drill: Some(Nm::from_mm(1.0)),
+                slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
+                layers: vec![Layer::TopCopper, Layer::BottomCopper],
+                mask_margin: None,
+                rotation: Rotation::DEG_90,
+                hole_offset: offset,
+            }],
+            bounds: body,
+            courtyard: body,
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     world.set_footprints(library.clone());
     world.spawn_component(
         RefDes::new("J1"),

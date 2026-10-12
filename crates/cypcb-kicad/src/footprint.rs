@@ -397,10 +397,10 @@ mod tests {
     /// Footprint with courtyard
     const WITH_COURTYARD: &str = r#"(module R_0603 (layer F.Cu)
   (descr "0603 with courtyard")
-  (fp_line (start -1.1 -0.8) (end 1.1 -0.8) (layer F.CrtYd) (width 0.05))
-  (fp_line (start 1.1 -0.8) (end 1.1 0.8) (layer F.CrtYd) (width 0.05))
-  (fp_line (start 1.1 0.8) (end -1.1 0.8) (layer F.CrtYd) (width 0.05))
-  (fp_line (start -1.1 0.8) (end -1.1 -0.8) (layer F.CrtYd) (width 0.05))
+  (fp_line (start -1.4 -0.8) (end 1.4 -0.8) (layer F.CrtYd) (width 0.05))
+  (fp_line (start 1.4 -0.8) (end 1.4 0.8) (layer F.CrtYd) (width 0.05))
+  (fp_line (start 1.4 0.8) (end -1.4 0.8) (layer F.CrtYd) (width 0.05))
+  (fp_line (start -1.4 0.8) (end -1.4 -0.8) (layer F.CrtYd) (width 0.05))
   (pad 1 smd rect (at -0.8 0) (size 0.9 0.95) (layers F.Cu F.Paste F.Mask))
   (pad 2 smd rect (at 0.8 0) (size 0.9 0.95) (layers F.Cu F.Paste F.Mask))
 )"#;

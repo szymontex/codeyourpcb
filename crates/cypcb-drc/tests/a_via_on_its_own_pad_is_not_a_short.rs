@@ -52,15 +52,18 @@ fn board(second_pad_nm: i64, via_net: NetId, turned: bool) -> BoardWorld {
     let mut world = BoardWorld::new();
     world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(40.0)), 2);
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "two".to_string(),
-        description: "two pads".to_string(),
-        pads: vec![pad("1", 0), pad("2", second_pad_nm)],
-        bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.0), Nm::from_mm(2.0))),
-        courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.0), Nm::from_mm(2.0))),
-        silk: Vec::new(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "two".to_string(),
+            description: "two pads".to_string(),
+            pads: vec![pad("1", 0), pad("2", second_pad_nm)],
+            bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.0), Nm::from_mm(2.0))),
+            courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.0), Nm::from_mm(2.0))),
+            silk: Vec::new(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     let mut nets = NetConnections::new();
     nets.add(PinConnection::new("1".to_string(), OWN));
     nets.add(PinConnection::new("2".to_string(), OTHER));

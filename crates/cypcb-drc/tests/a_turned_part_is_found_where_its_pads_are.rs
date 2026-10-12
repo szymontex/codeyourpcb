@@ -55,6 +55,7 @@ fn bar() -> Footprint {
         courtyard,
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// The bar with a courtyard around pad 1 alone, the way a footprint centred on
@@ -69,6 +70,9 @@ fn short_bar() -> Footprint {
         ),
         ..bar()
     }
+    .pads_outside_courtyard_because(
+        "this is the case under test: pad 2 stands outside the box the index holds",
+    )
 }
 
 /// An M3 mounting hole: 3.2mm drilled, no copper.
@@ -94,6 +98,7 @@ fn mounting_hole() -> Footprint {
         courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(7.2), Nm::from_mm(7.2))),
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// A plated slot 2.4mm by 1.0mm along x, in a 3.2mm by 1.8mm pad.
@@ -119,6 +124,7 @@ fn latch(library: &FootprintLibrary) -> Footprint {
         }],
         ..base
     }
+    .with_courtyard_holding_its_pads()
 }
 
 fn board() -> BoardWorld {

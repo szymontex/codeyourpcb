@@ -49,7 +49,8 @@ fn board(part: Rotation, pad: Rotation) -> (BoardWorld, FootprintLibrary) {
         bounds: body,
         courtyard: body,
         silk: Vec::new(),
-    };
+    }
+    .expect_pads_in_courtyard();
     let mut world = BoardWorld::new();
     world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
     let net = world.intern_net("SIG");

@@ -41,15 +41,18 @@ fn fixture(name: &str) -> String {
 fn board(pads: &[PadInfo], silk: &[SilkInfo]) -> (BoardWorld, FootprintLibrary) {
     let bounds = Rect::new(Point::from_mm(-6.0, -6.0), Point::from_mm(6.0, 6.0));
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "FETCHED".to_string(),
-        description: String::new(),
-        pads: pads.iter().map(PadInfo::to_pad_def).collect(),
-        bounds,
-        courtyard: bounds,
-        silk: silk.iter().flat_map(SilkInfo::to_shapes).collect(),
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "FETCHED".to_string(),
+            description: String::new(),
+            pads: pads.iter().map(PadInfo::to_pad_def).collect(),
+            bounds,
+            courtyard: bounds,
+            silk: silk.iter().flat_map(SilkInfo::to_shapes).collect(),
+        }
+        .expect_pads_in_courtyard(),
+    );
     let parsed = cypcb_parser::parse(SOURCE);
     assert!(
         parsed.errors.is_empty(),

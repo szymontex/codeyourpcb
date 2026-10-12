@@ -116,29 +116,32 @@ fn board_with_pad_and_body(gap_mm: f64, courtyard_half_mm: f64) -> BoardWorld {
     world.set_board("e".to_string(), (Nm::from_mm(10.0), Nm::from_mm(10.0)), 2);
 
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "square".to_string(),
-        description: String::new(),
-        bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),
-        courtyard: Rect::from_points(
-            Point::from_mm(-courtyard_half_mm, -courtyard_half_mm),
-            Point::from_mm(courtyard_half_mm, courtyard_half_mm),
-        ),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "square".to_string(),
+            description: String::new(),
+            bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),
+            courtyard: Rect::from_points(
+                Point::from_mm(-courtyard_half_mm, -courtyard_half_mm),
+                Point::from_mm(courtyard_half_mm, courtyard_half_mm),
+            ),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .expect_pads_in_courtyard(),
+    );
 
     world.spawn_component(
         RefDes::new("R1"),

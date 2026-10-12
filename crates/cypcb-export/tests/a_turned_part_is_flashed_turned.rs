@@ -52,6 +52,7 @@ fn chip() -> Footprint {
         courtyard: body,
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// R1 square at (10, 10), R2 turned 90 at (20, 10), R3 turned 90 on the

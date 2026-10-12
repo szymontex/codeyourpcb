@@ -70,6 +70,7 @@ fn two_pin_header() -> Footprint {
         ),
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 fn board() -> (BoardWorld, FootprintLibrary) {

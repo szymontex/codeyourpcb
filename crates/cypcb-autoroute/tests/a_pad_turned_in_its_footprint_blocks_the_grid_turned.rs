@@ -23,26 +23,29 @@ fn free_cells(part: Rotation, pad: Rotation) -> Vec<bool> {
     let mut world = BoardWorld::new();
     world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "P".into(),
-        description: String::new(),
-        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(2.9)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: pad,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "P".into(),
+            description: String::new(),
+            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(2.9)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: pad,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library.clone());
     world.spawn_component(
         RefDes::new("R1"),

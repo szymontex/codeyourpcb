@@ -43,15 +43,18 @@ fn board(margin: Option<Nm>) -> BoardWorld {
     };
 
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "chip".to_string(),
-        description: String::new(),
-        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![pad(-0.5, "1"), pad(0.5, "2")],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "chip".to_string(),
+            description: String::new(),
+            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![pad(-0.5, "1"), pad(0.5, "2")],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library);
 
     for (refdes, x_mm) in [("R1", 10.0), ("R2", 12.0)] {

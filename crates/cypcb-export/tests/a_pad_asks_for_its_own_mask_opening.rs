@@ -32,26 +32,29 @@ fn mask_of(margin: Option<Nm>) -> String {
     );
 
     let mut library = FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "pad".to_string(),
-        description: String::new(),
-        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Circle,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: margin,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "pad".to_string(),
+            description: String::new(),
+            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Circle,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: margin,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
 
     world.spawn_component(
         RefDes::new("J1"),

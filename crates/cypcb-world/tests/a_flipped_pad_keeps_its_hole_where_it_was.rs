@@ -35,6 +35,7 @@ fn footprint(rotation: Rotation) -> Footprint {
         courtyard: body,
         silk: Vec::new(),
     }
+    .expect_pads_in_courtyard()
 }
 
 /// The mirror of a point: x reversed.

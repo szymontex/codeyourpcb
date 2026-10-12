@@ -30,50 +30,56 @@ fn board_with_hole_and_part(pad_gap_mm: f64, body_half_mm: f64) -> BoardWorld {
 
     let mut library = FootprintLibrary::new();
     // An M3 mounting hole: drilled, unplated, no copper of its own.
-    library.register(Footprint {
-        placement_origin: None,
-        name: "mount".to_string(),
-        description: String::new(),
-        bounds: Rect::from_points(Point::from_mm(-1.6, -1.6), Point::from_mm(1.6, 1.6)),
-        courtyard: Rect::from_points(Point::from_mm(-1.6, -1.6), Point::from_mm(1.6, 1.6)),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Circle,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(3.2), Nm::from_mm(3.2)),
-            drill: Some(Nm::from_mm(3.2)),
-            slot: None,
-            // No copper layer at all is what makes a hole unplated.
-            layers: Vec::new(),
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
-    library.register(Footprint {
-        placement_origin: None,
-        name: "part".to_string(),
-        description: String::new(),
-        bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),
-        courtyard: Rect::from_points(
-            Point::from_mm(-body_half_mm, -body_half_mm),
-            Point::from_mm(body_half_mm, body_half_mm),
-        ),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".to_string(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "mount".to_string(),
+            description: String::new(),
+            bounds: Rect::from_points(Point::from_mm(-1.6, -1.6), Point::from_mm(1.6, 1.6)),
+            courtyard: Rect::from_points(Point::from_mm(-1.6, -1.6), Point::from_mm(1.6, 1.6)),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Circle,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(3.2), Nm::from_mm(3.2)),
+                drill: Some(Nm::from_mm(3.2)),
+                slot: None,
+                // No copper layer at all is what makes a hole unplated.
+                layers: Vec::new(),
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .expect_pads_in_courtyard(),
+    );
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "part".to_string(),
+            description: String::new(),
+            bounds: Rect::from_points(Point::from_mm(-0.3, -0.3), Point::from_mm(0.3, 0.3)),
+            courtyard: Rect::from_points(
+                Point::from_mm(-body_half_mm, -body_half_mm),
+                Point::from_mm(body_half_mm, body_half_mm),
+            ),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".to_string(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .expect_pads_in_courtyard(),
+    );
 
     world.spawn_component(
         RefDes::new("H1"),

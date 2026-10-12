@@ -23,26 +23,29 @@ fn board(locked: bool) -> (BoardWorld, cypcb_world::footprint::FootprintLibrary)
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD1".into(),
-        description: String::new(),
-        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD1".into(),
+            description: String::new(),
+            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library.clone());
 
     let hand = world.intern_net("HAND");
@@ -129,26 +132,29 @@ fn a_net_a_hand_trace_already_joins_is_not_routed_again() {
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD1".into(),
-        description: String::new(),
-        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD1".into(),
+            description: String::new(),
+            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library.clone());
 
     let net = world.intern_net("SIG");
@@ -199,27 +205,30 @@ fn copper_on_another_layer_does_not_count_as_a_connection() {
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD1".into(),
-        description: String::new(),
-        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            drill: None,
-            slot: None,
-            // Top only: a surface-mount pad.
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD1".into(),
+            description: String::new(),
+            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                drill: None,
+                slot: None,
+                // Top only: a surface-mount pad.
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library.clone());
 
     let net = world.intern_net("SIG");
@@ -269,28 +278,31 @@ fn a_via_joins_two_traces_into_one_piece_of_copper() {
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD1".into(),
-        description: String::new(),
-        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            // Through-hole pins: the wire leaves on top and comes back on the
-            // bottom, which only connects if the pad is on both.
-            drill: Some(Nm::from_mm(0.3)),
-            slot: None,
-            layers: vec![Layer::TopCopper, Layer::BottomCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD1".into(),
+            description: String::new(),
+            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                // Through-hole pins: the wire leaves on top and comes back on the
+                // bottom, which only connects if the pad is on both.
+                drill: Some(Nm::from_mm(0.3)),
+                slot: None,
+                layers: vec![Layer::TopCopper, Layer::BottomCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library.clone());
 
     let net = world.intern_net("SIG");
@@ -362,26 +374,29 @@ fn a_ground_plane_connects_the_pins_that_sit_in_it() {
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD1".into(),
-        description: String::new(),
-        bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD1".into(),
+            description: String::new(),
+            bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library.clone());
 
     let gnd = world.intern_net("GND");
@@ -439,26 +454,29 @@ fn a_net_crosses_its_own_hand_trace_to_reach_its_pad() {
     world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
-    library.register(Footprint {
-        placement_origin: None,
-        name: "PAD1".into(),
-        description: String::new(),
-        bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
-        courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
-        silk: Vec::new(),
-        pads: vec![PadDef {
-            hole_offset: None,
-            number: "1".into(),
-            shape: PadShape::Rect,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            drill: None,
-            slot: None,
-            layers: vec![Layer::TopCopper],
-            mask_margin: None,
-            rotation: Rotation::ZERO,
-        }],
-    });
+    library.register(
+        Footprint {
+            placement_origin: None,
+            name: "PAD1".into(),
+            description: String::new(),
+            bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                hole_offset: None,
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                drill: None,
+                slot: None,
+                layers: vec![Layer::TopCopper],
+                mask_margin: None,
+                rotation: Rotation::ZERO,
+            }],
+        }
+        .with_courtyard_holding_its_pads(),
+    );
     world.set_footprints(library.clone());
 
     let net = world.intern_net("SIG");
@@ -541,26 +559,29 @@ fn strip_board(layer_count: u8) -> (BoardWorld, cypcb_world::footprint::Footprin
 
     let mut library = cypcb_world::footprint::FootprintLibrary::new();
     for (name, layer) in [("TOP1", Layer::TopCopper), ("BOT1", Layer::BottomCopper)] {
-        library.register(Footprint {
-            placement_origin: None,
-            name: name.into(),
-            description: String::new(),
-            bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
-            courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
-            silk: Vec::new(),
-            pads: vec![PadDef {
-                hole_offset: None,
-                number: "1".into(),
-                shape: PadShape::Rect,
-                position: Point::ORIGIN,
-                size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
-                drill: None,
-                slot: None,
-                layers: vec![layer],
-                mask_margin: None,
-                rotation: Rotation::ZERO,
-            }],
-        });
+        library.register(
+            Footprint {
+                placement_origin: None,
+                name: name.into(),
+                description: String::new(),
+                bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+                courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+                silk: Vec::new(),
+                pads: vec![PadDef {
+                    hole_offset: None,
+                    number: "1".into(),
+                    shape: PadShape::Rect,
+                    position: Point::ORIGIN,
+                    size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
+                    drill: None,
+                    slot: None,
+                    layers: vec![layer],
+                    mask_margin: None,
+                    rotation: Rotation::ZERO,
+                }],
+            }
+            .with_courtyard_holding_its_pads(),
+        );
     }
     world.set_footprints(library.clone());
 

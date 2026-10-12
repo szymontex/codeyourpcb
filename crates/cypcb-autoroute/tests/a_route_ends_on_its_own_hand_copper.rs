@@ -35,26 +35,29 @@ fn board_with_j2_on(
 
     let mut library = FootprintLibrary::new();
     for (name, layer) in [("PAD1", Layer::TopCopper), ("PAD2", j2_layer)] {
-        library.register(Footprint {
-            placement_origin: None,
-            name: name.into(),
-            description: String::new(),
-            bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
-            courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
-            silk: Vec::new(),
-            pads: vec![PadDef {
-                hole_offset: None,
-                number: "1".into(),
-                shape: PadShape::Rect,
-                position: Point::ORIGIN,
-                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-                drill: None,
-                slot: None,
-                layers: vec![layer],
-                mask_margin: None,
-                rotation: Rotation::ZERO,
-            }],
-        });
+        library.register(
+            Footprint {
+                placement_origin: None,
+                name: name.into(),
+                description: String::new(),
+                bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+                courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+                silk: Vec::new(),
+                pads: vec![PadDef {
+                    hole_offset: None,
+                    number: "1".into(),
+                    shape: PadShape::Rect,
+                    position: Point::ORIGIN,
+                    size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                    drill: None,
+                    slot: None,
+                    layers: vec![layer],
+                    mask_margin: None,
+                    rotation: Rotation::ZERO,
+                }],
+            }
+            .with_courtyard_holding_its_pads(),
+        );
     }
     world.set_footprints(library.clone());
 
