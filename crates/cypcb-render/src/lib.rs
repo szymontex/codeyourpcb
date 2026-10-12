@@ -1487,11 +1487,20 @@ impl PcbEngine {
             Rect::new(Point::new(Nm(0), Nm(0)), Point::new(Nm(0), Nm(0)))
         };
 
-        // Courtyard is bounds with margin
+        // Courtyard is bounds with margin.
+        //
+        // Taken from `bounds`, not from the running minima: a footprint with
+        // no pads - a logo, a mark, a fiducial drawn as ink - leaves them at
+        // `i64::MAX` and `i64::MIN`, and a margin added to those is a
+        // courtyard the width of the number line. Placing it overflowed in a
+        // debug build and, in a release one, wrapped into a box that put an
+        // edge-clearance violation on a part in the middle of the board. The
+        // KiCad reader derives a pad-less part's courtyard the same way, from
+        // the empty box about the origin.
         let margin = Nm(250_000); // 0.25mm margin
         let courtyard = Rect::new(
-            Point::new(Nm(min_x - margin.0), Nm(min_y - margin.0)),
-            Point::new(Nm(max_x + margin.0), Nm(max_y + margin.0)),
+            Point::new(Nm(bounds.min.x.0 - margin.0), Nm(bounds.min.y.0 - margin.0)),
+            Point::new(Nm(bounds.max.x.0 + margin.0), Nm(bounds.max.y.0 + margin.0)),
         );
 
         Footprint {
@@ -2625,6 +2634,53 @@ mod tests {
         assert!(
             !snapshot.contains("\"traces\":[]"),
             "traces must not be empty"
+        );
+    }
+
+    #[test]
+    fn a_footprint_with_no_pads_has_a_small_courtyard_about_its_origin() {
+        // No pads, so no extremes: the box is the empty one at the origin and
+        // the courtyard is its margin, 0.25mm each way. It was a box between
+        // `i64::MAX` and `i64::MIN` with the margin added.
+        let engine = PcbEngine::new();
+        let footprint = engine.footprint_from_pads("MARK", &[]);
+        assert_eq!(footprint.bounds.min, Point::new(Nm(0), Nm(0)));
+        assert_eq!(footprint.bounds.max, Point::new(Nm(0), Nm(0)));
+        assert_eq!(
+            footprint.courtyard.min,
+            Point::new(Nm(-250_000), Nm(-250_000))
+        );
+        assert_eq!(
+            footprint.courtyard.max,
+            Point::new(Nm(250_000), Nm(250_000))
+        );
+    }
+
+    #[test]
+    fn control_a_footprint_with_pads_keeps_its_courtyard() {
+        // Two 1mm square pads 4mm apart: the bounds hold both, and the
+        // courtyard is 0.25mm outside them, as it was before.
+        let pads: Vec<PadInfo> = serde_json::from_str(
+            r#"[{"number":"1","x_nm":-2000000,"y_nm":0,"width_nm":1000000,
+                 "height_nm":1000000,"shape":"rect","layer_mask":1,"drill_nm":null},
+                {"number":"2","x_nm":2000000,"y_nm":0,"width_nm":1000000,
+                 "height_nm":1000000,"shape":"rect","layer_mask":1,"drill_nm":null}]"#,
+        )
+        .unwrap();
+        let engine = PcbEngine::new();
+        let footprint = engine.footprint_from_pads("TWO", &pads);
+        assert_eq!(
+            footprint.bounds.min,
+            Point::new(Nm(-2_500_000), Nm(-500_000))
+        );
+        assert_eq!(footprint.bounds.max, Point::new(Nm(2_500_000), Nm(500_000)));
+        assert_eq!(
+            footprint.courtyard.min,
+            Point::new(Nm(-2_750_000), Nm(-750_000))
+        );
+        assert_eq!(
+            footprint.courtyard.max,
+            Point::new(Nm(2_750_000), Nm(750_000))
         );
     }
 
