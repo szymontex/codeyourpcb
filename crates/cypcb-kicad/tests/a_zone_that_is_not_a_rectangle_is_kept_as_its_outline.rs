@@ -10,8 +10,8 @@
 //! repository's own boards: 304 such zones in 112 files.
 //!
 //! What is held here: the corners arrive as the file states them, a keepout
-//! is acted on whole, a pour is kept and is not filled - and says so, in the
-//! words the refusal used - and the writer returns the ring it was given.
+//! is acted on whole, a pour is kept and filled from its ring, and the writer
+//! returns the ring it was given.
 
 use cypcb_core::Point;
 use cypcb_kicad::board_writer::write_board;
@@ -106,7 +106,7 @@ fn a_zone_that_is_not_a_rectangle_is_not_among_the_rectangles() {
 }
 
 #[test]
-fn a_pour_that_is_an_l_is_kept_and_not_filled_and_the_reader_says_so() {
+fn a_pour_that_is_an_l_is_kept_with_its_corners_and_needs_no_excuse() {
     let mut parsed = parse_kicad_pcb_str(&board(L_POUR)).expect("the board reads");
 
     assert_eq!(parsed.metadata.zone_count, 0, "not a rectangle");
@@ -114,16 +114,10 @@ fn a_pour_that_is_an_l_is_kept_and_not_filled_and_the_reader_says_so() {
         parsed.metadata.outlined_zone_count, 1,
         "but it is in the board"
     );
-    assert_eq!(parsed.metadata.zone_refusals.len(), 1);
-    let said = &parsed.metadata.zone_refusals[0];
     assert!(
-        said.contains("the zone on net GND is a 6-point outline"),
-        "{said}"
-    );
-    assert!(said.contains("not filled"), "{said}");
-    assert!(
-        said.contains("bounding box would put copper where the shape was drawn to avoid it"),
-        "the reason to refuse the box travels with the warning: {said}"
+        parsed.metadata.zone_refusals.is_empty(),
+        "it is filled from its ring: {:?}",
+        parsed.metadata.zone_refusals
     );
 
     let outlined = parsed.world.outlined_zones();
@@ -254,4 +248,32 @@ fn a_rectangle_goes_back_as_the_four_corners_of_its_box() {
         .find(|l| l.trim_start().starts_with("(pts"))
         .expect("the zone has a polygon");
     assert_eq!(line.matches("(xy ").count(), 4, "{line}");
+}
+
+#[test]
+fn a_pour_whose_outline_crosses_itself_is_refused_and_a_keepout_is_kept() {
+    // A bow tie on the L's box: copper cut from it would be one of two shapes.
+    let crossing = "(xy 102 102) (xy 138 128) (xy 138 102) (xy 102 120)";
+    let pour = L_POUR.replace(
+        "(xy 102 102) (xy 138 102) (xy 138 115) (xy 120 115) (xy 120 128) (xy 102 128)",
+        crossing,
+    );
+    assert_ne!(pour, L_POUR);
+    let mut parsed = parse_kicad_pcb_str(&board(&pour)).unwrap();
+    assert_eq!(parsed.metadata.outlined_zone_count, 0);
+    assert!(parsed.world.outlined_zones().is_empty());
+    assert!(
+        parsed.metadata.zone_refusals[0].contains("crosses itself"),
+        "{:?}",
+        parsed.metadata.zone_refusals
+    );
+
+    // A keepout asks only whether a point is in it, and that has an answer.
+    let keepout = L_KEEPOUT.replace(
+        "(xy 105 105) (xy 115 105) (xy 115 110) (xy 110 110) (xy 110 115) (xy 105 115)",
+        "(xy 105 105) (xy 115 115) (xy 115 105) (xy 105 112)",
+    );
+    let mut parsed = parse_kicad_pcb_str(&board(&keepout)).unwrap();
+    assert_eq!(parsed.metadata.outlined_zone_count, 1);
+    assert_eq!(parsed.world.outlined_zones().len(), 1);
 }

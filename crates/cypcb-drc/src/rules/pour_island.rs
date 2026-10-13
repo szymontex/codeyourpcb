@@ -12,9 +12,9 @@
 //! two rectangles sharing an edge are one sheet of copper.
 
 use cypcb_core::pour::PourOptions;
-use cypcb_core::Rect;
 #[cfg(test)]
-use cypcb_core::{Nm, Point};
+use cypcb_core::Nm;
+use cypcb_core::{Point, Rect};
 use cypcb_world::components::Layer;
 use cypcb_world::BoardWorld;
 
@@ -64,7 +64,11 @@ impl DrcRule for PourIslandRule {
             .into_iter()
             .filter(|(_, zone)| zone.kind == ZoneKind::CopperPour)
             .collect();
-        if zones.is_empty() {
+        let any_outlined = world
+            .outlined_zones()
+            .iter()
+            .any(|(_, zone, _)| zone.is_copper_pour());
+        if zones.is_empty() && !any_outlined {
             return Vec::new();
         }
 
@@ -98,6 +102,21 @@ impl DrcRule for PourIslandRule {
             }
         }
 
+        // The pours drawn as a polygon.
+        for layer in [Layer::TopCopper, Layer::BottomCopper] {
+            for (entity, zone, outline) in cypcb_world::copper::outlined_pours(world, layer) {
+                let filled = cypcb_world::copper::fill_outlined_zone(
+                    world, &library, layer, &zone, &outline, &options,
+                );
+                if filled.shapes.is_empty() {
+                    continue;
+                }
+                for island in unconnected_island_shapes(&filled.shapes, &filled.spoke_shapes) {
+                    violations.push(DrcViolation::pour_island(entity, island));
+                }
+            }
+        }
+
         violations
     }
 }
@@ -105,6 +124,29 @@ impl DrcRule for PourIslandRule {
 /// Group the pieces into sheets of touching copper and return the sheets no
 /// spoke reaches, each as one representative rectangle.
 fn unconnected_islands(pieces: &[Rect], spokes: &[Rect]) -> Vec<Rect> {
+    islands(pieces, spokes, touches, |piece| *piece)
+}
+
+/// The same for a pour drawn as a polygon, whose pieces are convex rings.
+///
+/// Two pieces that meet at one corner are one sheet, as two rectangles that
+/// meet at one corner are: `touches` is closed, and so is
+/// `cypcb_core::pour_shape::shapes_touch`.
+fn unconnected_island_shapes(pieces: &[Vec<Point>], spokes: &[Vec<Point>]) -> Vec<Rect> {
+    islands(
+        pieces,
+        spokes,
+        |a, b| cypcb_core::pour_shape::shapes_touch(a, b),
+        |piece| cypcb_core::pour_shape::shape_bounds(piece),
+    )
+}
+
+fn islands<T>(
+    pieces: &[T],
+    spokes: &[T],
+    touches: impl Fn(&T, &T) -> bool,
+    representative: impl Fn(&T) -> Rect,
+) -> Vec<Rect> {
     let mut parent: Vec<usize> = (0..pieces.len()).collect();
 
     fn find(parent: &mut [usize], index: usize) -> usize {
@@ -157,7 +199,7 @@ fn unconnected_islands(pieces: &[Rect], spokes: &[Rect]) -> Vec<Rect> {
     }
 
     let mut reported: Vec<usize> = Vec::new();
-    let mut islands = Vec::new();
+    let mut found = Vec::new();
     for index in 0..pieces.len() {
         let root = find(&mut parent, index);
         if connected[root] || connected[index] {
@@ -167,9 +209,9 @@ fn unconnected_islands(pieces: &[Rect], spokes: &[Rect]) -> Vec<Rect> {
             continue;
         }
         reported.push(root);
-        islands.push(pieces[index]);
+        found.push(representative(&pieces[index]));
     }
-    islands
+    found
 }
 
 /// Whether two rectangles share any copper, edges included.
@@ -312,5 +354,97 @@ mod tests {
             "the figure a pour keeps from foreign copper is not the figure two traces keep \
              from each other, and this house publishes both"
         );
+    }
+
+    fn ring(points: &[(f64, f64)]) -> Vec<Point> {
+        points.iter().map(|&(x, y)| Point::from_mm(x, y)).collect()
+    }
+
+    fn rect_as_piece(r: Rect) -> Vec<Point> {
+        vec![
+            r.min,
+            Point::new(r.max.x, r.min.y),
+            r.max,
+            Point::new(r.min.x, r.max.y),
+        ]
+    }
+
+    /// An L, 20 x 20 with the upper right quarter cut away, with the lower left
+    /// square (0..10, 0..10) taken out of it: what is left is two squares that
+    /// meet at one point, the inner corner (10, 10).
+    fn two_squares_meeting_at_the_inner_corner() -> Vec<Vec<Point>> {
+        let l = ring(&[
+            (0.0, 0.0),
+            (20.0, 0.0),
+            (20.0, 10.0),
+            (10.0, 10.0),
+            (10.0, 20.0),
+            (0.0, 20.0),
+        ]);
+        cypcb_core::pour_shape::fill_ring(&l, &[rect(0.0, 0.0, 10.0, 10.0)], Nm::ZERO)
+    }
+
+    #[test]
+    fn one_touching_point_joins_two_pieces_of_a_ring_as_it_joins_two_rectangles() {
+        let pieces = two_squares_meeting_at_the_inner_corner();
+        assert_eq!(pieces.len(), 2, "{pieces:?}");
+        // A spoke on the lower right square only.
+        let spoke = rect(15.0, 4.0, 16.0, 6.0);
+
+        // The pieces as rectangles, which is what the checker has always been given.
+        let as_rects = [rect(10.0, 0.0, 20.0, 10.0), rect(0.0, 10.0, 10.0, 20.0)];
+        assert_eq!(unconnected_islands(&as_rects, &[spoke]), Vec::<Rect>::new());
+
+        // The same two pieces as the fill cut them from the ring: the same answer.
+        let spokes = [rect_as_piece(spoke)];
+        assert_eq!(
+            unconnected_island_shapes(&pieces, &spokes),
+            Vec::<Rect>::new()
+        );
+    }
+
+    #[test]
+    fn a_nanometre_apart_is_an_island_for_both() {
+        let pieces = two_squares_meeting_at_the_inner_corner();
+        let spoke = rect(15.0, 4.0, 16.0, 6.0);
+        // Move the upper piece a nanometre left, away from the corner.
+        let apart: Vec<Vec<Point>> = pieces
+            .iter()
+            .map(|piece| {
+                let upper = piece.iter().all(|c| c.y.0 >= Nm::from_mm(10.0).0);
+                piece
+                    .iter()
+                    .map(|c| {
+                        if upper {
+                            Point::new(Nm(c.x.0 - 1), c.y)
+                        } else {
+                            *c
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let found = unconnected_island_shapes(&apart, &[rect_as_piece(spoke)]);
+        assert_eq!(found.len(), 1, "the piece that no spoke reaches: {found:?}");
+
+        let mut upper = rect(0.0, 10.0, 10.0, 20.0);
+        upper.min.x = Nm(upper.min.x.0 - 1);
+        upper.max.x = Nm(upper.max.x.0 - 1);
+        assert_eq!(
+            unconnected_islands(&[rect(10.0, 0.0, 20.0, 10.0), upper], &[spoke]).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn the_representative_of_an_island_is_the_box_of_its_piece() {
+        let pieces = two_squares_meeting_at_the_inner_corner();
+        let found = unconnected_island_shapes(&pieces, &[]);
+        assert_eq!(
+            found.len(),
+            1,
+            "joined at the corner, they are one sheet with no spoke"
+        );
+        assert!(found[0].max.x.0 >= Nm::from_mm(10.0).0);
     }
 }

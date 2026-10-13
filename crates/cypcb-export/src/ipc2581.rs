@@ -815,6 +815,44 @@ pub fn export_ipc2581_with(
             out.push_str("          </Set>\n");
         }
 
+        // The pours drawn as a polygon, as the convex pieces the filler laid
+        // down: the same copper as a rectangle's, cut from the ring.
+        for (_, zone, outline) in cypcb_world::copper::outlined_pours(world, layer) {
+            let filled = cypcb_world::copper::fill_outlined_zone(
+                world, library, layer, &zone, &outline, pour,
+            );
+            if filled.shapes.is_empty() && filled.spoke_shapes.is_empty() {
+                continue;
+            }
+            let net = zone
+                .net
+                .and_then(|net| world.net_name(net))
+                .unwrap_or("unknown")
+                .to_string();
+            let _ = writeln!(out, "          <Set net=\"{}\">", qualified(&net));
+            for shape in filled.all_shapes() {
+                out.push_str("            <Features>\n              <Contour>\n");
+                out.push_str("                <Polygon>\n");
+                let _ = writeln!(
+                    out,
+                    "                  <PolyBegin x=\"{}\" y=\"{}\"/>",
+                    mm(shape[0].x),
+                    mm(shape[0].y)
+                );
+                for corner in shape.iter().skip(1).chain(shape.first()) {
+                    let _ = writeln!(
+                        out,
+                        "                  <PolyStepSegment x=\"{}\" y=\"{}\"/>",
+                        mm(corner.x),
+                        mm(corner.y)
+                    );
+                }
+                out.push_str("                </Polygon>\n              </Contour>\n");
+                out.push_str("            </Features>\n");
+            }
+            out.push_str("          </Set>\n");
+        }
+
         out.push_str("        </LayerFeature>\n");
     }
 

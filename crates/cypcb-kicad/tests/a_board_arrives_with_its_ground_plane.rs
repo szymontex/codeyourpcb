@@ -170,7 +170,7 @@ fn a_rectangular_ground_plane_arrives_with_the_board() {
 }
 
 #[test]
-fn a_pour_this_importer_cannot_hold_is_refused_by_name() {
+fn a_pour_that_is_an_l_is_kept_as_its_ring_and_not_as_a_rectangle() {
     let mut result = parse("l-shaped", BOARD_WITH_AN_L_SHAPED_PLANE);
 
     assert_eq!(
@@ -178,21 +178,22 @@ fn a_pour_this_importer_cannot_hold_is_refused_by_name() {
         "an L-shaped pour is not a rectangle and must not be carried as one"
     );
     assert_eq!(
-        result.metadata.zone_refusals.len(),
-        1,
-        "the refusal has to be reported, or the plane is lost in silence"
+        result.metadata.outlined_zone_count, 1,
+        "it is in the board, as the ring of corners the file states"
     );
-
-    let why = &result.metadata.zone_refusals[0];
     assert!(
-        why.contains("GND"),
-        "the reader has to be told which pour was left out: {why}"
+        result.metadata.zone_refusals.is_empty(),
+        "a pour that is filled from its ring needs no excuse: {:?}",
+        result.metadata.zone_refusals
     );
-    assert!(why.contains("6-point"), "and what was wrong with it: {why}");
 
-    // And nothing reached the board. A bounding box here would put copper
-    // across the corner the designer cut away.
+    // A reader of the rectangles does not see it. A bounding box here would put
+    // copper across the corner the designer cut away.
     assert_eq!(result.world.zones().len(), 0);
+    let outlined = result.world.outlined_zones();
+    assert_eq!(outlined.len(), 1);
+    assert_eq!(outlined[0].2.corners().len(), 6);
+    assert!(outlined[0].1.net.is_some(), "on the net the file names");
 }
 
 #[test]

@@ -1073,7 +1073,7 @@ four-layer rule onto a two-layer board:
 - The reference is not a plane but a pour, and the pour is cut by the traces
   routed on that same layer. Coverage has to be measured against the filled
   geometry - the pieces and spokes `fill_zone` returns
-  (`crates/cypcb-world/src/copper.rs:47`) - and never against the zone's
+  (`crates/cypcb-world/src/copper.rs:127`) - and never against the zone's
   declared rectangle, which covers copper that is not there.
 - Every trace on the opposite layer is itself a gap in the reference of the
   trace above it. A two-layer board with any routing on the reference layer

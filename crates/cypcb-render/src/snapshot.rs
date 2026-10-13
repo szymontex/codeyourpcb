@@ -197,6 +197,11 @@ pub struct PourInfo {
     pub layer_mask: u32,
     /// The filled copper: min x, min y, max x, max y, in nanometres.
     pub rects: Vec<[i64; 4]>,
+    /// The filled copper of a pour drawn as a polygon: convex pieces, the
+    /// corners of each in nanometres. Left out when there are none, which is
+    /// every pour that is a rectangle.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub polygons: Vec<Vec<[i64; 2]>>,
 }
 
 /// A teardrop, as the copper it is: a polygon on one layer, on one net.

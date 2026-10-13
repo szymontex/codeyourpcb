@@ -62,6 +62,51 @@ pub fn bounds(points: &[Point]) -> Option<Rect> {
     Some(Rect::new(min, max))
 }
 
+/// Whether the ring is simple: no edge crosses, touches or runs along another
+/// except the neighbour it shares a corner with.
+///
+/// A ring that is not simple has no one area. KiCad draws zones as the user
+/// clicks them and some cross themselves; read by the even-odd rule such a ring
+/// is a different shape from the one its winding gives, and copper cut from it
+/// would be one of the two by accident. A repeated corner in a row is one corner.
+pub fn is_simple(points: &[Point]) -> bool {
+    let mut ring: Vec<Point> = open(points).to_vec();
+    ring.dedup();
+    if ring.len() > 1 && ring.first() == ring.last() {
+        ring.pop();
+    }
+    let n = ring.len();
+    if n < 3 {
+        return false;
+    }
+    let dot = |o: Point, a: Point, b: Point| {
+        (i128::from(a.x.0) - i128::from(o.x.0)) * (i128::from(b.x.0) - i128::from(o.x.0))
+            + (i128::from(a.y.0) - i128::from(o.y.0)) * (i128::from(b.y.0) - i128::from(o.y.0))
+    };
+    for i in 0..n {
+        let (a0, a1) = (ring[i], ring[(i + 1) % n]);
+        for j in (i + 1)..n {
+            let (b0, b1) = (ring[j], ring[(j + 1) % n]);
+            let next_to = j == i + 1 || (i == 0 && j == n - 1);
+            if next_to {
+                // They share one corner. Folding back on each other is the only
+                // way two edges that share a corner can share more.
+                let (corner, far_a, far_b) = if j == i + 1 {
+                    (a1, a0, b1)
+                } else {
+                    (a0, a1, b0)
+                };
+                if side(corner, far_a, far_b) == 0 && dot(corner, far_a, far_b) > 0 {
+                    return false;
+                }
+            } else if segments_meet(a0, a1, b0, b1) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 /// Whether `p` is inside the ring or on its edge.
 ///
 /// An edge and a corner count as inside, the way [`Rect::contains`] counts
@@ -136,6 +181,83 @@ mod tests {
     /// An L: the square 0..10 with its upper right quarter, 5..10 by 5..10, cut away.
     fn l_shape() -> Vec<Point> {
         ring(&[(0, 0), (10, 0), (10, 5), (5, 5), (5, 10), (0, 10)])
+    }
+
+    #[test]
+    fn a_simple_ring_is_simple() {
+        assert!(is_simple(&l_shape()));
+        assert!(is_simple(&ring(&[(5, 0), (10, 5), (5, 10), (0, 5)])));
+        let mut closed = l_shape();
+        closed.push(closed[0]);
+        assert!(is_simple(&closed), "a closing corner changes nothing");
+    }
+
+    #[test]
+    fn a_ring_that_crosses_itself_is_not_simple() {
+        assert!(
+            !is_simple(&ring(&[(0, 0), (10, 10), (10, 0), (0, 10)])),
+            "a bow tie"
+        );
+        assert!(
+            !is_simple(&ring(&[(0, 0), (10, 0), (10, 10), (5, -5), (0, 10)])),
+            "a star"
+        );
+    }
+
+    #[test]
+    fn a_ring_that_touches_itself_is_not_simple() {
+        // A corner of the ring on one of its own edges.
+        assert!(!is_simple(&ring(&[
+            (0, 0),
+            (10, 0),
+            (10, 10),
+            (5, 0),
+            (0, 10)
+        ])));
+        // Two corners that are one point, the neck of a figure of eight.
+        assert!(!is_simple(&ring(&[
+            (0, 0),
+            (10, 10),
+            (20, 0),
+            (20, 20),
+            (10, 10),
+            (0, 20)
+        ])));
+    }
+
+    #[test]
+    fn a_ring_that_doubles_back_on_an_edge_is_not_simple() {
+        assert!(
+            !is_simple(&ring(&[(0, 0), (10, 0), (5, 0), (5, 10)])),
+            "out and back"
+        );
+    }
+
+    #[test]
+    fn a_corner_in_the_middle_of_an_edge_is_still_simple() {
+        assert!(is_simple(&ring(&[
+            (0, 0),
+            (5, 0),
+            (10, 0),
+            (10, 10),
+            (0, 10)
+        ])));
+    }
+
+    #[test]
+    fn a_ring_that_is_one_edge_out_and_back_is_not_simple() {
+        assert!(!is_simple(&ring(&[(0, 0), (10, 0), (5, 0)])));
+    }
+
+    #[test]
+    fn a_repeated_corner_is_one_corner() {
+        assert!(is_simple(&ring(&[
+            (0, 0),
+            (10, 0),
+            (10, 0),
+            (10, 10),
+            (0, 10)
+        ])));
     }
 
     #[test]

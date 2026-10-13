@@ -1991,6 +1991,39 @@ impl PcbEngine {
                     net: net.clone(),
                     layer_mask: layer.to_copper_mask(),
                     rects,
+                    polygons: Vec::new(),
+                });
+            }
+        }
+
+        // The pours drawn as a polygon, as the convex pieces the filler laid down.
+        for layer in [Layer::TopCopper, Layer::BottomCopper] {
+            let library = self.footprint_lib.clone();
+            for (_, zone, outline) in cypcb_world::copper::outlined_pours(&mut self.world, layer) {
+                let net = zone
+                    .net
+                    .and_then(|id| self.world.net_name(id).map(|name| name.to_string()))
+                    .unwrap_or_default();
+                let filled = cypcb_world::copper::fill_outlined_zone(
+                    &mut self.world,
+                    &library,
+                    layer,
+                    &zone,
+                    &outline,
+                    &options,
+                );
+                let polygons: Vec<Vec<[i64; 2]>> = filled
+                    .all_shapes()
+                    .map(|shape| shape.iter().map(|c| [c.x.0, c.y.0]).collect())
+                    .collect();
+                if polygons.is_empty() {
+                    continue;
+                }
+                pours.push(PourInfo {
+                    net,
+                    layer_mask: layer.to_copper_mask(),
+                    rects: Vec::new(),
+                    polygons,
                 });
             }
         }

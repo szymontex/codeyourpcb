@@ -2,12 +2,12 @@
 //!
 //! `cargo test -p cypcb-cli --test a_pour_the_importer_cannot_carry_is_named`
 //!
-//! `parse_kicad_pcb` refuses a pour it cannot state - a ground plane cut
-//! around a connector is not a rectangle, and a bounding box would put copper
-//! where the shape was drawn to avoid it - and it says why, in
-//! `metadata.zone_refusals`. `cypcb-render` has printed those reasons in the
-//! browser since they existed. `cypcb from-kicad` did not: the fixture below
-//! came through with two of its three pours and the command said
+//! `parse_kicad_pcb` keeps a pour that is not a rectangle as its ring - a
+//! ground plane cut around a connector - and fills it from the ring. A `.cypcb`
+//! design has no word for a polygon, and a bounding box would put copper where
+//! the shape was drawn to avoid it, so `cypcb from-kicad` leaves it out of the
+//! design and says so in `not_written`. The fixture below once came through
+//! with two of its three pours and the command said
 //! `Wrote ... 2 component(s), 3 net(s), 2 footprint definition(s)` and nothing
 //! else.
 //!
@@ -55,15 +55,15 @@ fn import(who: &str) -> (String, String) {
 }
 
 #[test]
-fn the_command_says_which_pour_it_could_not_carry_and_why() {
+fn the_command_says_which_pour_it_could_not_write_and_why() {
     let (said, _) = import("named");
 
     assert!(
-        said.contains("the zone on net GND is a 6-point outline"),
+        said.contains("1 zone(s) that are not rectangles not written"),
         "the fixture's L-shaped ground plane has to be named:\n{said}"
     );
     assert!(
-        said.contains("bounding box would put copper where the shape was drawn to avoid it"),
+        said.contains("bounding box would be copper where the shape was drawn to avoid it"),
         "and the reason has to travel with it, because it is the reason not to \
          approximate:\n{said}"
     );

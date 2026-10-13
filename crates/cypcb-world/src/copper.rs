@@ -16,7 +16,7 @@ use cypcb_core::pour::{self, PourOptions};
 use cypcb_core::{Nm, Point, Rect};
 
 use crate::components::trace::{Trace, Via};
-use crate::components::zone::{Hatch, Zone};
+use crate::components::zone::{Hatch, Zone, ZoneOutline};
 use crate::components::{Layer, NetId};
 use crate::footprint::FootprintLibrary;
 use crate::world::BoardWorld;
@@ -31,12 +31,92 @@ pub struct FilledPour {
     pub pieces: Vec<Rect>,
     /// Thermal spokes, clipped to the zone and to the copper they may occupy.
     pub spokes: Vec<Rect>,
+    /// The plane of a pour drawn as a polygon: convex pieces, a ring of corners
+    /// each. Empty for a rectangle, whose plane is `pieces`.
+    pub shapes: Vec<Vec<Point>>,
+    /// The spokes of a pour drawn as a polygon, cut to its ring.
+    pub spoke_shapes: Vec<Vec<Point>>,
 }
 
 impl FilledPour {
     /// Every rectangle in this pour, plane and spokes alike.
     pub fn all(&self) -> impl Iterator<Item = &Rect> {
         self.pieces.iter().chain(self.spokes.iter())
+    }
+
+    /// Every convex piece of a polygon pour, plane and spokes alike.
+    pub fn all_shapes(&self) -> impl Iterator<Item = &Vec<Point>> {
+        self.shapes.iter().chain(self.spoke_shapes.iter())
+    }
+}
+
+/// The copper pours on a layer that are drawn as a polygon, in the order the
+/// board holds them.
+///
+/// A pour that carries a [`Hatch`] is left out: a mesh is cut from rectangles
+/// and nothing here cuts one from a ring, and filling it solid would put copper
+/// where a mesh was asked for. The importer never gives an outlined zone a
+/// hatch and the language has no polygon, so no board reaches this today; the
+/// refusal is here so that one that does is not drawn as a sheet.
+///
+/// A pour whose outline crosses itself is left out too, for the reason the
+/// importer refuses one: it has no one area to cut copper from.
+pub fn outlined_pours(
+    world: &mut BoardWorld,
+    layer: Layer,
+) -> Vec<(bevy_ecs::entity::Entity, Zone, ZoneOutline)> {
+    let mask = layer.to_copper_mask();
+    let rows: Vec<_> = world
+        .outlined_zones()
+        .into_iter()
+        .filter(|(_, zone, outline)| {
+            zone.is_copper_pour() && zone.layer_mask & mask != 0 && outline.is_simple()
+        })
+        .collect();
+    rows.into_iter()
+        .filter(|(entity, _, _)| world.ecs().get::<Hatch>(*entity).is_none())
+        .collect()
+}
+
+/// Fill one pour that is drawn as a polygon against the board it sits on.
+///
+/// The same pour as [`fill_zone`] makes of a rectangle, cut from the ring and
+/// not from its box: the ring minus every foreign piece of copper grown by the
+/// clearance, minus the thermal gap round the pads of its own net, bridged by
+/// spokes cut to the ring.
+pub fn fill_outlined_zone(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    layer: Layer,
+    zone: &Zone,
+    outline: &ZoneOutline,
+    options: &PourOptions,
+) -> FilledPour {
+    use cypcb_core::pour_shape;
+
+    let (obstacles, own_pads) = copper_on_layer(world, library, layer, zone.net);
+
+    let mut shapes = pour_shape::fill_ring(outline.corners(), &obstacles, options.clearance);
+    for pad in &own_pads {
+        shapes = pour_shape::cut_pieces(shapes, pour::grown(*pad, options.thermal_gap));
+    }
+
+    let ring = pour_shape::convex_pieces(outline.corners());
+    let mut spoke_shapes = Vec::new();
+    for pad in &own_pads {
+        for spoke in pour::thermal_spokes(*pad, options) {
+            let inside: Vec<Vec<Point>> = ring
+                .iter()
+                .filter_map(|piece| pour_shape::clip_to_rect(piece, spoke))
+                .collect();
+            spoke_shapes.extend(pour_shape::cut_all(inside, &obstacles, options.clearance));
+        }
+    }
+
+    FilledPour {
+        shapes,
+        spoke_shapes,
+        ..FilledPour::default()
     }
 }
 
@@ -96,7 +176,11 @@ pub fn fill_zone(
         pieces = hatched(&pieces, hatch);
     }
 
-    FilledPour { pieces, spokes }
+    FilledPour {
+        pieces,
+        spokes,
+        ..FilledPour::default()
+    }
 }
 
 /// The copper a hatch leaves of a solid fill: lines of `width`, centre to

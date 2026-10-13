@@ -222,12 +222,17 @@ fn control_a_zone_without_the_mark_is_not_a_teardrop() {
     let mut parsed = parse("unmarked", &plain);
     assert_eq!(parsed.metadata.teardrop_count, 0);
     assert!(teardrop_copper(&mut parsed.world).is_empty());
-    // Both of the formerly marked zones are now ordinary zones: the first is a
-    // seven-point outline this importer refuses by name, the second is on a
-    // mask layer and names no copper.
-    assert!(parsed
-        .metadata
-        .zone_refusals
-        .iter()
-        .any(|line| line.contains("6-point outline")));
+    // The two formerly marked copper zones are now ordinary pours that are not
+    // rectangles - a six-point outline and a four-point one - kept in the board
+    // and filled from their rings; the zone on a mask layer names no copper.
+    assert_eq!(parsed.metadata.outlined_zone_count, 2);
+    assert!(
+        parsed
+            .metadata
+            .zone_refusals
+            .iter()
+            .all(|line| !line.contains("6-point outline")),
+        "a pour with a ring is carried, not refused: {:?}",
+        parsed.metadata.zone_refusals
+    );
 }

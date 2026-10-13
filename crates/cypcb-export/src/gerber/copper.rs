@@ -347,6 +347,16 @@ fn export_pours(
             emit_region(*piece, output, format);
         }
     }
+
+    // The pours drawn as a polygon, as the convex pieces the filler laid down.
+    for (_, zone, outline) in cypcb_world::copper::outlined_pours(world, layer) {
+        let filled = cypcb_world::copper::fill_outlined_zone(
+            world, library, layer, &zone, &outline, options,
+        );
+        for shape in filled.all_shapes() {
+            emit_polygon(shape, output, format);
+        }
+    }
 }
 
 /// Draw the teardrops of this layer, as the board holds them.
