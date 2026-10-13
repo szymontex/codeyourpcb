@@ -175,8 +175,12 @@ pub struct ZoneInfo {
     pub layer_mask: u32,
     /// Net name it pours to, empty when it names none.
     pub net: String,
-    /// Its outline: min x, min y, max x, max y, in nanometres.
+    /// Its box: min x, min y, max x, max y, in nanometres.
     pub bounds: [i64; 4],
+    /// The corners it was drawn with, in nanometres, when it is not a
+    /// rectangle. Left out for a rectangle, which is its `bounds`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outline: Option<Vec<[i64; 2]>>,
 }
 
 /// A copper pour, as the copper it actually becomes.

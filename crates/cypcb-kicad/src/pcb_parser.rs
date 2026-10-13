@@ -29,7 +29,7 @@ use cypcb_core::{Nm, Point, Rect};
 
 use crate::frame;
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
-use cypcb_world::components::zone::Zone;
+use cypcb_world::components::zone::{Zone, ZoneOutline};
 use cypcb_world::components::{BoardOutline, EdgeConnector, Layer, PadShape, Side, StackupSheet};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef, PlacementOrigin};
 use cypcb_world::{
@@ -97,6 +97,10 @@ pub enum KicadPcbError {
 // Result types
 // ---------------------------------------------------------------------------
 
+fn is_zero(n: &usize) -> bool {
+    *n == 0
+}
+
 /// Metadata extracted from a parsed KiCad PCB file.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct KicadPcbMetadata {
@@ -114,8 +118,16 @@ pub struct KicadPcbMetadata {
     pub board_size_mm: (f64, f64),
     /// Number of copper layers.
     pub layer_count: u8,
-    /// Copper pours and rule areas carried into the board.
+    /// Copper pours and rule areas carried into the board as rectangles.
     pub zone_count: usize,
+    /// Rule areas and pours kept in the board as an outline, because they are
+    /// not rectangles: the ring of corners the file states.
+    ///
+    /// A keepout is acted on whole. A pour is kept for the file it is written
+    /// back to and not filled - each one of those is also named in
+    /// `zone_refusals`, so the board that arrives without its copper says so.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub outlined_zone_count: usize,
     /// Teardrop zones carried into the board as teardrop copper: a polygon on
     /// its layer and net, as KiCad keeps one.
     pub teardrop_count: usize,
@@ -556,6 +568,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     // 8. Extract copper pours and rule areas
     let mut zone_refusals: Vec<String> = Vec::new();
     let mut zone_count = 0usize;
+    let mut outlined_zone_count = 0usize;
     let mut teardrop_count = 0usize;
     let mut mask_teardrops = 0usize;
     for elem in elements {
@@ -566,6 +579,17 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
             ZoneImport::Carried(zone) => {
                 world.spawn_entity((zone,));
                 zone_count += 1;
+            }
+            // Not a rectangle: kept as the ring of corners the file states. A
+            // pour is not filled, and says so.
+            ZoneImport::Outlined {
+                zone,
+                outline,
+                unfilled,
+            } => {
+                world.spawn_outlined_zone(zone, outline);
+                outlined_zone_count += 1;
+                zone_refusals.extend(unfilled);
             }
             // A teardrop is copper of the net and layer it is on, whole: the
             // polygon in the file is the polygon, curved or not, and the
@@ -629,6 +653,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         pad_approximations,
         placement_notes,
         zone_count,
+        outlined_zone_count,
         teardrop_count,
         zone_refusals,
         track_refusals,
@@ -1792,12 +1817,12 @@ pub(crate) fn parse_pad(
 /// exported Gerber shipped a board whose ground was missing.
 ///
 /// What can be carried is carried exactly. This crate's `Zone` is a rectangle,
-/// and KiCad's is a polygon, so a pour whose outline is an axis-aligned
-/// rectangle comes across as itself and anything else is refused by name
-/// rather than flattened to its bounding box. A bounding box is not a
-/// conservative approximation of an L-shaped pour - it is copper where the
-/// designer put none, and it would be wrong in exactly the places the shape
-/// was drawn to avoid.
+/// and KiCad's is a polygon, so a zone whose outline is an axis-aligned
+/// rectangle comes across as itself and anything else is kept as the ring of
+/// corners the file states - see `outlined` - and never flattened to its
+/// bounding box. A bounding box is not a conservative approximation of an
+/// L-shaped pour - it is copper where the designer put none, and it would be
+/// wrong in exactly the places the shape was drawn to avoid.
 fn parse_zone(
     elem: &Sexp,
     net_map: &NetIndex,
@@ -1970,12 +1995,9 @@ fn parse_zone(
     }
 
     let Some(bounds) = axis_aligned_rectangle(&points) else {
-        return Ok(ZoneImport::Refused(format!(
-            "{label} is a {}-point outline; this importer carries rectangular \
-             pours only, and a bounding box would put copper where the shape \
-             was drawn to avoid it",
-            points.len()
-        )));
+        return Ok(outlined(
+            &points, is_keepout, layer_mask, net_id, net_name, zone_name, &label,
+        ));
     };
 
     if is_keepout {
@@ -1998,6 +2020,60 @@ fn parse_zone(
     }
 }
 
+/// A zone whose outline is not a rectangle.
+///
+/// Its corners go into the board as they are. What the board does with them is
+/// not the same for the two kinds of zone. A keepout is a promise about where
+/// nothing goes, and a point in or out of the ring is all the router and the
+/// checker ask of it. A pour is copper, and nothing here makes copper of a
+/// ring yet: the fill is cut from rectangles. Read as its bounding box it would
+/// be copper where the designer cut it away, so it is kept for the file it is
+/// written back to and filled by nobody, and the sentence that says so is
+/// returned with it.
+fn outlined(
+    points: &[(f64, f64)],
+    is_keepout: bool,
+    layer_mask: u32,
+    net_id: Option<NetId>,
+    net_name: String,
+    zone_name: Option<String>,
+    label: &str,
+) -> ZoneImport {
+    let corners: Vec<Point> = points.iter().map(|(x, y)| Point::from_mm(*x, *y)).collect();
+    let Some(outline) = ZoneOutline::new(corners) else {
+        return ZoneImport::Refused(format!(
+            "{label} is a {}-point outline that encloses no area",
+            points.len()
+        ));
+    };
+
+    if is_keepout {
+        return ZoneImport::Outlined {
+            zone: Zone::keepout(outline.bounds(), layer_mask),
+            outline,
+            unfilled: None,
+        };
+    }
+
+    let Some(net) = net_id else {
+        return ZoneImport::Refused(format!(
+            "{label} is poured to no net, so nothing connects to it"
+        ));
+    };
+    let unfilled = format!(
+        "{label} is a {}-point outline; its outline is kept in the board and it is not filled: \
+         the fill is cut from rectangles, and a bounding box would put copper where the shape \
+         was drawn to avoid it",
+        points.len()
+    );
+    ZoneImport::Outlined {
+        zone: Zone::copper_pour_for_net(outline.bounds(), layer_mask, net)
+            .with_name(zone_name.unwrap_or(net_name)),
+        outline,
+        unfilled: Some(unfilled),
+    }
+}
+
 /// Where teardrop copper read from a file starts in the order a board writes
 /// its copper in: after every teardrop the builder makes.
 const FILE_TEARDROP_ORDER: u32 = 1 << 30;
@@ -2006,6 +2082,14 @@ const FILE_TEARDROP_ORDER: u32 = 1 << 30;
 pub enum ZoneImport {
     /// Carried into the board.
     Carried(Zone),
+    /// Carried into the board as the ring of corners it is, not as a
+    /// rectangle. `unfilled` is the sentence that says a pour is in the board
+    /// and has no copper yet.
+    Outlined {
+        zone: Zone,
+        outline: ZoneOutline,
+        unfilled: Option<String>,
+    },
     /// A teardrop zone on a copper layer: a polygon, the layer it is on and the
     /// net it carries.
     Teardrop {

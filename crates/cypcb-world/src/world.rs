@@ -783,15 +783,64 @@ impl BoardWorld {
             .collect()
     }
 
-    /// Iterate over all zones.
+    /// Iterate over the zones that are rectangles.
     ///
     /// Returns a vector of (Entity, Zone clone) tuples.
     /// Uses clones to avoid lifetime issues with the query.
+    ///
+    /// A zone with a [`ZoneOutline`] is not here. Its `bounds` is the box round
+    /// its corners, which is not the zone, and a caller that reads `bounds`
+    /// would put copper - or take it away - where the shape was drawn to do
+    /// neither. [`BoardWorld::outlined_zones`] is the call that asks for those,
+    /// and a reader that has not been taught the outline does not see them:
+    /// the same as before the model could hold one.
     pub fn zones(&mut self) -> Vec<(Entity, Zone)> {
-        in_build_order::<(Entity, &Zone)>(&mut self.world)
+        in_build_order::<(Entity, &Zone, Option<&ZoneOutline>)>(&mut self.world)
             .into_iter()
-            .map(|(e, z)| (e, z.clone()))
+            .filter(|(_, _, outline)| outline.is_none())
+            .map(|(e, z, _)| (e, z.clone()))
             .collect()
+    }
+
+    /// Iterate over the zones that are not rectangles, with their outlines.
+    ///
+    /// The zone's `bounds` is the box round the outline.
+    pub fn outlined_zones(&mut self) -> Vec<(Entity, Zone, ZoneOutline)> {
+        in_build_order::<(Entity, &Zone, &ZoneOutline)>(&mut self.world)
+            .into_iter()
+            .map(|(e, z, outline)| (e, z.clone(), outline.clone()))
+            .collect()
+    }
+
+    /// Every zone, rectangle or not, with its outline when it has one.
+    ///
+    /// For a writer that must carry the whole board: `zones` leaves the
+    /// outlined ones out on purpose.
+    pub fn all_zones(&mut self) -> Vec<(Entity, Zone, Option<ZoneOutline>)> {
+        in_build_order::<(Entity, &Zone, Option<&ZoneOutline>)>(&mut self.world)
+            .into_iter()
+            .map(|(e, z, outline)| (e, z.clone(), outline.cloned()))
+            .collect()
+    }
+
+    /// Add a zone that is the ring of corners, not a rectangle.
+    ///
+    /// The zone's `bounds` is set to the box round the corners, so the two
+    /// never disagree. Only a keepout or a copper pour has an outline: a flex
+    /// region or a named area is drawn as a rectangle, and the checks that read
+    /// those do not look for an outline.
+    ///
+    /// # Panics
+    ///
+    /// When the zone is a flex region or a named area.
+    pub fn spawn_outlined_zone(&mut self, mut zone: Zone, outline: ZoneOutline) -> Entity {
+        assert!(
+            matches!(zone.kind, ZoneKind::Keepout | ZoneKind::CopperPour),
+            "only a keepout or a copper pour has an outline, not {:?}",
+            zone.kind
+        );
+        zone.bounds = outline.bounds();
+        self.world.spawn((zone, outline)).id()
     }
 
     // ========================================================================

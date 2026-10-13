@@ -964,6 +964,11 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
         Option<cypcb_core::Nm>,
         Option<crate::components::Hatch>,
     );
+    // A zone that is a ring of corners is not here: the language has a
+    // rectangle for a zone and no word for a polygon yet, and written as its
+    // bounding box a pour would be copper where the shape was drawn to avoid
+    // it. It is counted and named in `not_written`.
+    let mut outlined_zones = 0usize;
     let zones: Vec<WrittenZone> = {
         let ecs = world.ecs_mut();
         in_build_order::<(
@@ -971,9 +976,14 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
             Option<&crate::components::StitchPitch>,
             Option<&crate::components::BendRadius>,
             Option<&crate::components::Hatch>,
+            Option<&crate::components::ZoneOutline>,
         )>(ecs)
         .into_iter()
-        .map(|(zone, pitch, radius, hatch)| {
+        .filter(|(.., outline)| {
+            outlined_zones += usize::from(outline.is_some());
+            outline.is_none()
+        })
+        .map(|(zone, pitch, radius, hatch, _)| {
             (
                 zone.clone(),
                 pitch.map(|p| p.0),
@@ -1532,6 +1542,15 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     if off_the_legend > 0 {
         not_written.push(format!(
             "{off_the_legend} text(s) written on the top legend instead of their own layer"
+        ));
+    }
+
+    // A zone drawn as a polygon.
+    if outlined_zones > 0 {
+        not_written.push(format!(
+            "{outlined_zones} zone(s) that are not rectangles not written: the language has \
+             no word for a polygon, and a bounding box would be copper where the shape was \
+             drawn to avoid it"
         ));
     }
 

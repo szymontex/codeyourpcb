@@ -52,8 +52,10 @@ export interface ZoneInfo {
   layer_mask: number;
   /** Net name it pours to, empty when it names none */
   net: string;
-  /** Its outline: [min x, min y, max x, max y] in nm */
+  /** Its box: [min x, min y, max x, max y] in nm */
   bounds: [number, number, number, number];
+  /** The corners it was drawn with, in nm, when it is not a rectangle. Absent for a rectangle, which is its `bounds`. */
+  outline?: [number, number][];
 }
 
 /**

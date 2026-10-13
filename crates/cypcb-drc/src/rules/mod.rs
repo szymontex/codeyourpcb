@@ -213,8 +213,16 @@ impl DrcRule for KeepoutRule {
             .filter(|(_, zone)| zone.is_keepout())
             .collect();
 
+        // The keepouts drawn as a polygon. A part's centre is in one or it is
+        // not, and a notch of a concave outline is not.
+        let outlined: Vec<_> = world
+            .outlined_zones()
+            .into_iter()
+            .filter(|(_, zone, _)| zone.is_keepout())
+            .collect();
+
         // If no keepout zones, skip
-        if zones.is_empty() {
+        if zones.is_empty() && outlined.is_empty() {
             return violations;
         }
 
@@ -226,6 +234,17 @@ impl DrcRule for KeepoutRule {
             for (zone_entity, zone) in &zones {
                 // Check if component center is inside zone
                 if zone.contains(position.0) {
+                    violations.push(DrcViolation::keepout(
+                        entity,
+                        *zone_entity,
+                        refdes.as_str(),
+                        zone.name.as_deref(),
+                        position.0,
+                    ));
+                }
+            }
+            for (zone_entity, zone, outline) in &outlined {
+                if outline.contains(position.0) {
                     violations.push(DrcViolation::keepout(
                         entity,
                         *zone_entity,
