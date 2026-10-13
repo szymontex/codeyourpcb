@@ -31,8 +31,10 @@ enum Reads {
     /// taught to. The text says what that costs and which kinds it reads.
     Rectangles(&'static str),
     /// Reads the ECS directly, and says why that is safe: what an outlined zone
-    /// is not, or never has.
-    Directly(&'static str),
+    /// is not, or never has. The first text is a line of code the file has to
+    /// contain for the reason to be true of it - the filter, or the component
+    /// it requires - and the test looks for it there.
+    Directly(&'static str, &'static str),
 }
 
 const READERS: &[(&str, Reads)] = &[
@@ -45,12 +47,15 @@ const READERS: &[(&str, Reads)] = &[
     ("crates/cypcb-render/src/lib.rs", Reads::Outline),
     ("crates/cypcb-world/src/dsl.rs", Reads::Outline),
     ("crates/cypcb-world/src/world.rs", Reads::Outline),
+    ("crates/cypcb-world/src/copper.rs", Reads::Outline),
+    ("crates/cypcb-export/src/gerber/copper.rs", Reads::Outline),
+    ("crates/cypcb-export/src/ipc2581.rs", Reads::Outline),
+    ("crates/cypcb-drc/src/rules/pour_island.rs", Reads::Outline),
+    ("crates/cypcb-drc/src/rules/net_split.rs", Reads::Outline),
+    ("crates/cypcb-drc/src/rules/unrouted_pin.rs", Reads::Outline),
+    ("crates/cypcb-autoroute/src/orchestrator.rs", Reads::Outline),
     // Rectangles only. Each of these is the same as before the model could hold
     // an outline: the zone is not there.
-    (
-        "crates/cypcb-autoroute/src/orchestrator.rs",
-        Reads::Rectangles("pours: a pad inside a pour is connected by it; an outlined pour is not filled"),
-    ),
     (
         "crates/cypcb-cli/src/commands/parse.rs",
         Reads::Rectangles("the model of a .cypcb design, which has no polygon"),
@@ -69,7 +74,7 @@ const READERS: &[(&str, Reads)] = &[
     ),
     (
         "crates/cypcb-drc/src/rules/edge_clearance.rs",
-        Reads::Rectangles("the edge clearance of pours, which are not filled"),
+        Reads::Rectangles("the edge clearance of pours: a pour drawn as a polygon is not measured against the board edge yet"),
     ),
     (
         "crates/cypcb-drc/src/rules/flex_trace_angle.rs",
@@ -77,66 +82,65 @@ const READERS: &[(&str, Reads)] = &[
     ),
     (
         "crates/cypcb-drc/src/rules/mounting_hole_clearance.rs",
-        Reads::Rectangles("copper of keepouts next to an unplated hole: not taught the outline yet"),
-    ),
-    (
-        "crates/cypcb-drc/src/rules/net_split.rs",
-        Reads::Rectangles("pours, which are not filled"),
+        Reads::Rectangles("keepouts next to an unplated hole: a keepout drawn as a polygon is not measured against a hole yet"),
     ),
     (
         "crates/cypcb-drc/src/rules/solid_pour_in_bend.rs",
         Reads::Rectangles("flex regions, which never have an outline"),
     ),
     (
-        "crates/cypcb-drc/src/rules/unrouted_pin.rs",
-        Reads::Rectangles("pours, which are not filled"),
-    ),
-    (
         "crates/cypcb-drc/src/rules/zone_overlap.rs",
-        Reads::Rectangles("pours on different nets, which are not filled"),
-    ),
-    (
-        "crates/cypcb-export/src/gerber/copper.rs",
-        Reads::Rectangles("the copper of pours: an outlined pour makes none until the fill is cut from polygons"),
-    ),
-    (
-        "crates/cypcb-export/src/ipc2581.rs",
-        Reads::Rectangles("the copper of pours: an outlined pour makes none until the fill is cut from polygons"),
+        Reads::Rectangles("two pours on different nets: a pour drawn as a polygon is not compared with another yet"),
     ),
     // The ECS, read directly.
     (
         "crates/cypcb-drc/src/rules/bend_radius.rs",
-        Reads::Directly("filters flex regions, and only a keepout or a pour has an outline"),
+        Reads::Directly(
+            "is_flex()",
+            "filters flex regions, and only a keepout or a pour has an outline",
+        ),
     ),
     (
         "crates/cypcb-drc/src/rules/empty_area.rs",
-        Reads::Directly("asks for a zone with no width or no height; an outline encloses an area"),
+        Reads::Directly(
+            "width > 0 && height > 0",
+            "asks for a zone with no width or no height; an outline encloses an area",
+        ),
     ),
     (
         "crates/cypcb-drc/src/rules/flex_hole.rs",
-        Reads::Directly("filters flex regions, and only a keepout or a pour has an outline"),
+        Reads::Directly(
+            "is_flex()",
+            "filters flex regions, and only a keepout or a pour has an outline",
+        ),
     ),
     (
         "crates/cypcb-drc/src/rules/hatch_etchable.rs",
-        Reads::Directly("needs a `Hatch`, which the importer never gives an outlined zone"),
-    ),
-    (
-        "crates/cypcb-world/src/copper.rs",
-        Reads::Directly("takes the zone it is handed, and what hands it one is `zones()`"),
+        Reads::Directly(
+            "&Hatch",
+            "needs a `Hatch`, which the importer never gives an outlined zone",
+        ),
     ),
     (
         "crates/cypcb-world/src/stitch.rs",
-        Reads::Directly("takes the zone it is handed, and what hands it one is a stitched `zones()` row"),
+        Reads::Directly(
+            "zone: &Zone",
+            "takes the zone it is handed, and what hands it one is a stitched `zones()` row",
+        ),
     ),
     (
         "crates/cypcb-world/src/sync.rs",
-        Reads::Directly("stitches pours that state a `StitchPitch`, which the importer never gives an outlined zone"),
+        Reads::Directly(
+            "StitchPitch",
+            "stitches pours that state a `StitchPitch`, which the importer never gives an outlined zone",
+        ),
     ),
 ];
 
 /// The source of a file without its comments and without its test module.
 fn code_of(src: &str) -> String {
-    let cut = src.find("#[cfg(test)]").unwrap_or(src.len());
+    // The test module, not a `#[cfg(test)]` on a single `use` above the code.
+    let cut = src.find("#[cfg(test)]\nmod ").unwrap_or(src.len());
     src[..cut]
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
@@ -187,6 +191,7 @@ fn turbofish<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
 fn reads_zones(src: &str) -> bool {
     let code = code_of(src);
     code.contains(".zones()")
+        || code.contains("pours_of(")
         || code.contains("&Zone ")
         || code.contains("&Zone,")
         || code.contains("&Zone>")
@@ -205,6 +210,8 @@ fn asks_for_the_outline(src: &str) -> bool {
     let code = code_of(src);
     code.contains("outlined_zones(")
         || code.contains("all_zones(")
+        || code.contains("pours_of(")
+        || code.contains("outlined_pours(")
         || ["query", "in_build_order"].iter().any(|name| {
             turbofish(&code, name)
                 .iter()
@@ -274,9 +281,10 @@ fn a_file_that_acts_on_the_outline_asks_for_it() {
                 "{file} is listed as reading rectangles only ({why}) and now asks for the \
                  outline: move it to the readers that act on one"
             ),
-            Reads::Directly(why) => assert!(
-                !text.is_empty() && !why.is_empty(),
-                "{file} reads the ECS directly and has to say why that is safe"
+            Reads::Directly(needle, why) => assert!(
+                code_of(text).contains(needle),
+                "{file} is listed as reading the ECS directly because \"{why}\", and its \
+                 code has no `{needle}`: the reason is not true of the file"
             ),
         }
     }
@@ -292,7 +300,7 @@ fn a_file_that_reads_the_ecs_directly_is_not_a_zones_reader_in_disguise() {
     // then reads the box of. One that does belongs under `Rectangles`.
     let all = sources();
     for (file, how) in READERS {
-        if let Reads::Directly(_) = how {
+        if let Reads::Directly(..) = how {
             let code = code_of(&all.iter().find(|(f, _)| f == file).unwrap().1);
             assert!(
                 !code.contains(".zones()") || file.ends_with("sync.rs"),
@@ -330,9 +338,27 @@ fn control_the_scan_ignores_what_is_not_a_read() {
 fn control_the_outline_check_tells_the_two_calls_from_zones() {
     assert!(asks_for_the_outline("world.outlined_zones()"));
     assert!(asks_for_the_outline("world.all_zones()"));
+    assert!(asks_for_the_outline("let pours = pours_of(world);"));
+    assert!(asks_for_the_outline(
+        "for p in copper::outlined_pours(world, layer) {}"
+    ));
     assert!(asks_for_the_outline(
         "ecs.query::<(&Zone, Option<&ZoneOutline>)>()"
     ));
     assert!(!asks_for_the_outline("world.zones()"));
     assert!(!asks_for_the_outline("ecs.query::<&Zone>()"));
+}
+
+#[test]
+fn control_a_reason_whose_code_is_not_in_the_file_is_not_true_of_it() {
+    // The check `Directly` rows go through: the needle is in the code, and not
+    // in a comment or in the test module.
+    let src = "fn f() { zones.filter(|z| z.is_flex()); }";
+    assert!(code_of(src).contains("is_flex()"));
+    assert!(!code_of("// z.is_flex()\nfn f() {}").contains("is_flex()"));
+    assert!(
+        !code_of("fn f() {}\n#[cfg(test)]\nmod t { fn g() { z.is_flex(); } }")
+            .contains("is_flex()")
+    );
+    assert!(!code_of(src).contains("&Hatch"));
 }

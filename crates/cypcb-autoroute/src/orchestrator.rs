@@ -18,7 +18,7 @@ use crate::cost::RoutingCost;
 use crate::grid::RoutingGrid;
 use crate::pathfinder::{find_path_with_zones, GridNode, PadZone};
 use crate::AutorouteConfig;
-use cypcb_world::components::rotate_about_origin;
+use cypcb_world::components::{rotate_about_origin, ZoneOutline};
 
 /// A pad target for routing — the absolute position and layer info of a single pad.
 #[derive(Debug, Clone)]
@@ -119,16 +119,28 @@ pub fn extract_ratsnest(world: &mut BoardWorld, library: &FootprintLibrary) -> V
     // Copper pours, with the net each is poured to. A pad of that net sitting
     // inside one is already connected by the plane - routing to it would be
     // laying copper on top of copper.
-    let pours: Vec<(NetId, cypcb_core::Rect, u32)> = world
+    let mut pours: Vec<(NetId, cypcb_core::Rect, Option<ZoneOutline>, u32)> = world
         .zones()
         .into_iter()
         .filter_map(|(_entity, zone)| {
             let net = zone.net?;
             zone.is_keepout()
                 .not()
-                .then_some((net, zone.bounds, zone.layer_mask))
+                .then_some((net, zone.bounds, None, zone.layer_mask))
         })
         .collect();
+    // The pours drawn as a polygon connect what their ring holds, not what the
+    // box round it does.
+    pours.extend(
+        world
+            .outlined_zones()
+            .into_iter()
+            .filter_map(|(_entity, zone, outline)| {
+                let net = zone.net?;
+                zone.is_copper_pour()
+                    .then_some((net, zone.bounds, Some(outline), zone.layer_mask))
+            }),
+    );
 
     // Build a map: net_id -> Vec<PadTarget>
     let mut net_pads: HashMap<NetId, Vec<PadTarget>> = HashMap::new();
@@ -816,18 +828,82 @@ pub fn is_multi_layer(layer_mask: u32) -> bool {
 /// The pour has to be on a layer the pad reaches - a ground plane on the bottom
 /// does not connect a top-side SMD pad - and has to contain the pad's centre.
 fn covered_by_pour(
-    pours: &[(NetId, cypcb_core::Rect, u32)],
+    pours: &[(NetId, cypcb_core::Rect, Option<ZoneOutline>, u32)],
     net: NetId,
     position: Point,
     pad_layers: u32,
 ) -> bool {
-    pours.iter().any(|(pour_net, bounds, pour_layers)| {
-        *pour_net == net && pour_layers & pad_layers != 0 && bounds.contains(position)
-    })
+    pours
+        .iter()
+        .any(|(pour_net, bounds, outline, pour_layers)| {
+            *pour_net == net
+                && pour_layers & pad_layers != 0
+                && match outline {
+                    Some(outline) => outline.contains(position),
+                    None => bounds.contains(position),
+                }
+        })
 }
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_pour_drawn_as_a_polygon_covers_what_its_ring_holds() {
+        use cypcb_world::components::ZoneOutline;
+        let net = NetId::new(1);
+        let l = ZoneOutline::new(vec![
+            Point::from_mm(0.0, 0.0),
+            Point::from_mm(20.0, 0.0),
+            Point::from_mm(20.0, 10.0),
+            Point::from_mm(10.0, 10.0),
+            Point::from_mm(10.0, 20.0),
+            Point::from_mm(0.0, 20.0),
+        ])
+        .expect("an L");
+        let pours = vec![(net, l.bounds(), Some(l), 0b01)];
+        // In the foot of the L, and on its edge.
+        assert!(covered_by_pour(
+            &pours,
+            net,
+            Point::from_mm(15.0, 5.0),
+            0b01
+        ));
+        assert!(covered_by_pour(
+            &pours,
+            net,
+            Point::from_mm(20.0, 5.0),
+            0b01
+        ));
+        // In the notch, which is inside the box and outside the L.
+        assert!(!covered_by_pour(
+            &pours,
+            net,
+            Point::from_mm(15.0, 15.0),
+            0b01
+        ));
+        // Another net, another layer.
+        assert!(!covered_by_pour(
+            &pours,
+            NetId::new(2),
+            Point::from_mm(15.0, 5.0),
+            0b01
+        ));
+        assert!(!covered_by_pour(
+            &pours,
+            net,
+            Point::from_mm(15.0, 5.0),
+            0b10
+        ));
+        // The control: the same pour as a rectangle covers the notch.
+        let boxed = vec![(net, pours[0].1, None, 0b01)];
+        assert!(covered_by_pour(
+            &boxed,
+            net,
+            Point::from_mm(15.0, 15.0),
+            0b01
+        ));
+    }
 
     #[test]
     fn a_ground_plane_removes_its_net_from_the_ratsnest() {

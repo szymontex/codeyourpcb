@@ -10,7 +10,7 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, Via};
-use cypcb_world::components::zone::{Zone, ZoneKind};
+use cypcb_world::components::zone::{Zone, ZoneKind, ZoneOutline};
 use cypcb_world::components::{FootprintRef, NetConnections, NetId, Position, RefDes, Rotation};
 use cypcb_world::footprint::{FootprintLibrary, PadDef};
 use cypcb_world::in_build_order;
@@ -19,7 +19,9 @@ use cypcb_world::BoardWorld;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
-use super::clearance::{copper_distance, pad_copper, trace_to_copper_distance, Copper, TraceData};
+use super::clearance::{
+    copper_distance, pad_copper, trace_to_copper_distance, Copper, Polygon, TraceData,
+};
 use super::{layer_bit, rotate_point, DrcRule};
 
 /// Rule for pins a net names and no copper reaches.
@@ -39,12 +41,7 @@ impl DrcRule for UnroutedPinRule {
             let ecs = world.ecs_mut();
             in_build_order::<&Via>(ecs).into_iter().copied().collect()
         };
-        let pours: Vec<Zone> = world
-            .zones()
-            .into_iter()
-            .map(|(_, zone)| zone)
-            .filter(|zone| zone.kind == ZoneKind::CopperPour)
-            .collect();
+        let pours = pours_of(world);
 
         // How many pads each net has. A net with one pad has nothing to be
         // routed to, and reporting it would be reporting the design rather
@@ -185,6 +182,35 @@ pub(crate) fn pad_centre(pad: &PadDef, position: &Position, rotation: &Rotation)
     )
 }
 
+/// A copper pour as the rules that ask what it reaches see it: the zone, and
+/// the ring of corners when it is not a rectangle.
+pub(crate) struct Pour {
+    pub zone: Zone,
+    pub outline: Option<ZoneOutline>,
+}
+
+/// Every copper pour on the board, the rectangles first and then those drawn as
+/// a polygon.
+pub(crate) fn pours_of(world: &mut BoardWorld) -> Vec<Pour> {
+    let rectangles = world
+        .zones()
+        .into_iter()
+        .filter(|(_, zone)| zone.kind == ZoneKind::CopperPour)
+        .map(|(_, zone)| Pour {
+            zone,
+            outline: None,
+        });
+    let outlined = world
+        .outlined_zones()
+        .into_iter()
+        .filter(|(_, zone, _)| zone.kind == ZoneKind::CopperPour)
+        .map(|(_, zone, outline)| Pour {
+            zone,
+            outline: Some(outline),
+        });
+    rectangles.chain(outlined).collect()
+}
+
 /// Whether this rule counts the pad as reached by copper of `net`.
 ///
 /// `NetSplitRule` asks it too, so that a pin nothing reaches is reported by
@@ -192,7 +218,7 @@ pub(crate) fn pad_centre(pad: &PadDef, position: &Position, rotation: &Rotation)
 pub(crate) fn pad_is_reached(
     traces: &[Trace],
     vias: &[Via],
-    pours: &[Zone],
+    pours: &[Pour],
     net: NetId,
     pad: &PadDef,
     copper: &Copper,
@@ -215,7 +241,7 @@ pub(crate) fn pad_is_reached(
 fn copper_reaches(
     traces: &[Trace],
     vias: &[Via],
-    pours: &[Zone],
+    pours: &[Pour],
     net: NetId,
     copper: &Copper,
     mask: u32,
@@ -260,12 +286,20 @@ fn copper_reaches(
     }
 
     for pour in pours {
-        if pour.net != Some(net) || pour.layer_mask & mask == 0 {
+        let zone = &pour.zone;
+        if zone.net != Some(net) || zone.layer_mask & mask == 0 {
+            continue;
+        }
+        // A pour drawn as a polygon is its ring and not the box round it.
+        if let Some(outline) = &pour.outline {
+            if Polygon::new(outline.corners()).to_copper(copper).1 == 0 {
+                return true;
+            }
             continue;
         }
         let bounds = Copper::boxed(rstar::AABB::from_corners(
-            [pour.bounds.min.x.0, pour.bounds.min.y.0],
-            [pour.bounds.max.x.0, pour.bounds.max.y.0],
+            [zone.bounds.min.x.0, zone.bounds.min.y.0],
+            [zone.bounds.max.x.0, zone.bounds.max.y.0],
         ));
         if copper_distance(&bounds, copper) == 0 {
             return true;

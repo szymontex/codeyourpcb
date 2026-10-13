@@ -619,10 +619,11 @@ export function drawFlexRegion(
  * Draw one filled copper pour.
  *
  * The rectangles arrive already cut around pads, traces and vias, so this only
- * has to place them. They are drawn semi-transparent because a plane covers
+ * has to place them. Exported for the test that fixes the shape of what it
+ * draws. They are drawn semi-transparent because a plane covers
  * most of a board and an opaque one would hide the silkscreen and the parts.
  */
-function drawPour(
+export function drawPour(
   ctx: CanvasRenderingContext2D, vp: Viewport, pour: PourInfo,
   layers: LayerVisibility, highlightedNet: string | null,
 ): void {
@@ -643,6 +644,19 @@ function drawPour(
       Math.min(sx1, sx2), Math.min(sy1, sy2),
       Math.abs(sx2 - sx1), Math.abs(sy2 - sy1),
     );
+  }
+
+  // A pour drawn as a polygon arrives as convex pieces, each a ring of corners.
+  for (const piece of pour.polygons ?? []) {
+    if (piece.length < 3) continue;
+    ctx.beginPath();
+    piece.forEach(([x, y], index) => {
+      const [sx, sy] = worldToScreen(vp, x, y);
+      if (index === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    ctx.closePath();
+    ctx.fill();
   }
 }
 

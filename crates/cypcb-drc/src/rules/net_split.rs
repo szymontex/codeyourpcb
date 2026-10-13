@@ -25,7 +25,6 @@
 
 use cypcb_core::Point;
 use cypcb_world::components::trace::{Trace, Via};
-use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::Layer;
 use cypcb_world::components::{FootprintRef, NetConnections, NetId, Position, RefDes, Rotation};
 use cypcb_world::in_build_order;
@@ -40,7 +39,7 @@ use super::clearance::{
     aabb_distance, component_pads, copper_distance, segment_distance, trace_to_copper_distance,
     Copper, Polygon, TraceData,
 };
-use super::unrouted_pin::{pad_centre, pad_is_reached};
+use super::unrouted_pin::{pad_centre, pad_is_reached, pours_of};
 use super::DrcRule;
 
 /// Rule for a net whose copper does not join all of its pins.
@@ -131,6 +130,8 @@ enum Shape {
     Segment(PieceSegment),
     Via(Via),
     Pour,
+    /// A pour drawn as a polygon: its ring.
+    PourRing(Polygon),
     /// A teardrop: the corners as the model holds them, and as a polygon.
     Teardrop(Vec<Point>, Polygon),
 }
@@ -166,12 +167,7 @@ pub fn copper_pieces(world: &mut BoardWorld) -> Vec<NetCopper> {
         let ecs = world.ecs_mut();
         in_build_order::<&Via>(ecs).into_iter().copied().collect()
     };
-    let pours: Vec<Zone> = world
-        .zones()
-        .into_iter()
-        .map(|(_, zone)| zone)
-        .filter(|zone| zone.kind == ZoneKind::CopperPour)
-        .collect();
+    let pours = pours_of(world);
     let components: Vec<_> = {
         let ecs = world.ecs_mut();
         in_build_order::<(
@@ -300,16 +296,22 @@ pub fn copper_pieces(world: &mut BoardWorld) -> Vec<NetCopper> {
     }
 
     for pour in &pours {
-        let Some(features) = pour.net.and_then(|net| by_net.get_mut(&net.id())) else {
+        let zone = &pour.zone;
+        let Some(features) = zone.net.and_then(|net| by_net.get_mut(&net.id())) else {
             continue;
         };
         let bounds = AABB::from_corners(
-            [pour.bounds.min.x.0, pour.bounds.min.y.0],
-            [pour.bounds.max.x.0, pour.bounds.max.y.0],
+            [zone.bounds.min.x.0, zone.bounds.min.y.0],
+            [zone.bounds.max.x.0, zone.bounds.max.y.0],
         );
+        // A pour drawn as a polygon joins what its ring touches, not what its box does.
+        let shape = match &pour.outline {
+            Some(outline) => Shape::PourRing(Polygon::new(outline.corners())),
+            None => Shape::Pour,
+        };
         features.push(Feature {
-            shape: Shape::Pour,
-            layer_mask: pour.layer_mask,
+            shape,
+            layer_mask: zone.layer_mask,
             bounds,
             copper: Copper::boxed(bounds),
         });
@@ -339,7 +341,7 @@ pub fn copper_pieces(world: &mut BoardWorld) -> Vec<NetCopper> {
                         Some(Shape::Pad(pin)) => piece.pins.push(pin),
                         Some(Shape::Segment(segment)) => piece.segments.push(segment),
                         Some(Shape::Via(via)) => piece.vias.push(via),
-                        Some(Shape::Pour) => piece.pour = true,
+                        Some(Shape::Pour | Shape::PourRing(_)) => piece.pour = true,
                         Some(Shape::Teardrop(outline, _)) => piece.teardrops.push(outline),
                         None => {}
                     }
@@ -473,14 +475,21 @@ fn touches(one: &Feature, other: &Feature) -> bool {
             let ((a1, a2), (b1, b2)) = (ends(first), ends(second));
             segment_distance(a1, a2, b1, b2) <= first.half_width + second.half_width
         }
-        (Shape::Teardrop(_, first), Shape::Teardrop(_, second)) => first.to_polygon(second).1 == 0,
-        (Shape::Teardrop(_, polygon), Shape::Segment(segment))
-        | (Shape::Segment(segment), Shape::Teardrop(_, polygon)) => {
+        (
+            Shape::Teardrop(_, first) | Shape::PourRing(first),
+            Shape::Teardrop(_, second) | Shape::PourRing(second),
+        ) => first.to_polygon(second).1 == 0,
+        (Shape::Teardrop(_, polygon) | Shape::PourRing(polygon), Shape::Segment(segment))
+        | (Shape::Segment(segment), Shape::Teardrop(_, polygon) | Shape::PourRing(polygon)) => {
             let (a, b) = ends(segment);
             polygon.to_segment(a, b).1 <= segment.half_width
         }
-        (Shape::Teardrop(_, polygon), _) => polygon.to_copper(&other.copper).1 == 0,
-        (_, Shape::Teardrop(_, polygon)) => polygon.to_copper(&one.copper).1 == 0,
+        (Shape::Teardrop(_, polygon) | Shape::PourRing(polygon), _) => {
+            polygon.to_copper(&other.copper).1 == 0
+        }
+        (_, Shape::Teardrop(_, polygon) | Shape::PourRing(polygon)) => {
+            polygon.to_copper(&one.copper).1 == 0
+        }
         (Shape::Segment(segment), _) => {
             let (a, b) = ends(segment);
             segment_touches(a, b, segment.half_width, &other.copper)

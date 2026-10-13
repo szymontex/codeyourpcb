@@ -74,6 +74,8 @@ export interface PourInfo {
   layer_mask: number;
   /** The filled copper: [min x, min y, max x, max y] in nm */
   rects: [number, number, number, number][];
+  /** The filled copper of a pour drawn as a polygon: convex pieces, corners in nm. Absent for a rectangle pour. */
+  polygons?: [number, number][][];
 }
 
 /**

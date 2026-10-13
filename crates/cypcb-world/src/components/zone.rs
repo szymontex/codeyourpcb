@@ -178,6 +178,14 @@ impl ZoneOutline {
         cypcb_core::outline::bounds(&self.0).expect("an outline has corners")
     }
 
+    /// Whether no edge of the outline crosses, touches or runs along another.
+    ///
+    /// Copper is cut from a simple outline only: one that crosses itself has no
+    /// one area to cut it from.
+    pub fn is_simple(&self) -> bool {
+        cypcb_core::outline::is_simple(&self.0)
+    }
+
     /// Whether the point is inside the outline or on its edge.
     pub fn contains(&self, point: cypcb_core::Point) -> bool {
         cypcb_core::outline::contains(&self.0, point)

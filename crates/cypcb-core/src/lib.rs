@@ -45,6 +45,7 @@ pub mod geometry;
 pub mod outline;
 pub mod physical_units;
 pub mod pour;
+pub mod pour_shape;
 pub mod units;
 
 // Re-export primary types at crate root for convenience
