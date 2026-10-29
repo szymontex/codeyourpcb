@@ -573,7 +573,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         if list_name(elem).as_deref() != Some("zone") {
             continue;
         }
-        match parse_zone(elem, &kicad_net_map, board_origin)? {
+        match parse_zone(elem, &kicad_net_map, board_origin, layer_count)? {
             ZoneImport::Carried(zone) => {
                 world.spawn_entity((zone,));
                 zone_count += 1;
@@ -1819,6 +1819,7 @@ fn parse_zone(
     elem: &Sexp,
     net_map: &NetIndex,
     origin: (f64, f64),
+    copper_count: u8,
 ) -> Result<ZoneImport, KicadPcbError> {
     let Ok(list) = elem.list() else {
         return Ok(ZoneImport::Skipped);
@@ -1831,7 +1832,9 @@ fn parse_zone(
     let mut points: Vec<(f64, f64)> = Vec::new();
     let mut filled_points: Vec<(f64, f64)> = Vec::new();
     let mut layers_named: Vec<Layer> = Vec::new();
+    let mut layer_strings: Vec<String> = Vec::new();
     let mut is_keepout = false;
+    let mut restricts_something = false;
     let mut is_teardrop = false;
 
     for child in &list[1..] {
@@ -1850,8 +1853,12 @@ fn parse_zone(
             Some("layer") | Some("layers") => {
                 if let Ok(layer_list) = child.list() {
                     for layer_sexp in &layer_list[1..] {
+                        let text = get_string(layer_sexp).unwrap_or_default();
                         let mut layers = Vec::new();
-                        parse_layer_names(&get_string(layer_sexp).unwrap_or_default(), &mut layers);
+                        if !zone_layer_set(&text, copper_count, &mut layers) {
+                            parse_layer_names(&text, &mut layers);
+                        }
+                        layer_strings.push(text);
                         for layer in layers {
                             layer_mask |= layer.to_copper_mask();
                             layers_named.push(layer);
@@ -1875,7 +1882,10 @@ fn parse_zone(
                 }
             }
             // A KiCad "rule area": copper is kept out rather than poured.
-            Some("keepout") => is_keepout = true,
+            Some("keepout") => {
+                is_keepout = true;
+                restricts_something = rule_area_restricts_something(child);
+            }
             // `(attr (teardrop (type padvia)))`: the zone is a teardrop, which
             // KiCad stores as copper on its track's layer and net
             // (`pcb_io_kicad_sexpr_parser.cpp`, read 2026-10-11).
@@ -1980,9 +1990,25 @@ fn parse_zone(
         });
     }
 
-    if layer_mask == 0 {
+    // A rule area is a keepout for what it does not allow. One that allows
+    // tracks, vias, pads, copper pour and footprints alike keeps nothing out:
+    // KiCad uses it for placement rules, and carrying it as a keepout would
+    // flag every track that crosses it.
+    if is_keepout && !restricts_something {
         return Ok(ZoneImport::Refused(format!(
-            "{label} names no copper layer, so there is nothing to pour it on"
+            "{label} is a rule area that allows tracks, vias, pads, copper pour and footprints, \
+             so it keeps nothing out"
+        )));
+    }
+
+    if layer_mask == 0 {
+        let named = layer_strings
+            .iter()
+            .map(|text| format!("\"{text}\""))
+            .collect::<Vec<_>>()
+            .join(" ");
+        return Ok(ZoneImport::Refused(format!(
+            "{label} names no copper layer ({named}), so there is nothing to pour it on"
         )));
     }
 
@@ -2524,6 +2550,42 @@ pub fn parse_layer_name(name: &str) -> Option<Layer> {
             None
         }
     }
+}
+
+/// Whether a `(keepout ...)` node forbids anything: some one of tracks, vias,
+/// pads, copper pour or footprints is `not_allowed`.
+fn rule_area_restricts_something(keepout: &Sexp) -> bool {
+    let Ok(list) = keepout.list() else {
+        return true;
+    };
+    list[1..].iter().any(|restriction| {
+        restriction.list().is_ok_and(|parts| {
+            parts.len() >= 2 && get_string(&parts[1]).as_deref() == Some("not_allowed")
+        })
+    })
+}
+
+/// The copper layers a zone's layer string stands for, when it is one of KiCad's
+/// sets: `F&B.Cu` is the two faces, `*.Cu` every copper layer of the board and
+/// `*In.Cu` the ones between the faces. Returns whether the string was one.
+///
+/// A pad has its own copper mask and this reader's wildcard list stops at the
+/// faces for it, but a zone has no such mask: what it names is what it is on.
+/// KiCad reads the same three strings the same way (`m_layerMasks` in its
+/// s-expression parser), and `copper_count` is the board's, from the file's own
+/// `(layers ...)` header, because `*.Cu` means the layers the board has.
+fn zone_layer_set(name: &str, copper_count: u8, layers: &mut Vec<Layer>) -> bool {
+    let inner = (0..copper_count.saturating_sub(2)).map(Layer::Inner);
+    match name {
+        "F&B.Cu" => layers.extend([Layer::TopCopper, Layer::BottomCopper]),
+        "*.Cu" => {
+            layers.extend([Layer::TopCopper, Layer::BottomCopper]);
+            layers.extend(inner);
+        }
+        "*In.Cu" => layers.extend(inner),
+        _ => return false,
+    }
+    true
 }
 
 /// Parse a KiCad layer name, handling wildcards like "*.Cu" and "*.Mask".
