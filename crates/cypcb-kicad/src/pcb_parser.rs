@@ -1834,6 +1834,7 @@ fn parse_zone(
     let mut layers_named: Vec<Layer> = Vec::new();
     let mut layer_strings: Vec<String> = Vec::new();
     let mut is_keepout = false;
+    let mut restricts_something = false;
     let mut is_teardrop = false;
 
     for child in &list[1..] {
@@ -1881,7 +1882,10 @@ fn parse_zone(
                 }
             }
             // A KiCad "rule area": copper is kept out rather than poured.
-            Some("keepout") => is_keepout = true,
+            Some("keepout") => {
+                is_keepout = true;
+                restricts_something = rule_area_restricts_something(child);
+            }
             // `(attr (teardrop (type padvia)))`: the zone is a teardrop, which
             // KiCad stores as copper on its track's layer and net
             // (`pcb_io_kicad_sexpr_parser.cpp`, read 2026-10-11).
@@ -1984,6 +1988,17 @@ fn parse_zone(
             layer,
             net,
         });
+    }
+
+    // A rule area is a keepout for what it does not allow. One that allows
+    // tracks, vias, pads, copper pour and footprints alike keeps nothing out:
+    // KiCad uses it for placement rules, and carrying it as a keepout would
+    // flag every track that crosses it.
+    if is_keepout && !restricts_something {
+        return Ok(ZoneImport::Refused(format!(
+            "{label} is a rule area that allows tracks, vias, pads, copper pour and footprints, \
+             so it keeps nothing out"
+        )));
     }
 
     if layer_mask == 0 {
@@ -2535,6 +2550,19 @@ pub fn parse_layer_name(name: &str) -> Option<Layer> {
             None
         }
     }
+}
+
+/// Whether a `(keepout ...)` node forbids anything: some one of tracks, vias,
+/// pads, copper pour or footprints is `not_allowed`.
+fn rule_area_restricts_something(keepout: &Sexp) -> bool {
+    let Ok(list) = keepout.list() else {
+        return true;
+    };
+    list[1..].iter().any(|restriction| {
+        restriction.list().is_ok_and(|parts| {
+            parts.len() >= 2 && get_string(&parts[1]).as_deref() == Some("not_allowed")
+        })
+    })
 }
 
 /// The copper layers a zone's layer string stands for, when it is one of KiCad's
