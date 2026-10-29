@@ -151,8 +151,93 @@ impl DrcRule for EdgeClearanceRule {
             }
         }
 
+        // The pours drawn as a polygon. A rectangle's pour is measured as the
+        // zone it declares, not as the copper the fill leaves, and so is a
+        // ring: the ring is what is measured, and where it is nearest the edge
+        // is where the violation is put.
+        for (entity, zone, ring) in world.outlined_zones() {
+            if !zone.is_copper_pour() {
+                continue;
+            }
+            let corners = ring.corners();
+            let (min_dist, at) = match &outline {
+                Some(outline) => (
+                    ring_to_outline(outline, corners),
+                    nearest_corner(outline, corners),
+                ),
+                None => {
+                    let to_rectangle = |p: &Point| {
+                        let (x, y) = (p.x.0, p.y.0);
+                        x.min(y).min(board_w - x).min(board_h - y)
+                    };
+                    let nearest = corners
+                        .iter()
+                        .min_by_key(|p| to_rectangle(p))
+                        .copied()
+                        .expect("a ring has corners");
+                    (to_rectangle(&nearest), nearest)
+                }
+            };
+            if min_dist < min_edge.0 {
+                violations.push(DrcViolation::edge_clearance(
+                    entity,
+                    Nm(min_dist.max(0)),
+                    min_edge,
+                    at,
+                ));
+            }
+        }
+
         violations
     }
+}
+
+/// How far a ring of corners sits from the board's edge, which is itself a ring.
+///
+/// Every edge of the one against every edge of the other, which is exact for two
+/// shapes that do not overlap and gives zero when an edge crosses. A ring with a
+/// corner off the board reads as zero, for the reason a box does: copper off the
+/// board is not "well clear of the edge".
+fn ring_to_outline(outline: &BoardOutline, corners: &[Point]) -> i64 {
+    if corners.iter().any(|c| !outline.contains(*c)) {
+        return 0;
+    }
+    let mut nearest = i64::MAX;
+    for (a, b) in outline.edges() {
+        let edge = ([a.x.raw(), a.y.raw()], [b.x.raw(), b.y.raw()]);
+        for i in 0..corners.len() {
+            let (p, q) = (corners[i], corners[(i + 1) % corners.len()]);
+            nearest = nearest.min(crate::rules::clearance::segment_distance(
+                [p.x.raw(), p.y.raw()],
+                [q.x.raw(), q.y.raw()],
+                edge.0,
+                edge.1,
+            ));
+        }
+    }
+    nearest
+}
+
+/// The corner of the ring that is nearest the board's edge: where to say the
+/// violation is.
+fn nearest_corner(outline: &BoardOutline, corners: &[Point]) -> Point {
+    corners
+        .iter()
+        .copied()
+        .min_by_key(|c| {
+            outline
+                .edges()
+                .map(|(a, b)| {
+                    crate::rules::clearance::point_to_segment_distance(
+                        [c.x.raw(), c.y.raw()],
+                        [a.x.raw(), a.y.raw()],
+                        [b.x.raw(), b.y.raw()],
+                    )
+                })
+                .min()
+                .unwrap_or(i64::MAX)
+        })
+        .expect("a ring has corners")
 }
 
 /// How far a bounding box sits from the board's edge.
