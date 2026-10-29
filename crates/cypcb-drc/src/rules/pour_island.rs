@@ -15,7 +15,6 @@ use cypcb_core::pour::PourOptions;
 #[cfg(test)]
 use cypcb_core::Nm;
 use cypcb_core::{Point, Rect};
-use cypcb_world::components::Layer;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -74,11 +73,13 @@ impl DrcRule for PourIslandRule {
 
         let library = world.footprints().clone();
         let options = pour_options(rules);
+        // Every copper layer of the board, as the screen and the Gerber have it.
+        let layers = world.copper_layers();
 
         let mut violations = Vec::new();
 
         for (entity, zone) in zones {
-            for layer in [Layer::TopCopper, Layer::BottomCopper] {
+            for &layer in &layers {
                 if zone.layer_mask & layer.to_copper_mask() == 0 {
                     continue;
                 }
@@ -103,7 +104,7 @@ impl DrcRule for PourIslandRule {
         }
 
         // The pours drawn as a polygon.
-        for layer in [Layer::TopCopper, Layer::BottomCopper] {
+        for &layer in &layers {
             for (entity, zone, outline) in cypcb_world::copper::outlined_pours(world, layer) {
                 let filled = cypcb_world::copper::fill_outlined_zone(
                     world, &library, layer, &zone, &outline, &options,

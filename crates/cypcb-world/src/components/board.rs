@@ -260,6 +260,19 @@ impl LayerStack {
         self.count.saturating_sub(2)
     }
 
+    /// Every copper layer of the stack, outer two first and then the inner
+    /// ones in order.
+    ///
+    /// Two stacks of the same count give the same list, and a two-layer stack
+    /// gives exactly `[TopCopper, BottomCopper]`, which is what the readers of
+    /// a pour looped over by hand before.
+    pub fn copper_layers(&self) -> Vec<super::physical::Layer> {
+        use super::physical::Layer;
+        let mut layers = vec![Layer::TopCopper, Layer::BottomCopper];
+        layers.extend((0..self.inner_count()).map(Layer::Inner));
+        layers
+    }
+
     /// Common layer stackups.
     pub const TWO_LAYER: LayerStack = LayerStack { count: 2 };
     pub const FOUR_LAYER: LayerStack = LayerStack { count: 4 };
@@ -307,6 +320,28 @@ mod tests {
 
         assert!(!size.contains(Nm::from_mm(101.0), Nm::from_mm(40.0)));
         assert!(!size.contains(Nm::from_mm(-1.0), Nm::from_mm(40.0)));
+    }
+
+    #[test]
+    fn the_copper_layers_of_a_stack_are_the_outer_two_and_then_the_inner_ones() {
+        use super::super::physical::Layer;
+        assert_eq!(
+            LayerStack::new(2).copper_layers(),
+            vec![Layer::TopCopper, Layer::BottomCopper]
+        );
+        assert_eq!(
+            LayerStack::new(4).copper_layers(),
+            vec![
+                Layer::TopCopper,
+                Layer::BottomCopper,
+                Layer::Inner(0),
+                Layer::Inner(1)
+            ]
+        );
+        // One layer for each in the count, and the last inner one is `Inner(count - 3)`.
+        let six = LayerStack::new(6).copper_layers();
+        assert_eq!(six.len(), 6);
+        assert_eq!(six.last(), Some(&Layer::Inner(3)));
     }
 
     #[test]

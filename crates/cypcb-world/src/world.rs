@@ -240,6 +240,17 @@ impl BoardWorld {
         Some((*size, *layers))
     }
 
+    /// The copper layers of the board, outer two first, then the inner ones.
+    ///
+    /// A world with no board is read as a two-layer one, as `LayerStack` is by
+    /// default.
+    pub fn copper_layers(&self) -> Vec<Layer> {
+        self.board_info()
+            .map(|(_, stack)| stack)
+            .unwrap_or_default()
+            .copper_layers()
+    }
+
     /// Get the board name if one has been set.
     pub fn board_name(&self) -> Option<&str> {
         let entity = self.board_entity?;
@@ -989,6 +1000,30 @@ pub fn in_build_order<D: bevy_ecs::query::ReadOnlyQueryData>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_world_with_no_board_has_the_two_outer_copper_layers() {
+        let world = BoardWorld::new();
+        assert_eq!(
+            world.copper_layers(),
+            vec![Layer::TopCopper, Layer::BottomCopper]
+        );
+    }
+
+    #[test]
+    fn the_copper_layers_of_a_world_are_those_of_its_board() {
+        let mut world = BoardWorld::new();
+        world.set_board("b".to_string(), (Nm(10_000_000), Nm(10_000_000)), 4);
+        assert_eq!(
+            world.copper_layers(),
+            vec![
+                Layer::TopCopper,
+                Layer::BottomCopper,
+                Layer::Inner(0),
+                Layer::Inner(1)
+            ]
+        );
+    }
 
     #[test]
     fn test_new_world_is_empty() {

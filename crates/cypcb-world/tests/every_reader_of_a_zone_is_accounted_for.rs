@@ -301,6 +301,71 @@ fn a_file_that_reads_the_ecs_directly_is_not_a_zones_reader_in_disguise() {
     }
 }
 
+/// Files that read a zone and loop over the two outer layers on purpose, and why.
+const OUTER_ONLY: &[(&str, &str)] = &[(
+    "crates/cypcb-world/src/stitch.rs",
+    "the copper a stitching via must keep off, taken from the outer sides; inner copper there is its own item",
+)];
+
+/// The places in this code that list the two outer layers and stop there.
+///
+/// A list of the two outer layers followed by the inner ones is the whole stack
+/// and is fine; a loop over the two alone is how a plane on an inner layer
+/// reached the Gerber and never the screen or the island check.
+fn outer_only_lists(code: &str) -> usize {
+    let list = "[Layer::TopCopper, Layer::BottomCopper]";
+    code.match_indices(list)
+        .filter(|(at, _)| {
+            let after: String = code[at + list.len()..]
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .take(".into_iter().chain(".len())
+                .collect();
+            after != ".into_iter().chain("
+        })
+        .count()
+}
+
+#[test]
+fn a_reader_of_a_zone_loops_over_the_layers_of_the_board() {
+    let all = sources();
+    let mut looked = 0;
+    for (file, _) in READERS {
+        let code = code_of(&all.iter().find(|(f, _)| f == file).unwrap().1);
+        looked += 1;
+        let allowed = OUTER_ONLY.iter().any(|(f, _)| f == file);
+        if allowed {
+            assert!(
+                outer_only_lists(&code) > 0,
+                "{file} is listed as looping over the outer layers on purpose and no longer does"
+            );
+        } else {
+            assert_eq!(
+                outer_only_lists(&code),
+                0,
+                "{file} reads zones and lists the two outer layers and no more: take the \
+                 layers from `BoardWorld::copper_layers()`, or say on `OUTER_ONLY` why not"
+            );
+        }
+    }
+    assert!(looked >= 20, "the walk looked at {looked} readers");
+}
+
+#[test]
+fn control_the_scan_tells_the_outer_pair_from_the_whole_stack() {
+    assert_eq!(
+        outer_only_lists("for layer in [Layer::TopCopper, Layer::BottomCopper] {"),
+        1
+    );
+    assert_eq!(
+        outer_only_lists(
+            "[Layer::TopCopper, Layer::BottomCopper]\n    .into_iter()\n    .chain((0..30).map(Layer::Inner))"
+        ),
+        0
+    );
+    assert_eq!(outer_only_lists("for &layer in &layers {"), 0);
+}
+
 #[test]
 fn control_the_scan_sees_each_way_of_reading_a_zone() {
     assert!(reads_zones("let z = world.zones();"));
