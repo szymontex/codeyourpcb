@@ -526,11 +526,15 @@ export function drawKeepout(
   ctx: CanvasRenderingContext2D, vp: Viewport, zone: ZoneInfo,
   layers: LayerVisibility,
 ): void {
-  // Bit 0 is top copper, bit 1 bottom - the same order the engine assigns.
-  // A keepout on a layer nobody is looking at stays out of the way.
+  // Bit 0 is top copper, bit 1 bottom - the same order the engine assigns -
+  // and the inner layers follow. A keepout on layers nobody is looking at stays
+  // out of the way.
   const onTop = (zone.layer_mask & 0b01) !== 0;
   const onBottom = (zone.layer_mask & 0b10) !== 0;
-  const visible = (onTop && layers.topCopper) || (onBottom && layers.bottomCopper);
+  const onInner = innerLayerNames(zone.layer_mask).some(
+    (name) => getTraceColor(name, layers) !== null,
+  );
+  const visible = (onTop && layers.topCopper) || (onBottom && layers.bottomCopper) || onInner;
   if (!visible) return;
 
   ctx.save();
@@ -627,10 +631,10 @@ export function drawPour(
   ctx: CanvasRenderingContext2D, vp: Viewport, pour: PourInfo,
   layers: LayerVisibility, highlightedNet: string | null,
 ): void {
-  // Layer mask bit 0 is top copper, bit 1 bottom - the same order the engine
-  // assigns them.
-  const isTop = (pour.layer_mask & 0b01) !== 0;
-  const color = getTraceColor(isTop ? 'Top' : 'Bottom', layers);
+  // Each fill is on one layer and its mask names it: bit 0 is top copper, bit 1
+  // bottom and the inner layers follow, so the colour and the switch that hides
+  // it are the layer's own, as a trace's are.
+  const color = getTraceColor(copperLayerName(pour.layer_mask) ?? 'Bottom', layers);
   if (!color) return;
 
   const isDimmed = highlightedNet != null && pour.net !== highlightedNet;
@@ -658,6 +662,15 @@ export function drawPour(
     ctx.closePath();
     ctx.fill();
   }
+}
+
+/** The names of the inner copper layers a mask has a bit for. */
+function innerLayerNames(mask: number): string[] {
+  const names: string[] = [];
+  for (let inner = 0; inner < 30; inner++) {
+    if ((mask & (1 << (2 + inner))) !== 0) names.push(`Inner${inner + 1}`);
+  }
+  return names;
 }
 
 /** The name the layer stack gives the one copper layer a mask names. */

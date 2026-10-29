@@ -1953,6 +1953,9 @@ impl PcbEngine {
             spoke_width: rules.thermal_relief_spoke_width,
         };
         let mut pours = Vec::new();
+        // Every copper layer of the board: a pour on an inner layer reaches the
+        // Gerber, so it reaches the screen too.
+        let layers = self.world.copper_layers();
 
         for (entity, zone) in zones {
             let net = zone
@@ -1962,7 +1965,7 @@ impl PcbEngine {
 
             // A zone can span several layers, and what obstructs it differs on
             // each, so each layer is filled on its own.
-            for layer in [Layer::TopCopper, Layer::BottomCopper] {
+            for &layer in &layers {
                 if zone.layer_mask & layer.to_copper_mask() == 0 {
                     continue;
                 }
@@ -1997,7 +2000,7 @@ impl PcbEngine {
         }
 
         // The pours drawn as a polygon, as the convex pieces the filler laid down.
-        for layer in [Layer::TopCopper, Layer::BottomCopper] {
+        for &layer in &layers {
             let library = self.footprint_lib.clone();
             for (_, zone, outline) in cypcb_world::copper::outlined_pours(&mut self.world, layer) {
                 let net = zone
