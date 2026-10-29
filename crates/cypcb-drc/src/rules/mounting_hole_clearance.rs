@@ -18,7 +18,7 @@ use cypcb_world::components::{place_pad, FootprintRef, Position, RefDes, Rotatio
 use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
-use super::clearance::{point_to_segment_distance, Copper, EntryCopper, Piece};
+use super::clearance::{point_to_segment_distance, Copper, EntryCopper, Piece, Polygon};
 use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
@@ -123,6 +123,13 @@ impl DrcRule for MountingHoleClearanceRule {
             ));
         }
 
+        // Pours only: a keepout is copper nowhere. Taken once, not for each hole.
+        let outlined: Vec<_> = world
+            .outlined_zones()
+            .into_iter()
+            .filter(|(_, zone, _)| !zone.is_keepout())
+            .collect();
+
         for hole in &holes {
             for entry in &entries {
                 // A hole is drilled through the whole board, so which layers
@@ -145,6 +152,30 @@ impl DrcRule for MountingHoleClearanceRule {
                 if gap < required.raw() {
                     violations.push(DrcViolation::edge_clearance(
                         entry.entity,
+                        Nm(gap.max(0)),
+                        required,
+                        hole.centre,
+                    ));
+                    let last = violations.len() - 1;
+                    violations[last].message = format!(
+                        "Copper too close to unplated hole {}: {:.2}mm actual, {:.2}mm required. \
+                         The drill cuts this copper open and the screw touches what is left.",
+                        hole.refdes,
+                        Nm(gap.max(0)).to_mm(),
+                        required.to_mm(),
+                    );
+                }
+            }
+
+            // The pours drawn as a polygon, measured as the ring they declare, as
+            // a rectangle's pour is measured as its box.
+            for (entity, zone, ring) in &outlined {
+                let gap = Polygon::new(ring.corners())
+                    .to_point([hole.centre.x.raw(), hole.centre.y.raw()])
+                    - hole.radius.raw();
+                if zone.layer_mask != 0 && gap < required.raw() {
+                    violations.push(DrcViolation::edge_clearance(
+                        *entity,
                         Nm(gap.max(0)),
                         required,
                         hole.centre,

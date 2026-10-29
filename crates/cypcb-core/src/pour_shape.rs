@@ -335,6 +335,19 @@ pub fn shapes_touch(a: &[Point], b: &[Point]) -> bool {
     !(apart(a, b) || apart(b, a))
 }
 
+/// Whether two convex pieces share area, not only a point or an edge.
+pub fn convex_interiors_overlap(a: &[Point], b: &[Point]) -> bool {
+    // Separating axis, edges counted as separating: the other is wholly on or
+    // beyond the line.
+    let apart = |p: &[Point], q: &[Point]| {
+        (0..p.len()).any(|i| {
+            let (s, e) = (p[i], p[(i + 1) % p.len()]);
+            q.iter().all(|&r| cross(s, e, r) <= 0)
+        })
+    };
+    !(apart(a, b) || apart(b, a))
+}
+
 /// Whether a convex piece and a rectangle share area, not only a point or an edge.
 pub fn interiors_overlap(piece: &[Point], rect: Rect) -> bool {
     let ring = [
@@ -346,15 +359,7 @@ pub fn interiors_overlap(piece: &[Point], rect: Rect) -> bool {
     if twice_area(&ring) <= 0 {
         return false;
     }
-    // Separating axis, edges counted as separating: the other is wholly on or
-    // beyond the line.
-    let apart = |p: &[Point], q: &[Point]| {
-        (0..p.len()).any(|i| {
-            let (s, e) = (p[i], p[(i + 1) % p.len()]);
-            q.iter().all(|&r| cross(s, e, r) <= 0)
-        })
-    };
-    !(apart(piece, &ring) || apart(&ring, piece))
+    convex_interiors_overlap(piece, &ring)
 }
 
 /// Whether a convex piece and a rectangle share a point.
@@ -674,6 +679,36 @@ mod tests {
         assert!(shapes_touch(&a, &b), "sharing the corner (100, 0)");
         let far = ring(&[(101, 0), (200, 0), (200, 100)]);
         assert!(!shapes_touch(&a, &far), "a nanometre apart");
+    }
+
+    #[test]
+    fn two_convex_pieces_overlap_in_area_and_not_at_an_edge_or_a_corner() {
+        let a = ring(&[(0, 0), (100, 0), (100, 100), (0, 100)]);
+        assert!(convex_interiors_overlap(
+            &a,
+            &ring(&[(50, 50), (150, 50), (150, 150), (50, 150)])
+        ));
+        assert!(
+            !convex_interiors_overlap(&a, &ring(&[(100, 0), (200, 0), (200, 100), (100, 100)])),
+            "an edge"
+        );
+        assert!(
+            !convex_interiors_overlap(&a, &ring(&[(100, 100), (200, 100), (200, 200), (100, 200)])),
+            "a corner"
+        );
+        assert!(
+            !convex_interiors_overlap(&a, &ring(&[(101, 0), (200, 0), (200, 100), (101, 100)])),
+            "apart"
+        );
+        let tri = ring(&[(0, 0), (100, 0), (0, 100)]);
+        assert!(
+            !convex_interiors_overlap(&tri, &ring(&[(60, 60), (160, 60), (160, 160), (60, 160)])),
+            "beyond the slanted edge"
+        );
+        assert!(convex_interiors_overlap(
+            &tri,
+            &ring(&[(40, 40), (160, 40), (160, 160), (40, 160)])
+        ));
     }
 
     #[test]

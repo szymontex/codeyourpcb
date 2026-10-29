@@ -54,6 +54,9 @@ const READERS: &[(&str, Reads)] = &[
     ("crates/cypcb-drc/src/rules/net_split.rs", Reads::Outline),
     ("crates/cypcb-drc/src/rules/unrouted_pin.rs", Reads::Outline),
     ("crates/cypcb-autoroute/src/orchestrator.rs", Reads::Outline),
+    ("crates/cypcb-drc/src/rules/edge_clearance.rs", Reads::Outline),
+    ("crates/cypcb-drc/src/rules/zone_overlap.rs", Reads::Outline),
+    ("crates/cypcb-drc/src/rules/mounting_hole_clearance.rs", Reads::Outline),
     // Rectangles only. Each of these is the same as before the model could hold
     // an outline: the zone is not there.
     (
@@ -73,24 +76,12 @@ const READERS: &[(&str, Reads)] = &[
         Reads::Rectangles("areas the stack points at: flex and named areas, which never have an outline"),
     ),
     (
-        "crates/cypcb-drc/src/rules/edge_clearance.rs",
-        Reads::Rectangles("the edge clearance of pours: a pour drawn as a polygon is not measured against the board edge yet"),
-    ),
-    (
         "crates/cypcb-drc/src/rules/flex_trace_angle.rs",
         Reads::Rectangles("flex regions, which never have an outline"),
     ),
     (
-        "crates/cypcb-drc/src/rules/mounting_hole_clearance.rs",
-        Reads::Rectangles("keepouts next to an unplated hole: a keepout drawn as a polygon is not measured against a hole yet"),
-    ),
-    (
         "crates/cypcb-drc/src/rules/solid_pour_in_bend.rs",
         Reads::Rectangles("flex regions, which never have an outline"),
-    ),
-    (
-        "crates/cypcb-drc/src/rules/zone_overlap.rs",
-        Reads::Rectangles("two pours on different nets: a pour drawn as a polygon is not compared with another yet"),
     ),
     // The ECS, read directly.
     (
