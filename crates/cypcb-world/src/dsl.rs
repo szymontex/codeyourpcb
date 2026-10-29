@@ -825,6 +825,75 @@ pub fn kind_from_refdes(refdes: &str) -> &'static str {
     }
 }
 
+/// Whether the language spells this as a word: a letter or underscore, then
+/// letters, digits and underscores.
+fn is_word(text: &str) -> bool {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// The reference each part is written under, one for each of `references` and
+/// in the same order.
+///
+/// The language names a component with a word, and a board does not have to.
+/// KiCad keeps whatever was typed, so a board arrives with `REF**` on a logo,
+/// `??` on a part nobody annotated, `kibuzzard-675DA838` from a plug-in and the
+/// same `J1` twice. A reference that is a word, and the first of its name, is
+/// written as it is. Any other has each character outside a word turned into an
+/// underscore, an underscore put before a first character that is not a letter,
+/// and a number after it when the name is taken. A name that was never in the
+/// board's list of words is never taken from the word that is in it, in either
+/// order.
+///
+/// The kind a part is written with comes from the letters its reference starts
+/// with, and none of this changes them: only characters that are not letters
+/// are replaced, and the underscore put in front is not a letter.
+pub fn written_references(references: &[&str]) -> Vec<String> {
+    let mut taken: std::collections::HashSet<String> = references
+        .iter()
+        .filter(|reference| is_word(reference))
+        .map(|reference| reference.to_string())
+        .collect();
+    let mut placed: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    references
+        .iter()
+        .map(|reference| {
+            if is_word(reference) && placed.insert(reference) {
+                return reference.to_string();
+            }
+            let mut base: String = reference
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || c == '_' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            if !base.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
+                base.insert(0, '_');
+            }
+            let mut name = base.clone();
+            let mut number = 1;
+            while taken.contains(&name) {
+                number += 1;
+                name = format!("{base}_{number}");
+            }
+            taken.insert(name.clone());
+            name
+        })
+        .collect()
+}
+
+/// A board's reference as the text of a comment: quoted, on one line.
+fn comment_text(reference: &str) -> String {
+    quoted(&reference.replace(['\n', '\r'], " "))
+}
+
 /// Quote a string the way the language reads one back.
 /// A component's value as the language would read it back.
 ///
@@ -895,6 +964,14 @@ pub struct WrittenBoard {
     /// board. Whatever the file leaves out has to reach them, not a comment
     /// inside a file they are not reading.
     pub not_written: Vec<String>,
+    /// The components written under another reference than the board gave
+    /// them, as (the board's, the file's), in the order they were written.
+    ///
+    /// The language spells a reference as a word, and a KiCad board holds
+    /// `REF**`, `??`, `TA-101` and the same `J1` twice. The file names such a
+    /// part with a word of its own, and the board's reference stands in a
+    /// comment above it.
+    pub renamed: Vec<(String, String)>,
 }
 
 /// [`board_as_dsl`], and the list of what it could not write.
@@ -955,6 +1032,15 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     // happens to hold: a diff between two imports of the same board should be
     // empty, and entity order is not a promise the ECS makes.
     parts.sort_by(|a, b| a.refdes.cmp(&b.refdes));
+    // The reference each part is written under, in the same order.
+    let written_as =
+        written_references(&parts.iter().map(|p| p.refdes.as_str()).collect::<Vec<_>>());
+    let renamed: Vec<(String, String)> = parts
+        .iter()
+        .zip(&written_as)
+        .filter(|(part, name)| part.refdes != **name)
+        .map(|(part, name)| (part.refdes.clone(), name.clone()))
+        .collect();
 
     // With the pitch beside each one: a stitched pour keeps its rule through a
     // round trip, and the vias it produced are not written as copper.
@@ -1271,12 +1357,15 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
         let _ = writeln!(out, "}}");
     }
 
-    for part in &parts {
+    for (part, name) in parts.iter().zip(&written_as) {
         let _ = writeln!(out);
+        if *name != part.refdes {
+            let _ = writeln!(out, "// was {}", comment_text(&part.refdes));
+        }
         let _ = writeln!(
             out,
             "component {} {} {} {{",
-            part.refdes,
+            name,
             kind_from_refdes(&part.refdes),
             quoted({
                 let base = crate::footprint::base_name(&part.footprint);
@@ -1334,7 +1423,7 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
         .map(|(id, name)| (id.0, name.to_string()))
         .collect();
     let mut pins_by_net: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for part in &parts {
+    for (part, written) in parts.iter().zip(&written_as) {
         let Some(connections) = &part.connections else {
             continue;
         };
@@ -1345,7 +1434,7 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
             pins_by_net
                 .entry(name.clone())
                 .or_default()
-                .push(format!("{}.{}", part.refdes, connection.pin));
+                .push(format!("{}.{}", written, connection.pin));
         }
     }
     // A net that carries copper and connects to no pin is declared too, with
@@ -1357,10 +1446,28 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     // The same shape as the quoting fault below, from the other direction.
     //
     // `net GND { }` is legal: `net_definition` takes an optional pin list.
+    //
+    // Copper on no net - KiCad's net 0, which a board holds for a track nobody
+    // connected - is written on a net called `unknown`, here and in the trace
+    // writer. Declared too: the trace named a net the file never had.
+    let mut on_no_net = false;
     for net_id in copper_nets(world) {
-        if let Some(name) = net_names.get(&net_id) {
-            pins_by_net.entry(name.clone()).or_default();
+        match net_names.get(&net_id) {
+            Some(name) => {
+                pins_by_net.entry(name.clone()).or_default();
+            }
+            None => {
+                pins_by_net.entry("unknown".to_string()).or_default();
+                on_no_net = true;
+            }
         }
+    }
+    if on_no_net {
+        not_written.push(
+            "copper on no net is written on a net called unknown: the language has no copper \
+             without one"
+                .to_string(),
+        );
     }
 
     // The second of the two places that used to drop a net for want of a
@@ -1625,6 +1732,7 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     WrittenBoard {
         source: out,
         not_written,
+        renamed,
     }
 }
 
@@ -1632,6 +1740,90 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
 mod tests {
     use super::*;
     use cypcb_core::Nm;
+
+    fn written(references: &[&str]) -> Vec<String> {
+        written_references(references)
+    }
+
+    #[test]
+    fn a_reference_that_is_a_word_and_alone_is_written_as_it_is() {
+        assert_eq!(
+            written(&["R1", "C_2", "_x", "U10"]),
+            ["R1", "C_2", "_x", "U10"]
+        );
+    }
+
+    #[test]
+    fn a_reference_that_is_not_a_word_has_each_other_character_made_an_underscore() {
+        assert_eq!(
+            written(&[
+                "REF**",
+                "G***",
+                "TA-101",
+                "??",
+                "J?",
+                "+3.3V2",
+                "5V1",
+                "BUCKTOOT(BATT)1"
+            ]),
+            [
+                "REF__",
+                "G___",
+                "TA_101",
+                "__",
+                "J_",
+                "_3_3V2",
+                "_5V1",
+                "BUCKTOOT_BATT_1"
+            ]
+        );
+        assert_eq!(written(&[""]), ["_"], "nothing at all is still a name");
+    }
+
+    #[test]
+    fn a_reference_written_twice_is_numbered_from_the_second() {
+        assert_eq!(written(&["J1", "J1", "J1"]), ["J1", "J1_2", "J1_3"]);
+        assert_eq!(written(&["REF**", "REF**"]), ["REF__", "REF___2"]);
+    }
+
+    #[test]
+    fn a_name_that_is_taken_is_never_taken_again_in_either_order() {
+        // `R-1` spells `R_1`, which the board's own `R_1` already is.
+        assert_eq!(written(&["R-1", "R_1"]), ["R_1_2", "R_1"]);
+        assert_eq!(written(&["R_1", "R-1"]), ["R_1", "R_1_2"]);
+        // A number that is taken moves on: the board has `J1_2` too.
+        assert_eq!(written(&["J1", "J1", "J1_2"]), ["J1", "J1_3", "J1_2"]);
+    }
+
+    #[test]
+    fn every_name_is_a_word_and_none_is_written_twice() {
+        let board = [
+            "REF**", "REF**", "REF*", "REF_", "REF__", "G***", "J1", "J1", "J1_2", "a-b", "a_b",
+            "a b", "", "_", "__", "5", "5V", "_5", "??", "?", "+",
+        ];
+        let names = written(&board);
+        assert_eq!(names.len(), board.len());
+        let mut seen = std::collections::HashSet::new();
+        for name in &names {
+            assert!(is_word(name), "{name:?} is not a word");
+            assert!(seen.insert(name.clone()), "{name:?} twice in {names:?}");
+        }
+    }
+
+    #[test]
+    fn the_kind_comes_out_the_same_for_the_name_written_as_for_the_name_given() {
+        let board = [
+            "REF**", "G***", "TA-101", "??", "J?", "J1", "J1", "R-1", "R_1", "C+1", "U(1)",
+            "LED-3", "D?", "Q?", "FB-2", "5V1", "+3.3V2",
+        ];
+        for (given, now) in board.iter().zip(written(&board)) {
+            assert_eq!(
+                kind_from_refdes(given),
+                kind_from_refdes(&now),
+                "{given} became {now}"
+            );
+        }
+    }
 
     #[test]
     fn millimetres_round_trip_exactly() {

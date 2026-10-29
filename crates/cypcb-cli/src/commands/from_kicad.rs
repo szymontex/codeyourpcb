@@ -198,6 +198,9 @@ impl FromKicadCommand {
         for line in &written.not_written {
             eprintln!("Warning: {line}");
         }
+        if let Some(line) = renamed_line(&written.renamed) {
+            eprintln!("Warning: {line}");
+        }
 
         // A design that will not read back is not an import, and the cost of
         // finding out here rather than on the user's next command is one parse.
@@ -219,6 +222,49 @@ impl FromKicadCommand {
             });
         }
 
+        // Reading it is parsing it and then loading it: a reference written twice
+        // parses and does not load, and parsing alone called that a good file.
+        let mut import_errors = Vec::new();
+        let ast = cypcb_parser::resolve_imports(&reread.value, &output, &mut import_errors);
+        let mut reloaded = cypcb_world::BoardWorld::new();
+        let mut library = cypcb_library::design::footprint_library_for(&ast, &output);
+        let synced = cypcb_world::sync_ast_to_world(&ast, &source, &mut reloaded, &mut library);
+        if let Some(first) = synced.errors.first() {
+            return Err(miette::miette!("{first}")).wrap_err_with(|| {
+                format!(
+                    "{} was written but does not load - this is a defect in the writer, \
+                     not in your board",
+                    output.display()
+                )
+            });
+        }
+
         Ok(())
     }
+}
+
+/// The one line that says components were written under another reference, with
+/// the first few so a person can find them.
+fn renamed_line(renamed: &[(String, String)]) -> Option<String> {
+    const SHOWN: usize = 5;
+    if renamed.is_empty() {
+        return None;
+    }
+    let shown: Vec<String> = renamed
+        .iter()
+        .take(SHOWN)
+        .map(|(was, now)| format!("{was} -> {now}"))
+        .collect();
+    let more = renamed.len().saturating_sub(SHOWN);
+    Some(format!(
+        "{} component(s) renamed: the language spells a reference as a word and gives each \
+         part its own, and the board's stands in a comment above the part ({}{})",
+        renamed.len(),
+        shown.join(", "),
+        if more > 0 {
+            format!(", and {more} more")
+        } else {
+            String::new()
+        }
+    ))
 }
