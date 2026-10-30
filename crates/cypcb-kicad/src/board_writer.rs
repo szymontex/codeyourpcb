@@ -487,6 +487,37 @@ pub fn write_board_with_rules(
         );
     }
 
+    // The holes in the board, each a closed loop on the same layer. They sit
+    // inside the outline, which is how KiCad tells a hole from a second board.
+    let cutouts: Vec<Vec<(Nm, Nm)>> = world
+        .board_entity()
+        .and_then(|entity| {
+            world
+                .ecs()
+                .get::<cypcb_world::components::BoardCutouts>(entity)
+        })
+        .map(|cutouts| {
+            cutouts
+                .rings
+                .iter()
+                .map(|ring| ring.iter().map(|p| (p.x, p.y)).collect())
+                .collect()
+        })
+        .unwrap_or_default();
+    for ring in &cutouts {
+        for index in 0..ring.len() {
+            let (x1, y1) = ring[index];
+            let (x2, y2) = ring[(index + 1) % ring.len()];
+            let (sx1, sy1) = on_sheet(origin, x1, y1);
+            let (sx2, sy2) = on_sheet(origin, x2, y2);
+            // literal: how KiCad draws the edge, as above - the pen, not the board
+            let _ = writeln!(
+                out,
+                "  (gr_line (start {sx1} {sy1}) (end {sx2} {sy2}) (stroke (width 0.1) (type solid)) (layer \"Edge.Cuts\"))"
+            );
+        }
+    }
+
     write_footprints(world, origin, &net_number, rules.as_ref(), &mut out);
     write_copper(world, origin, &net_number, &mut out);
     write_zones(world, origin, &net_number, rules.as_ref(), &mut out);
