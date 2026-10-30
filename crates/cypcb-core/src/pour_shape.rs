@@ -322,6 +322,82 @@ pub fn cut_pieces(pieces: Vec<Vec<Point>>, hole: Rect) -> Vec<Vec<Point>> {
     next
 }
 
+/// The part of a convex piece on one side of the line through `a` and `b`:
+/// the left of it (the side a counter-clockwise ring keeps its inside on) or the
+/// right. `None` when nothing of the piece with area is left.
+///
+/// Where the line crosses an edge of the piece the corner is rounded to the
+/// nearest nanometre, so a slanted cut can be out by under one.
+fn clip_half_plane(piece: &[Point], a: Point, b: Point, keep_left: bool) -> Option<Vec<Point>> {
+    let side = |p: Point| -> i128 {
+        let s = cross(a, b, p);
+        if keep_left {
+            s
+        } else {
+            -s
+        }
+    };
+    let mut kept = Vec::with_capacity(piece.len() + 2);
+    for i in 0..piece.len() {
+        let (p, q) = (piece[i], piece[(i + 1) % piece.len()]);
+        let (sp, sq) = (side(p), side(q));
+        if sp >= 0 {
+            kept.push(p);
+        }
+        if (sp > 0 && sq < 0) || (sp < 0 && sq > 0) {
+            // p + (q - p) * sp / (sp - sq), in whole nanometres.
+            let (num, denom) = if sp > sq {
+                (sp, sp - sq)
+            } else {
+                (-sp, sq - sp)
+            };
+            let at = |from: i64, to: i64| -> i128 {
+                let delta = i128::from(to) - i128::from(from);
+                i128::from(from) + (2 * delta * num + denom).div_euclid(2 * denom)
+            };
+            kept.push(pt(at(p.x.0, q.x.0), at(p.y.0, q.y.0)));
+        }
+    }
+    hull(&kept)
+}
+
+/// A convex piece with a convex polygon taken out of it: convex pieces that do
+/// not overlap each other or the polygon.
+///
+/// `hole` is read counter-clockwise whichever way it is wound. Piece by piece
+/// the outside of each of its edges is cut away and kept, and what is left
+/// inside that edge goes on to the next, so what remains at the end is the
+/// part inside every edge - the hole itself, which is dropped.
+pub fn cut_convex(piece: &[Point], hole: &[Point]) -> Vec<Vec<Point>> {
+    let hole: Vec<Point> = if twice_area(hole) < 0 {
+        hole.iter().rev().copied().collect()
+    } else {
+        hole.to_vec()
+    };
+    if hole.len() < 3 || twice_area(&hole) == 0 || !convex_interiors_overlap(piece, &hole) {
+        return vec![piece.to_vec()];
+    }
+    let mut out = Vec::with_capacity(hole.len());
+    let mut rest = piece.to_vec();
+    for i in 0..hole.len() {
+        let (a, b) = (hole[i], hole[(i + 1) % hole.len()]);
+        out.extend(clip_half_plane(&rest, a, b, false));
+        match clip_half_plane(&rest, a, b, true) {
+            Some(inside) => rest = inside,
+            None => break,
+        }
+    }
+    out
+}
+
+/// Every piece with the convex polygon taken out of it.
+pub fn cut_pieces_by(pieces: Vec<Vec<Point>>, hole: &[Point]) -> Vec<Vec<Point>> {
+    pieces
+        .into_iter()
+        .flat_map(|piece| cut_convex(&piece, hole))
+        .collect()
+}
+
 /// Whether two convex pieces share a point. Touching counts, at an edge or at
 /// one corner, as it does for two rectangles in the checker.
 pub fn shapes_touch(a: &[Point], b: &[Point]) -> bool {
@@ -775,5 +851,62 @@ mod tests {
             touching > 100 && touching < rects.len() * rects.len(),
             "the grid has both kinds of pair"
         );
+    }
+
+    fn area2(pieces: &[Vec<Point>]) -> i128 {
+        pieces.iter().map(|piece| twice_area(piece)).sum()
+    }
+
+    #[test]
+    fn a_diamond_taken_out_of_a_square_leaves_the_rest_of_it() {
+        let square = ring(&[(0, 0), (10, 0), (10, 10), (0, 10)]);
+        let diamond = ring(&[(5, 2), (8, 5), (5, 8), (2, 5)]);
+        let left = cut_convex(&square, &diamond);
+        // 100 - 18, twice.
+        assert_eq!(area2(&left), 2 * 82);
+        // None of it inside the diamond.
+        for piece in &left {
+            assert!(!convex_interiors_overlap(piece, &diamond), "{piece:?}");
+        }
+    }
+
+    #[test]
+    fn a_hole_wound_clockwise_cuts_the_same_copper() {
+        let square = ring(&[(0, 0), (10, 0), (10, 10), (0, 10)]);
+        let diamond = ring(&[(5, 2), (8, 5), (5, 8), (2, 5)]);
+        let mut clockwise = diamond.clone();
+        clockwise.reverse();
+        assert_eq!(
+            area2(&cut_convex(&square, &clockwise)),
+            area2(&cut_convex(&square, &diamond))
+        );
+    }
+
+    #[test]
+    fn a_hole_that_misses_the_piece_leaves_it_whole() {
+        let square = ring(&[(0, 0), (10, 0), (10, 10), (0, 10)]);
+        let far = ring(&[(20, 0), (30, 0), (25, 5)]);
+        assert_eq!(cut_convex(&square, &far), vec![square.clone()]);
+        // Touching along an edge takes nothing either.
+        let beside = ring(&[(10, 0), (20, 0), (20, 10), (10, 10)]);
+        assert_eq!(cut_convex(&square, &beside), vec![square]);
+    }
+
+    #[test]
+    fn a_hole_that_covers_the_piece_leaves_nothing() {
+        let small = ring(&[(2, 2), (4, 2), (4, 4), (2, 4)]);
+        let big = ring(&[(0, 0), (10, 0), (10, 10), (0, 10)]);
+        assert!(cut_convex(&small, &big).is_empty());
+    }
+
+    #[test]
+    fn a_triangle_cut_from_a_corner_is_the_square_less_the_corner() {
+        let square = ring(&[(0, 0), (10, 0), (10, 10), (0, 10)]);
+        // Reaches out past the square on two sides: the part inside is the
+        // triangle (0,0) (6,0) (0,6), area 18.
+        let corner = ring(&[(-5, -5), (6, 0), (0, 6)]);
+        let left = cut_convex(&square, &corner);
+        let overlap = ring(&[(0, 0), (6, 0), (0, 6)]);
+        assert_eq!(area2(&left), 2 * 100 - twice_area(&overlap).abs());
     }
 }

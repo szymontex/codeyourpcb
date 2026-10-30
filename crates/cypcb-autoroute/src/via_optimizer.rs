@@ -9,7 +9,7 @@ use cypcb_core::{Nm, Point, Rect};
 use cypcb_drc::rules::clearance::segment_distance;
 use cypcb_router::types::{RouteSegment, ViaPlacement};
 use cypcb_world::components::trace::{Trace, Via};
-use cypcb_world::components::{rotate_about_origin, ZoneOutline};
+use cypcb_world::components::{rotate_about_origin, KeepoutKind, ZoneOutline};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, FootprintRef, Layer, NetConnections, NetId, Position, Rotation};
 
@@ -30,9 +30,14 @@ const NO_NET: NetId = NetId(u32::MAX);
 pub struct BoardObstacles {
     pads: Vec<PadCopper>,
     traces: Vec<RouteSegment>,
+    /// The keepouts that forbid tracks, with the layers each is on.
     keepouts: Vec<(Rect, u32)>,
+    /// The keepouts that forbid vias and not tracks.
+    via_keepouts: Vec<(Rect, u32)>,
     /// The keepouts drawn as a polygon, each with the layers it is on.
     outlined_keepouts: Vec<(ZoneOutline, u32)>,
+    /// The ones that forbid vias and not tracks, drawn as a polygon.
+    outlined_via_keepouts: Vec<(ZoneOutline, u32)>,
 }
 
 /// A pad as the smallest circle that covers it, whatever its shape and
@@ -185,25 +190,36 @@ impl BoardObstacles {
             })
             .collect();
 
-        let keepouts = world
-            .zones()
-            .into_iter()
-            .filter(|(_, zone)| zone.is_keepout())
-            .map(|(_, zone)| (zone.bounds, zone.layer_mask))
-            .collect();
-
-        let outlined_keepouts = world
-            .outlined_zones()
-            .into_iter()
-            .filter(|(_, zone, _)| zone.is_keepout())
-            .map(|(_, zone, outline)| (outline, zone.layer_mask))
-            .collect();
+        // What a segment has to keep out of is the areas that forbid tracks;
+        // what a via has to keep out of is those and the ones that forbid vias.
+        let rects = world.zones();
+        let outlines = world.outlined_zones();
+        let mut keepouts = Vec::new();
+        let mut via_keepouts = Vec::new();
+        for (entity, zone) in &rects {
+            if world.forbids(*entity, zone, KeepoutKind::Tracks) {
+                keepouts.push((zone.bounds, zone.layer_mask));
+            } else if world.forbids(*entity, zone, KeepoutKind::Vias) {
+                via_keepouts.push((zone.bounds, zone.layer_mask));
+            }
+        }
+        let mut outlined_keepouts = Vec::new();
+        let mut outlined_via_keepouts = Vec::new();
+        for (entity, zone, outline) in outlines {
+            if world.forbids(entity, &zone, KeepoutKind::Tracks) {
+                outlined_keepouts.push((outline, zone.layer_mask));
+            } else if world.forbids(entity, &zone, KeepoutKind::Vias) {
+                outlined_via_keepouts.push((outline, zone.layer_mask));
+            }
+        }
 
         BoardObstacles {
             pads,
             traces,
             keepouts,
+            via_keepouts,
             outlined_keepouts,
+            outlined_via_keepouts,
         }
     }
 }
@@ -618,12 +634,41 @@ fn board_clear(
             segment_distance(p1, p2, c, c) >= min_clearance.0 + width.0 / 2 + pad.radius.0
         });
 
-    pads_clear && keepouts_clear(board, layer, p1, p2, width)
+    pads_clear && keepouts_clear(board, layer, p1, p2, width, false)
 }
 
-/// Whether a segment on `layer` stays out of the board's keepouts.
+/// Whether a segment on `layer` stays out of the board's keepouts: the ones
+/// that forbid tracks, and with `via` also the ones that forbid vias.
 fn keepouts_clear(
     board: &BoardObstacles,
+    layer: Layer,
+    p1: [i64; 2],
+    p2: [i64; 2],
+    width: Nm,
+    via: bool,
+) -> bool {
+    keepout_set_clear(
+        &board.keepouts,
+        &board.outlined_keepouts,
+        layer,
+        p1,
+        p2,
+        width,
+    ) && (!via
+        || keepout_set_clear(
+            &board.via_keepouts,
+            &board.outlined_via_keepouts,
+            layer,
+            p1,
+            p2,
+            width,
+        ))
+}
+
+/// Whether a segment on `layer` stays out of these keepouts.
+fn keepout_set_clear(
+    keepouts: &[(Rect, u32)],
+    outlined_keepouts: &[(ZoneOutline, u32)],
     layer: Layer,
     p1: [i64; 2],
     p2: [i64; 2],
@@ -632,8 +677,7 @@ fn keepouts_clear(
     let Some(index) = layer_to_index(layer) else {
         return true;
     };
-    let rects_clear = board
-        .keepouts
+    let rects_clear = keepouts
         .iter()
         .filter(|(_, mask)| mask & (1 << index) != 0)
         .all(|(rect, _)| {
@@ -650,8 +694,7 @@ fn keepouts_clear(
     // The same question of a polygon: neither end inside it, and every edge of
     // it at least half the width from the segment.
     rects_clear
-        && board
-            .outlined_keepouts
+        && outlined_keepouts
             .iter()
             .filter(|(_, mask)| mask & (1 << index) != 0)
             .all(|(outline, _)| {
@@ -739,7 +782,7 @@ impl Surroundings<'_> {
             .filter(|pad| pad.net != Some(net))
             .filter(|pad| pad.layers.is_empty() || pad.layers.contains(&layer))
             .all(|pad| pad_gap(pad, p1, p2) >= c + width.0 / 2);
-        segments && vias && pads && keepouts_clear(self.board, layer, p1, p2, width)
+        segments && vias && pads && keepouts_clear(self.board, layer, p1, p2, width, false)
     }
 
     /// Whether `via` moved to `at` clears every other net's copper on every
@@ -777,7 +820,7 @@ impl Surroundings<'_> {
         let keepouts = [Layer::TopCopper, Layer::BottomCopper]
             .into_iter()
             .chain((0..30).map(Layer::Inner))
-            .all(|layer| keepouts_clear(self.board, layer, at, at, Nm(2 * r)));
+            .all(|layer| keepouts_clear(self.board, layer, at, at, Nm(2 * r), true));
         segments && vias && pads && board_holes && keepouts
     }
 }
@@ -890,6 +933,35 @@ mod tests {
             start,
             end,
         )
+    }
+
+    #[test]
+    fn a_via_may_not_be_moved_into_an_area_that_forbids_vias() {
+        let via = make_via(1, 0.0, 0.0, Layer::TopCopper, Layer::BottomCopper);
+        let area = Rect::new(Point::from_mm(4.0, -2.0), Point::from_mm(8.0, 2.0));
+        let allowed = |board: &BoardObstacles| {
+            let surroundings = Surroundings {
+                segments: Vec::new(),
+                vias: Vec::new(),
+                board,
+                min_clearance: Nm::from_mm(0.127),
+                min_hole_to_hole: Nm(0),
+            };
+            let at = [Point::from_mm(6.0, 0.0).x.0, Point::from_mm(6.0, 0.0).y.0];
+            surroundings.via_clear(NetId::new(1), at, &via)
+        };
+        assert!(allowed(&BoardObstacles::default()), "the control");
+        let vias_only = BoardObstacles {
+            via_keepouts: vec![(area, 0b11)],
+            ..BoardObstacles::default()
+        };
+        assert!(!allowed(&vias_only));
+        // An area that forbids tracks keeps a via out as well: the cells are shut.
+        let tracks_only = BoardObstacles {
+            keepouts: vec![(area, 0b11)],
+            ..BoardObstacles::default()
+        };
+        assert!(!allowed(&tracks_only));
     }
 
     #[test]

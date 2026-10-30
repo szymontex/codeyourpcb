@@ -774,7 +774,7 @@ pub fn export_ipc2581_with(
                 .copied();
             let filled = cypcb_world::copper::fill_zone(world, library, layer, &zone, hatch, pour);
             let pieces: Vec<cypcb_core::Rect> = filled.all().copied().collect();
-            if pieces.is_empty() {
+            if pieces.is_empty() && filled.shapes.is_empty() && filled.spoke_shapes.is_empty() {
                 continue;
             }
             // A pour without a net is copper poured for its own sake -
@@ -814,6 +814,10 @@ pub fn export_ipc2581_with(
                 out.push_str("                </Polygon>\n              </Contour>\n");
                 out.push_str("            </Features>\n");
             }
+            // A pour a rule area cuts at a slant comes back as convex pieces.
+            for shape in filled.all_shapes() {
+                write_shape(&mut out, shape);
+            }
             out.push_str("          </Set>\n");
         }
 
@@ -833,24 +837,7 @@ pub fn export_ipc2581_with(
                 .to_string();
             let _ = writeln!(out, "          <Set net=\"{}\">", qualified(&net));
             for shape in filled.all_shapes() {
-                out.push_str("            <Features>\n              <Contour>\n");
-                out.push_str("                <Polygon>\n");
-                let _ = writeln!(
-                    out,
-                    "                  <PolyBegin x=\"{}\" y=\"{}\"/>",
-                    mm(shape[0].x),
-                    mm(shape[0].y)
-                );
-                for corner in shape.iter().skip(1).chain(shape.first()) {
-                    let _ = writeln!(
-                        out,
-                        "                  <PolyStepSegment x=\"{}\" y=\"{}\"/>",
-                        mm(corner.x),
-                        mm(corner.y)
-                    );
-                }
-                out.push_str("                </Polygon>\n              </Contour>\n");
-                out.push_str("            </Features>\n");
+                write_shape(&mut out, shape);
             }
             out.push_str("          </Set>\n");
         }
@@ -863,4 +850,26 @@ pub fn export_ipc2581_with(
     out.push_str("  </Ecad>\n");
     out.push_str("</IPC-2581>\n");
     (out, warnings)
+}
+
+/// One convex piece of copper as a contour feature.
+fn write_shape(out: &mut String, shape: &[cypcb_core::Point]) {
+    out.push_str("            <Features>\n              <Contour>\n");
+    out.push_str("                <Polygon>\n");
+    let _ = writeln!(
+        out,
+        "                  <PolyBegin x=\"{}\" y=\"{}\"/>",
+        mm(shape[0].x),
+        mm(shape[0].y)
+    );
+    for corner in shape.iter().skip(1).chain(shape.first()) {
+        let _ = writeln!(
+            out,
+            "                  <PolyStepSegment x=\"{}\" y=\"{}\"/>",
+            mm(corner.x),
+            mm(corner.y)
+        );
+    }
+    out.push_str("                </Polygon>\n              </Contour>\n");
+    out.push_str("            </Features>\n");
 }

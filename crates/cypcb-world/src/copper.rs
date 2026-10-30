@@ -17,7 +17,7 @@ use cypcb_core::{Nm, Point, Rect};
 
 use crate::components::trace::{Trace, Via};
 use crate::components::zone::{Hatch, Zone, ZoneOutline};
-use crate::components::{same_net, Layer, NetId};
+use crate::components::{same_net, KeepoutKind, Layer, NetId};
 use crate::footprint::FootprintLibrary;
 use crate::world::BoardWorld;
 
@@ -78,6 +78,56 @@ pub fn outlined_pours(
         .collect()
 }
 
+/// The areas that keep a pour out of this layer: every keepout that forbids
+/// copper pour, as convex pieces. The five-kind keepout is one of them, as it
+/// is for KiCad.
+///
+/// The fill is cut away from the area's outline with no gap, as KiCad's zone
+/// filler cuts it (`zone_filler.cpp`, "Keepouts use outline with no
+/// clearance"): the clearance a pour keeps is from copper, and a rule area is
+/// not copper.
+pub fn pour_cuts(world: &mut BoardWorld, layer: Layer) -> Vec<Vec<Point>> {
+    use cypcb_core::pour_shape;
+
+    let mask = layer.to_copper_mask();
+    let mut cuts = Vec::new();
+    for (entity, zone, outline) in world.all_zones() {
+        if zone.layer_mask & mask == 0 || !world.forbids(entity, &zone, KeepoutKind::Pour) {
+            continue;
+        }
+        match outline {
+            Some(outline) => cuts.extend(pour_shape::convex_pieces(outline.corners())),
+            None => cuts.push(vec![
+                zone.bounds.min,
+                Point::new(zone.bounds.max.x, zone.bounds.min.y),
+                zone.bounds.max,
+                Point::new(zone.bounds.min.x, zone.bounds.max.y),
+            ]),
+        }
+    }
+    cuts
+}
+
+/// The rectangle a convex piece is, when it is one that sits square to the axes.
+fn as_rect(piece: &[Point]) -> Option<Rect> {
+    let bounds = cypcb_core::pour_shape::shape_bounds(piece);
+    let box_twice_area = 2
+        * i128::from(bounds.max.x.0 - bounds.min.x.0)
+        * i128::from(bounds.max.y.0 - bounds.min.y.0);
+    (piece.len() == 4 && cypcb_core::pour_shape::twice_area(piece).abs() == box_twice_area)
+        .then_some(bounds)
+}
+
+/// A rectangle as the ring of its corners, counter-clockwise.
+fn ring_of(rect: Rect) -> Vec<Point> {
+    vec![
+        rect.min,
+        Point::new(rect.max.x, rect.min.y),
+        rect.max,
+        Point::new(rect.min.x, rect.max.y),
+    ]
+}
+
 /// Fill one pour that is drawn as a polygon against the board it sits on.
 ///
 /// The same pour as [`fill_zone`] makes of a rectangle, cut from the ring and
@@ -111,6 +161,13 @@ pub fn fill_outlined_zone(
                 .collect();
             spoke_shapes.extend(pour_shape::cut_all(inside, &obstacles, options.clearance));
         }
+    }
+
+    // The rule areas that keep a pour out, taken out of the plane and its
+    // bridges alike.
+    for cut in pour_cuts(world, layer) {
+        shapes = pour_shape::cut_pieces_by(shapes, &cut);
+        spoke_shapes = pour_shape::cut_pieces_by(spoke_shapes, &cut);
     }
 
     FilledPour {
@@ -165,6 +222,22 @@ pub fn fill_zone(
         }
     }
 
+    // The rule areas that keep a pour out. One that sits square to the axes is
+    // taken out of the rectangles as another obstacle would be, with no gap.
+    let (square, slanted): (Vec<Vec<Point>>, Vec<Vec<Point>>) = pour_cuts(world, layer)
+        .into_iter()
+        .partition(|cut| as_rect(cut).is_some());
+    for hole in square.iter().filter_map(|cut| as_rect(cut)) {
+        pieces = pieces
+            .into_iter()
+            .flat_map(|piece| pour::fill(piece, &[hole], Nm::ZERO))
+            .collect();
+        spokes = spokes
+            .into_iter()
+            .flat_map(|spoke| pour::fill(spoke, &[hole], Nm::ZERO))
+            .collect();
+    }
+
     // A mesh rather than a sheet, when the pour asked for one.
     //
     // Cut last, against the copper the plane already became: hatching first
@@ -174,6 +247,23 @@ pub fn fill_zone(
     // relieve.
     if let Some(hatch) = hatch {
         pieces = hatched(&pieces, hatch);
+    }
+
+    // A rule area that is not square to the axes leaves copper that is not a
+    // rectangle. The plane and its bridges then come back as the convex pieces
+    // a polygon pour is made of, and the rectangles are empty.
+    if !slanted.is_empty() {
+        let mut shapes: Vec<Vec<Point>> = pieces.iter().copied().map(ring_of).collect();
+        let mut spoke_shapes: Vec<Vec<Point>> = spokes.iter().copied().map(ring_of).collect();
+        for cut in &slanted {
+            shapes = cypcb_core::pour_shape::cut_pieces_by(shapes, cut);
+            spoke_shapes = cypcb_core::pour_shape::cut_pieces_by(spoke_shapes, cut);
+        }
+        return FilledPour {
+            shapes,
+            spoke_shapes,
+            ..FilledPour::default()
+        };
     }
 
     FilledPour {

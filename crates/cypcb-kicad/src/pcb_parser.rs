@@ -29,7 +29,7 @@ use cypcb_core::{Nm, Point, Rect};
 
 use crate::frame;
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
-use cypcb_world::components::zone::{Zone, ZoneOutline};
+use cypcb_world::components::zone::{KeepoutKind, KeepoutKinds, Zone, ZoneOutline};
 use cypcb_world::components::{BoardOutline, EdgeConnector, Layer, PadShape, Side, StackupSheet};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef, PlacementOrigin};
 use cypcb_world::{
@@ -638,13 +638,23 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
             continue;
         }
         match parse_zone(elem, &kicad_net_map, board_origin, layer_count)? {
-            ZoneImport::Carried(zone) => {
-                world.spawn_entity((zone,));
+            ZoneImport::Carried(zone, kinds) => {
+                match kinds {
+                    Some(kinds) => world.spawn_entity((zone, kinds)),
+                    None => world.spawn_entity((zone,)),
+                };
                 zone_count += 1;
             }
             // Not a rectangle: kept as the ring of corners the file states.
-            ZoneImport::Outlined { zone, outline } => {
-                world.spawn_outlined_zone(zone, outline);
+            ZoneImport::Outlined {
+                zone,
+                outline,
+                kinds,
+            } => {
+                let entity = world.spawn_outlined_zone(zone, outline);
+                if let Some(kinds) = kinds {
+                    world.ecs_mut().entity_mut(entity).insert(kinds);
+                }
                 outlined_zone_count += 1;
             }
             // A teardrop is copper of the net and layer it is on, whole: the
@@ -1898,7 +1908,7 @@ fn parse_zone(
     let mut layers_named: Vec<Layer> = Vec::new();
     let mut layer_strings: Vec<String> = Vec::new();
     let mut is_keepout = false;
-    let mut restricts_something = false;
+    let mut keepout_kinds = KeepoutKinds::NONE;
     let mut is_teardrop = false;
 
     for child in &list[1..] {
@@ -1948,7 +1958,7 @@ fn parse_zone(
             // A KiCad "rule area": copper is kept out rather than poured.
             Some("keepout") => {
                 is_keepout = true;
-                restricts_something = rule_area_restricts_something(child);
+                keepout_kinds = rule_area_kinds(child);
             }
             // `(attr (teardrop (type padvia)))`: the zone is a teardrop, which
             // KiCad stores as copper on its track's layer and net
@@ -2054,11 +2064,11 @@ fn parse_zone(
         });
     }
 
-    // A rule area is a keepout for what it does not allow. One that allows
-    // tracks, vias, pads, copper pour and footprints alike keeps nothing out:
-    // KiCad uses it for placement rules, and carrying it as a keepout would
-    // flag every track that crosses it.
-    if is_keepout && !restricts_something {
+    // A rule area is a keepout for what it does not allow, and for that alone.
+    // One that allows tracks, vias, pads, copper pour and footprints alike
+    // keeps nothing out: KiCad uses it for placement rules, and carrying it as
+    // a keepout would flag every track that crosses it.
+    if is_keepout && keepout_kinds.is_empty() {
         return Ok(ZoneImport::Refused(format!(
             "{label} is a rule area that allows tracks, vias, pads, copper pour and footprints, \
              so it keeps nothing out"
@@ -2078,12 +2088,21 @@ fn parse_zone(
 
     let Some(bounds) = axis_aligned_rectangle(&points) else {
         return Ok(outlined(
-            &points, is_keepout, layer_mask, net_id, net_name, zone_name, &label,
+            &points,
+            is_keepout.then_some(keepout_kinds),
+            layer_mask,
+            net_id,
+            net_name,
+            zone_name,
+            &label,
         ));
     };
 
     if is_keepout {
-        return Ok(ZoneImport::Carried(Zone::keepout(bounds, layer_mask)));
+        return Ok(ZoneImport::Carried(
+            Zone::keepout(bounds, layer_mask),
+            partial(keepout_kinds),
+        ));
     }
 
     match net_id {
@@ -2093,6 +2112,7 @@ fn parse_zone(
         Some(net) => Ok(ZoneImport::Carried(
             Zone::copper_pour_for_net(bounds, layer_mask, net)
                 .with_name(zone_name.unwrap_or(net_name)),
+            None,
         )),
         // A pour with no net cannot be filled or checked, and KiCad does write
         // them - an unassigned pour is a common half-finished state.
@@ -2112,7 +2132,7 @@ fn parse_zone(
 /// designer cut it away.
 fn outlined(
     points: &[(f64, f64)],
-    is_keepout: bool,
+    keepout: Option<KeepoutKinds>,
     layer_mask: u32,
     net_id: Option<NetId>,
     net_name: String,
@@ -2127,10 +2147,11 @@ fn outlined(
         ));
     };
 
-    if is_keepout {
+    if let Some(kinds) = keepout {
         return ZoneImport::Outlined {
             zone: Zone::keepout(outline.bounds(), layer_mask),
             outline,
+            kinds: partial(kinds),
         };
     }
 
@@ -2154,6 +2175,7 @@ fn outlined(
         zone: Zone::copper_pour_for_net(outline.bounds(), layer_mask, net)
             .with_name(zone_name.unwrap_or(net_name)),
         outline,
+        kinds: None,
     }
 }
 
@@ -2163,11 +2185,16 @@ const FILE_TEARDROP_ORDER: u32 = 1 << 30;
 
 /// What became of one `(zone ...)`.
 pub enum ZoneImport {
-    /// Carried into the board.
-    Carried(Zone),
+    /// Carried into the board. A keepout that forbids only some kinds comes
+    /// with them; `None` is a pour, or a keepout that forbids all five.
+    Carried(Zone, Option<KeepoutKinds>),
     /// Carried into the board as the ring of corners it is, not as a
     /// rectangle.
-    Outlined { zone: Zone, outline: ZoneOutline },
+    Outlined {
+        zone: Zone,
+        outline: ZoneOutline,
+        kinds: Option<KeepoutKinds>,
+    },
     /// A teardrop zone on a copper layer: a polygon, the layer it is on and the
     /// net it carries.
     Teardrop {
@@ -2646,17 +2673,40 @@ pub fn parse_layer_name(name: &str) -> Option<Layer> {
     }
 }
 
-/// Whether a `(keepout ...)` node forbids anything: some one of tracks, vias,
-/// pads, copper pour or footprints is `not_allowed`.
-fn rule_area_restricts_something(keepout: &Sexp) -> bool {
+/// What a `(keepout ...)` node forbids: each of tracks, vias, pads, copper
+/// pour and footprints that is `not_allowed`, and no other.
+///
+/// A restriction the node does not state is allowed, as KiCad reads it. A node
+/// that is not a list is taken to forbid everything, the safe reading of a
+/// rule area this reader cannot make out.
+fn rule_area_kinds(keepout: &Sexp) -> KeepoutKinds {
     let Ok(list) = keepout.list() else {
-        return true;
+        return KeepoutKinds::ALL;
     };
-    list[1..].iter().any(|restriction| {
-        restriction.list().is_ok_and(|parts| {
-            parts.len() >= 2 && get_string(&parts[1]).as_deref() == Some("not_allowed")
-        })
-    })
+    let mut kinds = Vec::new();
+    for restriction in &list[1..] {
+        let Ok(parts) = restriction.list() else {
+            continue;
+        };
+        if parts.len() < 2 || get_string(&parts[1]).as_deref() != Some("not_allowed") {
+            continue;
+        }
+        match get_string(&parts[0]).as_deref() {
+            Some("tracks") => kinds.push(KeepoutKind::Tracks),
+            Some("vias") => kinds.push(KeepoutKind::Vias),
+            Some("pads") => kinds.push(KeepoutKind::Pads),
+            Some("copperpour") => kinds.push(KeepoutKind::Pour),
+            Some("footprints") => kinds.push(KeepoutKind::Footprints),
+            _ => {}
+        }
+    }
+    KeepoutKinds::of_kinds(&kinds)
+}
+
+/// The kinds a keepout carries as a component: `None` when it forbids all five,
+/// which is what a keepout with no component means.
+fn partial(kinds: KeepoutKinds) -> Option<KeepoutKinds> {
+    (!kinds.is_all()).then_some(kinds)
 }
 
 /// The copper layers a zone's layer string stands for, when it is one of KiCad's

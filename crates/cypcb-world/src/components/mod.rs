@@ -52,4 +52,7 @@ pub use electrical::{
 pub use metadata::{ComponentKind, Name, SourceSpan};
 pub use physical::{FootprintRef, Layer, Pad, PadShape, Side};
 pub use position::{place_box, place_pad, rotate_about_origin, Position, Rotation};
-pub use zone::{BendRadius, Hatch, StitchPitch, Stitched, Zone, ZoneKind, ZoneOutline};
+pub use zone::{
+    BendRadius, Hatch, KeepoutKind, KeepoutKinds, StitchPitch, Stitched, Zone, ZoneKind,
+    ZoneOutline,
+};

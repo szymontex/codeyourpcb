@@ -813,6 +813,27 @@ impl BoardWorld {
             .collect()
     }
 
+    /// What a keepout entity forbids: its [`KeepoutKinds`], or all five kinds
+    /// when it has none.
+    pub fn keepout_kinds(&self, entity: Entity) -> crate::components::KeepoutKinds {
+        crate::components::KeepoutKinds::of(
+            self.world.get::<crate::components::KeepoutKinds>(entity),
+        )
+    }
+
+    /// Whether this zone is a keepout that forbids `kind`.
+    ///
+    /// The one question every reader of a keepout asks. A zone that is not a
+    /// keepout forbids nothing.
+    pub fn forbids(
+        &self,
+        entity: Entity,
+        zone: &Zone,
+        kind: crate::components::KeepoutKind,
+    ) -> bool {
+        zone.is_keepout() && self.keepout_kinds(entity).forbids(kind)
+    }
+
     /// Iterate over the zones that are not rectangles, with their outlines.
     ///
     /// The zone's `bounds` is the box round the outline.

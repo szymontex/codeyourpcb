@@ -77,6 +77,89 @@ pub struct Zone {
     pub net: Option<NetId>,
 }
 
+/// What a keepout forbids. KiCad's rule area states each of these on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeepoutKind {
+    /// Tracks, arcs included.
+    Tracks,
+    /// Vias of every span.
+    Vias,
+    /// Pads.
+    Pads,
+    /// Copper pour: the fill is cut away from the area.
+    Pour,
+    /// Footprints.
+    Footprints,
+}
+
+impl KeepoutKind {
+    /// Every kind, in the order KiCad lists them.
+    pub const ALL: [KeepoutKind; 5] = [
+        KeepoutKind::Tracks,
+        KeepoutKind::Vias,
+        KeepoutKind::Pads,
+        KeepoutKind::Pour,
+        KeepoutKind::Footprints,
+    ];
+
+    const fn bit(self) -> u8 {
+        match self {
+            KeepoutKind::Tracks => 1,
+            KeepoutKind::Vias => 2,
+            KeepoutKind::Pads => 4,
+            KeepoutKind::Pour => 8,
+            KeepoutKind::Footprints => 16,
+        }
+    }
+}
+
+/// Which kinds of thing a keepout forbids.
+///
+/// A component on the zone's own entity rather than a field of [`Zone`], for
+/// the reason [`StitchPitch`] is one: a keepout that forbids everything is the
+/// ordinary case, and thirty-five places in this workspace build a `Zone`
+/// literally. **A keepout without this component forbids all five kinds**, which
+/// is what the language's `keepout` means and what every keepout meant before
+/// KiCad's rule areas could be carried one kind at a time. Use
+/// [`KeepoutKinds::of`] to read it; reading the component alone would take a
+/// missing one for a keepout that forbids nothing.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeepoutKinds(u8);
+
+impl KeepoutKinds {
+    /// Nothing forbidden. A rule area like this keeps nothing out and is not a
+    /// keepout at all.
+    pub const NONE: KeepoutKinds = KeepoutKinds(0);
+    /// All five kinds.
+    pub const ALL: KeepoutKinds = KeepoutKinds(31);
+
+    /// These kinds and no others.
+    pub fn of_kinds(kinds: &[KeepoutKind]) -> KeepoutKinds {
+        KeepoutKinds(kinds.iter().fold(0, |bits, kind| bits | kind.bit()))
+    }
+
+    /// Whether this kind is forbidden.
+    pub const fn forbids(self, kind: KeepoutKind) -> bool {
+        self.0 & kind.bit() != 0
+    }
+
+    /// Whether nothing is forbidden.
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Whether all five are forbidden.
+    pub const fn is_all(self) -> bool {
+        self.0 == KeepoutKinds::ALL.0
+    }
+
+    /// The kinds a keepout entity forbids: its component, or all five when it
+    /// has none.
+    pub fn of(component: Option<&KeepoutKinds>) -> KeepoutKinds {
+        component.copied().unwrap_or(KeepoutKinds::ALL)
+    }
+}
+
 /// The pitch of the via field that ties a pour's two sides together.
 ///
 /// A component on the zone's own entity rather than a field of [`Zone`]: a

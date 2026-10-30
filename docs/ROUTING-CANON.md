@@ -1073,7 +1073,7 @@ four-layer rule onto a two-layer board:
 - The reference is not a plane but a pour, and the pour is cut by the traces
   routed on that same layer. Coverage has to be measured against the filled
   geometry - the pieces and spokes `fill_zone` returns
-  (`crates/cypcb-world/src/copper.rs:127`) - and never against the zone's
+  (`crates/cypcb-world/src/copper.rs:184`) - and never against the zone's
   declared rectangle, which covers copper that is not there.
 - Every trace on the opposite layer is itself a gap in the reference of the
   trace above it. A two-layer board with any routing on the reference layer
@@ -1149,7 +1149,7 @@ along than expected.
 *What exists.* A pour declares its stitch pitch in the language - `stitch
 <pitch>` inside a zone (`crates/cypcb-parser/src/parser.rs:1416`,
 `crates/cypcb-parser/src/ast.rs:1136`) - and it is carried on the zone's entity
-as `StitchPitch` (`crates/cypcb-world/src/components/zone.rs:87`). A generator
+as `StitchPitch` (`crates/cypcb-world/src/components/zone.rs:170`). A generator
 places the field: `stitching_vias` (`crates/cypcb-world/src/stitch.rs:56`)
 walks the pour's rectangle on a grid at `StitchSpec::pitch`, starting half a
 pitch inside the edge so the field is symmetric, and keeps a point only where
@@ -1512,7 +1512,7 @@ last clause is the rule.
 
 **2. What the grid costs in accuracy, and it is worse than half a cell.** A pad
 centre is snapped by integer division, not by rounding: `nm_to_grid_x`
-(`crates/cypcb-autoroute/src/grid.rs:800`) computes `(nm - origin) / resolution`,
+(`crates/cypcb-autoroute/src/grid.rs:848`) computes `(nm - origin) / resolution`,
 which truncates toward zero. The node therefore sits at or below the pad centre
 on each axis, and the error approaches a whole cell per axis rather than half of
 one. Worst case radially is `resolution * sqrt(2)`.

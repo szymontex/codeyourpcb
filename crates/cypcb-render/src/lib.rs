@@ -1987,14 +1987,19 @@ impl PcbEngine {
                     .all()
                     .map(|r| [r.min.x.0, r.min.y.0, r.max.x.0, r.max.y.0])
                     .collect();
-                if rects.is_empty() {
+                // A pour a rule area cuts at a slant comes back as convex pieces.
+                let polygons: Vec<Vec<[i64; 2]>> = filled
+                    .all_shapes()
+                    .map(|shape| shape.iter().map(|c| [c.x.0, c.y.0]).collect())
+                    .collect();
+                if rects.is_empty() && polygons.is_empty() {
                     continue;
                 }
                 pours.push(PourInfo {
                     net: net.clone(),
                     layer_mask: layer.to_copper_mask(),
                     rects,
-                    polygons: Vec::new(),
+                    polygons,
                 });
             }
         }

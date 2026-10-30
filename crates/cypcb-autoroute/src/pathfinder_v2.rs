@@ -1378,6 +1378,12 @@ fn find_path_congestion_augmented(
             }
             let target = (nx, ny, target_layer);
 
+            // A rule area that forbids vias keeps one out whatever else the
+            // cell holds, on any layer the hole passes.
+            if grid.via_forbidden(nx as u32, ny as u32, grid.via_layers(nl, target_layer)) {
+                continue;
+            }
+
             // A via may not be placed on a pad's copper or inside its
             // clearance. `paths_to_output` used to delete such vias after the
             // fact, which left the two halves of a route on two layers with

@@ -93,12 +93,16 @@ impl DrcRule for PourIslandRule {
                     .copied();
                 let filled =
                     cypcb_world::copper::fill_zone(world, &library, layer, &zone, hatch, &options);
-                if filled.pieces.is_empty() {
-                    continue;
+                if !filled.pieces.is_empty() {
+                    for island in unconnected_islands(&filled.pieces, &filled.spokes) {
+                        violations.push(DrcViolation::pour_island(entity, island));
+                    }
                 }
-
-                for island in unconnected_islands(&filled.pieces, &filled.spokes) {
-                    violations.push(DrcViolation::pour_island(entity, island));
+                // A pour a rule area cuts at a slant comes back as convex pieces.
+                if !filled.shapes.is_empty() {
+                    for island in unconnected_island_shapes(&filled.shapes, &filled.spoke_shapes) {
+                        violations.push(DrcViolation::pour_island(entity, island));
+                    }
                 }
             }
         }

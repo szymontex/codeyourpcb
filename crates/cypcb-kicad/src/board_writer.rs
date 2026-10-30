@@ -25,7 +25,7 @@ use std::fmt::Write as _;
 
 use cypcb_core::Nm;
 use cypcb_world::components::trace::{Trace, Via};
-use cypcb_world::components::zone::{Zone, ZoneKind, ZoneOutline};
+use cypcb_world::components::zone::{KeepoutKind, KeepoutKinds, Zone, ZoneKind, ZoneOutline};
 use cypcb_world::components::{
     EdgeConnector, FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation,
     Stackup, StackupLayerKind, Value,
@@ -811,16 +811,19 @@ fn write_zones(
     rules: Option<&KicadDesignRules>,
     out: &mut String,
 ) {
-    let zones: Vec<(Zone, Option<ZoneOutline>)> = {
-        let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(&Zone, Option<&ZoneOutline>)>();
-        query
-            .iter(ecs)
-            .map(|(zone, outline)| (zone.clone(), outline.cloned()))
+    let zones: Vec<(Zone, Option<ZoneOutline>, KeepoutKinds)> = {
+        // In the order the board was built. A keepout that forbids only some
+        // kinds carries a component a pour does not, which puts the two in
+        // different archetypes, and the archetypes are walked in an order of
+        // their own: the zones were written in a different order on a second
+        // save.
+        in_build_order::<(&Zone, Option<&ZoneOutline>, Option<&KeepoutKinds>)>(world.ecs_mut())
+            .into_iter()
+            .map(|(zone, outline, kinds)| (zone.clone(), outline.cloned(), KeepoutKinds::of(kinds)))
             .collect()
     };
 
-    for (zone, outline) in zones {
+    for (zone, outline, kinds) in zones {
         // A flex region is not copper. It says which part of the board bends,
         // which KiCad has no area for - and writing it as a pour made it one
         // netless `(zone ...)` per copper layer, 32 of them for a region
@@ -865,9 +868,21 @@ fn write_zones(
             if keepout {
                 // A keepout is an area rule rather than copper: KiCad calls it
                 // a zone with nothing allowed in it, and fills nothing.
+                let switch = |kind: KeepoutKind| {
+                    if kinds.forbids(kind) {
+                        "not_allowed"
+                    } else {
+                        "allowed"
+                    }
+                };
                 let _ = writeln!(
                     out,
-                    "    (keepout (tracks not_allowed) (vias not_allowed) (pads not_allowed) (copperpour not_allowed) (footprints not_allowed))"
+                    "    (keepout (tracks {}) (vias {}) (pads {}) (copperpour {}) (footprints {}))",
+                    switch(KeepoutKind::Tracks),
+                    switch(KeepoutKind::Vias),
+                    switch(KeepoutKind::Pads),
+                    switch(KeepoutKind::Pour),
+                    switch(KeepoutKind::Footprints)
                 );
             } else {
                 // Both of these were literals, and both are fab numbers the design
