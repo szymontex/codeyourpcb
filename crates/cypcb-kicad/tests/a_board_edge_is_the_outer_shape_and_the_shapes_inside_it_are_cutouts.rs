@@ -193,27 +193,21 @@ fn a_rectangle_inside_a_rectangle_is_a_hole() {
 }
 
 #[test]
-fn a_circle_is_counted_and_is_neither_edge_nor_hole() {
+fn a_circle_inside_the_edge_is_a_hole() {
     let edge = format!(
         "{}  (gr_circle (center 120 115) (end 122 115) (stroke (width 0.1) (type solid)) (fill no) (layer \"Edge.Cuts\"))\n",
         lines_around(OUTER.0, OUTER.1, OUTER.2, OUTER.3)
     );
     let parsed = read(&board(&edge, ""));
     assert_eq!(ring(&parsed.world).expect("a ring").len(), 4);
-    assert!(cutouts(&parsed.world).is_empty());
-    let notes = &parsed.metadata.placement_notes;
-    assert!(
-        notes
-            .iter()
-            .any(|n| n.starts_with("1 closed shape(s) on Edge.Cuts")),
-        "{notes:?}"
-    );
+    assert_eq!(cutouts(&parsed.world).len(), 1);
+    assert!(parsed.metadata.placement_notes.is_empty());
 }
 
 #[test]
-fn a_hole_inside_an_edge_with_an_arc_is_still_a_hole() {
-    // A D: three lines and an arc. It is no ring here, but it is a shape the
-    // hole is inside of, so the hole has an odd count and stays a hole.
+fn a_hole_inside_an_edge_with_an_arc_is_a_hole_in_that_edge() {
+    // A D: three lines and an arc, which bulges to 140. The hole inside it has
+    // an odd count of shapes round it and stays a hole; the D is the ring.
     let edge = format!(
         "{}{}{}{}{}",
         line(100.0, 100.0, 130.0, 100.0),
@@ -223,18 +217,11 @@ fn a_hole_inside_an_edge_with_an_arc_is_still_a_hole() {
         rect(105.0, 110.0, 115.0, 120.0)
     );
     let parsed = read(&board(&edge, ""));
-    assert!(
-        ring(&parsed.world).is_none(),
-        "an edge with an arc is no ring here"
-    );
+    assert!(ring(&parsed.world).is_some(), "the D is the ring");
     assert_eq!(cutouts(&parsed.world).len(), 1);
-    // The size is the box of the lines, as it was.
-    assert_eq!(size_mm(&parsed.world), (30.0, 30.0));
-    assert!(parsed
-        .metadata
-        .placement_notes
-        .iter()
-        .any(|n| n.starts_with("1 closed shape(s) on Edge.Cuts")));
+    // The arc reaches 10mm past the lines.
+    assert_eq!(size_mm(&parsed.world), (40.0, 30.0));
+    assert!(parsed.metadata.placement_notes.is_empty());
 }
 
 #[test]
