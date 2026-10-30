@@ -1095,6 +1095,11 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
         .and_then(|entity| world.ecs().get::<crate::components::BoardOutline>(entity))
         .map(|outline| outline.points.clone());
 
+    let cutouts = world
+        .board_entity()
+        .and_then(|entity| world.ecs().get::<crate::components::BoardCutouts>(entity))
+        .map_or(0, |cutouts| cutouts.rings.len());
+
     // The fabricator the design named, carried straight back out. A board that
     // named none writes none: this writer's job is to return what it was given,
     // and inventing a fab here would make every round trip claim a choice the
@@ -1666,6 +1671,14 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
             "{outlined_zones} zone(s) that are not rectangles not written: the language has \
              no word for a polygon, and a bounding box would be copper where the shape was \
              drawn to avoid it"
+        ));
+    }
+
+    // A hole in the board. The outline is one ring.
+    if cutouts > 0 {
+        not_written.push(format!(
+            "{cutouts} cutout(s) not written: the language has no word for a hole in the \
+             board, so the board comes back without them"
         ));
     }
 

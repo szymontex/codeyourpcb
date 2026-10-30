@@ -55,6 +55,11 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "cell centres turned back into a pad's own frame, and a span rounded up so the scan covers the pad",
     ),
     (
+        "cypcb-kicad/src/pcb_parser.rs",
+        2,
+        "points on a circle or an arc of the board edge, to see which shape lies inside which",
+    ),
+    (
         "cypcb-world/src/teardrop.rs",
         1,
         "the angle where a teardrop meets a round land, not a part",

@@ -30,7 +30,9 @@ use cypcb_core::{Nm, Point, Rect};
 use crate::frame;
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
 use cypcb_world::components::zone::{KeepoutKind, KeepoutKinds, Zone, ZoneOutline};
-use cypcb_world::components::{BoardOutline, EdgeConnector, Layer, PadShape, Side, StackupSheet};
+use cypcb_world::components::{
+    BoardCutouts, BoardOutline, EdgeConnector, Layer, PadShape, Side, StackupSheet,
+};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef, PlacementOrigin};
 use cypcb_world::{
     BoardWorld, FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation,
@@ -443,7 +445,28 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     let (stackup, stackup_refusals) = extract_stackup(elements);
 
     // 4. Extract board outline from Edge.Cuts
-    let board_bounds = extract_board_outline(elements);
+    //
+    // The board is the outer shape Edge.Cuts draws. Size and origin come from
+    // that shape when this reader carries it as a ring; the shapes inside it
+    // are holes. With no ring (a rectangle, or an edge with an arc in it) the
+    // bounding box of the lines, rectangles and polygons stands, as it always
+    // has.
+    let edge = extract_edge_shapes(elements);
+    let board_bounds = edge
+        .ring
+        .as_ref()
+        .map(|ring| {
+            let xs = ring.iter().map(|p| p.0);
+            let ys = ring.iter().map(|p| p.1);
+            Rect::from_points(
+                Point::from_mm(
+                    xs.clone().fold(f64::MAX, f64::min),
+                    ys.clone().fold(f64::MAX, f64::min),
+                ),
+                Point::from_mm(xs.fold(f64::MIN, f64::max), ys.fold(f64::MIN, f64::max)),
+            )
+        })
+        .or_else(|| extract_board_outline(elements));
     // Board origin in KiCad coordinates - component positions are absolute,
     // so they are measured from the board's own corner, the bottom-left one,
     // with Y turned the board's way up. `frame` says why.
@@ -474,10 +497,17 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         // imported again walked away from its outline: measured on the USB
         // fixture, the parts moved 10mm left and 5mm up per trip while the
         // outline stayed on the sheet.
-        if let Some(outline) =
-            extract_board_ring(elements, board_origin).and_then(BoardOutline::new)
-        {
+        let on_board = |shape: &Vec<(f64, f64)>| -> Vec<Point> {
+            shape
+                .iter()
+                .map(|&(x, y)| frame::board_point(board_origin, x, y))
+                .collect()
+        };
+        if let Some(outline) = edge.ring.as_ref().map(on_board).and_then(BoardOutline::new) {
             world.ecs_mut().entity_mut(board).insert(outline);
+        }
+        if let Some(cutouts) = BoardCutouts::new(edge.cutouts.iter().map(on_board).collect()) {
+            world.ecs_mut().entity_mut(board).insert(cutouts);
         }
 
         // After `set_board`, which is what a stackup attaches to.
@@ -491,6 +521,19 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     let mut component_count = 0usize;
     let mut pad_approximations: Vec<String> = Vec::new();
     let mut placement_notes: Vec<String> = Vec::new();
+    if edge.left_out > 0 {
+        placement_notes.push(format!(
+            "{} closed shape(s) on Edge.Cuts with an arc, a curve or a circle in them are read \
+             neither as the board edge nor as a cutout",
+            edge.left_out
+        ));
+    }
+    if edge.extra_outers > 0 {
+        placement_notes.push(format!(
+            "{} further outer shape(s) on Edge.Cuts: only the largest is the board edge",
+            edge.extra_outers
+        ));
+    }
 
     for elem in elements {
         if let Some(name) = list_name(elem) {
@@ -2841,107 +2884,401 @@ fn calculate_pad_bounds(pads: &[PadDef]) -> Rect {
     )
 }
 
-/// The board's outline as a ring of points, when Edge.Cuts describes one.
+/// What Edge.Cuts holds, read the way KiCad reads it.
 ///
 /// A bounding box is enough to say how big a board is and wrong for saying
-/// where its edge runs. A cutout, a slot or a chamfer all live inside the same
-/// box, and clearance measured against the box passes copper that sits outside
-/// the actual edge.
+/// where its edge runs. The edge is a set of closed shapes: loose `gr_line`
+/// and `gr_arc` segments walked end to end, and `gr_rect`, `gr_poly` and
+/// `gr_circle`, closed on their own. KiCad (`doConvertOutlineToPolygon` and
+/// `buildContourHierarchy` in `convert_shape_list_to_polygon.cpp`) counts, for
+/// each shape, the shapes that contain its first point: an even count is a
+/// board outline, an odd count is a hole in the shape around it.
 ///
-/// `gr_poly` is already a ring and is taken as written. Loose `gr_line`
-/// segments are walked end to end into one; anything that does not close, or
-/// leaves segments over, yields nothing rather than a guess - a partial
-/// outline would be worse than the bounding box it replaces.
-fn extract_board_ring(elements: &[Sexp], origin: (f64, f64)) -> Option<Vec<Point>> {
-    // A polygon states the ring directly.
-    for elem in elements {
-        if list_name(elem).as_deref() != Some("gr_poly") || !is_on_edge_cuts(elem) {
-            continue;
-        }
-        let mut points = Vec::new();
-        if let Ok(list) = elem.list() {
-            for child in list {
-                if list_name(child).as_deref() != Some("pts") {
-                    continue;
-                }
-                let Ok(pts) = child.list() else { continue };
-                for pt in &pts[1..] {
-                    if list_name(pt).as_deref() != Some("xy") {
-                        continue;
-                    }
-                    let Ok(pt_list) = pt.list() else { continue };
-                    if pt_list.len() >= 3 {
-                        if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
-                            points.push(frame::board_point(origin, x, y));
-                        }
-                    }
-                }
-            }
-        }
-        if points.len() >= 3 {
-            return Some(points);
-        }
-    }
+/// The ring is the largest outer shape. A rectangle (`gr_rect`) is its own
+/// bounding box and is no ring, as before. A shape with an arc, a curve or a
+/// circle in it is neither a ring nor a cutout here: it takes part in the
+/// counting, so a cutout inside an arc-edged board is still a cutout, and it
+/// is counted in `left_out`. A chain that never closes is ignored.
+struct EdgeShapes {
+    /// The outer shape the board is cut along, in file millimetres.
+    ring: Option<Vec<(f64, f64)>>,
+    /// The holes, in file millimetres, in the order the file gave them.
+    cutouts: Vec<Vec<(f64, f64)>>,
+    /// Closed shapes with an arc, a curve or a circle in them.
+    left_out: usize,
+    /// Outer shapes beyond the largest.
+    extra_outers: usize,
+}
 
-    // Otherwise, walk the loose segments into a ring.
-    let mut segments: Vec<(Point, Point)> = Vec::new();
-    for elem in elements {
-        if list_name(elem).as_deref() != Some("gr_line") || !is_on_edge_cuts(elem) {
-            continue;
-        }
-        if let (Some(start), Some(end)) = (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
-        {
-            segments.push((
-                frame::board_point(origin, start.0, start.1),
-                frame::board_point(origin, end.0, end.1),
-            ));
-        }
-    }
-    if segments.len() < 3 {
-        return None;
-    }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EdgeKind {
+    /// Lines walked into a loop, or a `gr_poly`: a ring this reader carries.
+    Plain,
+    /// A `gr_rect`.
+    Rect,
+    /// Anything with an arc, a curve or a circle in it.
+    Round,
+}
 
+struct EdgeContour {
+    kind: EdgeKind,
+    points: Vec<(f64, f64)>,
+}
+
+fn extract_edge_shapes(elements: &[Sexp]) -> EdgeShapes {
     // A micrometre: KiCad writes millimetres with enough decimals that two
     // endpoints meant to touch land on the same nanometre, but not enough to
     // rely on it.
-    const JOIN_TOLERANCE_NM: i64 = 1_000;
-    let touches = |a: Point, b: Point| -> bool {
-        (a.x.raw() - b.x.raw()).abs() <= JOIN_TOLERANCE_NM
-            && (a.y.raw() - b.y.raw()).abs() <= JOIN_TOLERANCE_NM
+    const JOIN_TOLERANCE_MM: f64 = 0.001 + 1e-9;
+    let touches = |a: (f64, f64), b: (f64, f64)| -> bool {
+        (a.0 - b.0).abs() <= JOIN_TOLERANCE_MM && (a.1 - b.1).abs() <= JOIN_TOLERANCE_MM
     };
 
-    let mut used = vec![false; segments.len()];
-    let start = segments[0].0;
-    let mut cursor = segments[0].1;
-    let mut ring = vec![start];
-    used[0] = true;
+    // Open pieces, as the points along them (an arc is sampled), and whether
+    // the piece is a straight line.
+    let mut pieces: Vec<(Vec<(f64, f64)>, bool)> = Vec::new();
+    let mut contours: Vec<EdgeContour> = Vec::new();
 
-    for _ in 1..segments.len() {
-        ring.push(cursor);
-        #[allow(clippy::question_mark)] // `?` would return None from the walk, not from this arm
-        let Some((index, next)) = segments.iter().enumerate().find_map(|(i, (a, b))| {
-            if used[i] {
-                return None;
-            }
-            if touches(*a, cursor) {
-                Some((i, *b))
-            } else if touches(*b, cursor) {
-                Some((i, *a))
-            } else {
-                None
-            }
-        }) else {
-            return None;
+    for elem in elements {
+        let Some(name) = list_name(elem) else {
+            continue;
         };
-        used[index] = true;
-        cursor = next;
+        if !matches!(
+            name.as_str(),
+            "gr_line" | "gr_arc" | "gr_curve" | "gr_circle" | "gr_rect" | "gr_poly"
+        ) || !is_on_edge_cuts(elem)
+        {
+            continue;
+        }
+        match name.as_str() {
+            "gr_line" => {
+                if let (Some(start), Some(end)) =
+                    (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
+                {
+                    pieces.push((vec![start, end], true));
+                }
+            }
+            "gr_arc" => {
+                if let Some(points) = sample_arc(elem) {
+                    pieces.push((points, false));
+                }
+            }
+            "gr_curve" => {
+                let points = points_of(elem);
+                if points.len() >= 2 {
+                    pieces.push((points, false));
+                }
+            }
+            "gr_circle" => {
+                if let (Some(center), Some(end)) =
+                    (find_xy_child(elem, "center"), find_xy_child(elem, "end"))
+                {
+                    let radius = (end.0 - center.0).hypot(end.1 - center.1);
+                    let points = (0..48)
+                        .map(|k| {
+                            point_on_circle(
+                                center,
+                                radius,
+                                std::f64::consts::TAU * f64::from(k) / 48.0,
+                            )
+                        })
+                        .collect();
+                    contours.push(EdgeContour {
+                        kind: EdgeKind::Round,
+                        points,
+                    });
+                }
+            }
+            "gr_rect" => {
+                if let (Some(a), Some(b)) =
+                    (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
+                {
+                    contours.push(EdgeContour {
+                        kind: EdgeKind::Rect,
+                        points: vec![(a.0, a.1), (b.0, a.1), (b.0, b.1), (a.0, b.1)],
+                    });
+                }
+            }
+            _ => {
+                let points = points_of(elem);
+                if points.len() >= 3 {
+                    contours.push(EdgeContour {
+                        kind: EdgeKind::Plain,
+                        points,
+                    });
+                }
+            }
+        }
     }
 
-    if !touches(cursor, start) {
-        return None;
+    // Walk the open pieces into loops. From the first piece not yet used, on
+    // from its end to whatever touches it, then back from its start; a piece
+    // is taken whichever way round it lies.
+    let mut used = vec![false; pieces.len()];
+    for first in 0..pieces.len() {
+        if used[first] {
+            continue;
+        }
+        used[first] = true;
+        let mut chain = pieces[first].0.clone();
+        let mut pieces_in = 1usize;
+        let mut plain = pieces[first].1;
+        let start = chain[0];
+        let mut closed = false;
+        while let Some(&cursor) = chain.last() {
+            if touches(cursor, start) && (pieces_in >= 3 || (!plain && pieces_in >= 2)) {
+                closed = true;
+                break;
+            }
+            let next = (0..pieces.len()).find_map(|i| {
+                if used[i] {
+                    return None;
+                }
+                let points = &pieces[i].0;
+                let (head, tail) = (points[0], points[points.len() - 1]);
+                if touches(head, cursor) {
+                    Some((i, false))
+                } else if touches(tail, cursor) {
+                    Some((i, true))
+                } else {
+                    None
+                }
+            });
+            let Some((i, reversed)) = next else {
+                break;
+            };
+            used[i] = true;
+            pieces_in += 1;
+            plain &= pieces[i].1;
+            if reversed {
+                chain.extend(pieces[i].0.iter().rev().skip(1).copied());
+            } else {
+                chain.extend(pieces[i].0.iter().skip(1).copied());
+            }
+        }
+        // Walked to a dead end: the rest may lie before the start.
+        while !closed {
+            let head = chain[0];
+            let next = (0..pieces.len()).find_map(|i| {
+                if used[i] {
+                    return None;
+                }
+                let points = &pieces[i].0;
+                if touches(points[points.len() - 1], head) {
+                    Some((i, false))
+                } else if touches(points[0], head) {
+                    Some((i, true))
+                } else {
+                    None
+                }
+            });
+            let Some((i, reversed)) = next else {
+                break;
+            };
+            used[i] = true;
+            pieces_in += 1;
+            plain &= pieces[i].1;
+            let mut before: Vec<(f64, f64)> = if reversed {
+                pieces[i].0.iter().rev().copied().collect()
+            } else {
+                pieces[i].0.clone()
+            };
+            before.pop();
+            before.extend(chain);
+            chain = before;
+            if touches(chain[chain.len() - 1], chain[0])
+                && (pieces_in >= 3 || (!plain && pieces_in >= 2))
+            {
+                closed = true;
+            }
+        }
+        if closed {
+            chain.pop();
+            contours.push(EdgeContour {
+                kind: if plain {
+                    EdgeKind::Plain
+                } else {
+                    EdgeKind::Round
+                },
+                points: chain,
+            });
+        }
     }
-    Some(ring)
+
+    // How many shapes contain each one's first point.
+    let depth: Vec<usize> = contours
+        .iter()
+        .enumerate()
+        .map(|(i, contour)| {
+            let first = contour.points[0];
+            contours
+                .iter()
+                .enumerate()
+                .filter(|(j, other)| *j != i && point_in_ring(first, &other.points))
+                .count()
+        })
+        .collect();
+
+    let area = |c: &EdgeContour| ring_area(&c.points);
+    let mut outers: Vec<usize> = (0..contours.len())
+        .filter(|&i| depth[i].is_multiple_of(2))
+        .collect();
+    // The largest first; the earlier one wins a tie.
+    outers.sort_by(|&a, &b| {
+        area(&contours[b])
+            .partial_cmp(&area(&contours[a]))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.cmp(&b))
+    });
+
+    let ring = outers
+        .first()
+        .filter(|&&i| contours[i].kind == EdgeKind::Plain)
+        .map(|&i| contours[i].points.clone());
+    let cutouts = (0..contours.len())
+        .filter(|&i| depth[i] % 2 == 1 && contours[i].kind != EdgeKind::Round)
+        .map(|i| contours[i].points.clone())
+        .collect();
+
+    EdgeShapes {
+        ring,
+        cutouts,
+        left_out: contours
+            .iter()
+            .filter(|c| c.kind == EdgeKind::Round)
+            .count(),
+        extra_outers: outers.len().saturating_sub(1),
+    }
 }
+
+/// The `(xy ...)` points of a shape's `(pts ...)`.
+fn points_of(elem: &Sexp) -> Vec<(f64, f64)> {
+    let mut points = Vec::new();
+    if let Ok(list) = elem.list() {
+        for child in list {
+            if list_name(child).as_deref() != Some("pts") {
+                continue;
+            }
+            let Ok(pts) = child.list() else { continue };
+            for pt in &pts[1..] {
+                if list_name(pt).as_deref() != Some("xy") {
+                    continue;
+                }
+                let Ok(pt_list) = pt.list() else { continue };
+                if pt_list.len() >= 3 {
+                    if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
+                        points.push((x, y));
+                    }
+                }
+            }
+        }
+    }
+    points
+}
+
+/// An arc as points along it, from its start to its end. Either the form
+/// KiCad writes now, `(start) (mid) (end)`, or the older one, `(start centre)
+/// (end first-point) (angle degrees)`.
+fn sample_arc(elem: &Sexp) -> Option<Vec<(f64, f64)>> {
+    const STEPS: usize = 24;
+    let start = find_xy_child(elem, "start")?;
+    let end = find_xy_child(elem, "end")?;
+    if let Some(mid) = find_xy_child(elem, "mid") {
+        // The circle through the three points.
+        let (ax, ay) = start;
+        let (bx, by) = mid;
+        let (cx, cy) = end;
+        let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+        if d.abs() < 1e-12 {
+            return Some(vec![start, end]);
+        }
+        let ux = ((ax * ax + ay * ay) * (by - cy)
+            + (bx * bx + by * by) * (cy - ay)
+            + (cx * cx + cy * cy) * (ay - by))
+            / d;
+        let uy = ((ax * ax + ay * ay) * (cx - bx)
+            + (bx * bx + by * by) * (ax - cx)
+            + (cx * cx + cy * cy) * (bx - ax))
+            / d;
+        let radius = (ax - ux).hypot(ay - uy);
+        let angle_of = |p: (f64, f64)| (p.1 - uy).atan2(p.0 - ux);
+        let (ta, tm, tb) = (angle_of(start), angle_of(mid), angle_of(end));
+        let turn = |from: f64, to: f64| (to - from).rem_euclid(std::f64::consts::TAU);
+        let sweep = if turn(ta, tm) < turn(ta, tb) {
+            turn(ta, tb)
+        } else {
+            -turn(tb, ta)
+        };
+        let mut points: Vec<(f64, f64)> = (0..=STEPS)
+            .map(|k| {
+                let angle = ta + sweep * (k as f64) / (STEPS as f64);
+                point_on_circle((ux, uy), radius, angle)
+            })
+            .collect();
+        // The ends are the file's own, not the sampled ones.
+        points[0] = start;
+        points[STEPS] = end;
+        return Some(points);
+    }
+    // Older form: the centre, a first point and an angle.
+    let angle = elem
+        .list()
+        .ok()?
+        .iter()
+        .find(|child| list_name(child).as_deref() == Some("angle"))
+        .and_then(|child| {
+            child
+                .list()
+                .ok()
+                .and_then(|sub| sub.get(1).and_then(get_f64))
+        })?;
+    let (centre, first) = (start, end);
+    let radius = (first.0 - centre.0).hypot(first.1 - centre.1);
+    let t0 = (first.1 - centre.1).atan2(first.0 - centre.0);
+    let t1 = t0 + angle.to_radians();
+    let mut points: Vec<(f64, f64)> = (0..=STEPS)
+        .map(|k| {
+            let t = t0 + (t1 - t0) * (k as f64) / (STEPS as f64);
+            point_on_circle(centre, radius, t)
+        })
+        .collect();
+    points[0] = first;
+    Some(points)
+}
+
+/// The point at an angle round a circle. Only used to sample the edge shapes.
+fn point_on_circle(centre: (f64, f64), radius: f64, angle: f64) -> (f64, f64) {
+    (
+        centre.0 + radius * angle.cos(),
+        centre.1 + radius * angle.sin(),
+    )
+}
+
+/// Whether a point is inside a ring: a ray along +x, counting crossings.
+fn point_in_ring(point: (f64, f64), ring: &[(f64, f64)]) -> bool {
+    let (x, y) = point;
+    let mut inside = false;
+    for i in 0..ring.len() {
+        let (x1, y1) = ring[i];
+        let (x2, y2) = ring[(i + 1) % ring.len()];
+        if (y1 > y) != (y2 > y) && x < (x2 - x1) * (y - y1) / (y2 - y1) + x1 {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// The area a ring encloses, whichever way it is wound.
+fn ring_area(ring: &[(f64, f64)]) -> f64 {
+    let mut twice = 0.0;
+    for i in 0..ring.len() {
+        let (x1, y1) = ring[i];
+        let (x2, y2) = ring[(i + 1) % ring.len()];
+        twice += x1 * y2 - x2 * y1;
+    }
+    (twice / 2.0).abs()
+}
+
 #[cfg(test)]
 mod tests {
 

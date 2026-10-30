@@ -400,6 +400,45 @@ pub struct BoardOutline {
     pub points: Vec<cypcb_core::Point>,
 }
 
+/// The holes in the board: slots and windows cut right through it.
+///
+/// KiCad draws them on the same layer as the outline, as closed shapes inside
+/// it, and reads a shape with an odd number of shapes around it as a hole in
+/// the board. [`BoardOutline`] is one ring and cannot say so. Each ring here
+/// is closed implicitly, in board coordinates, like the outline.
+///
+/// Only the board file carries these: the checks, the fabrication files and
+/// the language still read the outline alone and do not know a cutout.
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct BoardCutouts {
+    /// One ring per cutout, in the order the file gave them.
+    pub rings: Vec<Vec<cypcb_core::Point>>,
+}
+
+impl BoardCutouts {
+    /// Build the cutouts, leaving out anything that is not a ring. `None` when
+    /// nothing is left.
+    ///
+    /// A ring is closed implicitly, so a polygon that repeats its first point
+    /// at the end loses the repeat: kept, it is written as a line of no length.
+    pub fn new(rings: Vec<Vec<cypcb_core::Point>>) -> Option<Self> {
+        let rings: Vec<_> = rings
+            .into_iter()
+            .map(|mut ring| {
+                if ring.len() > 1 && ring.first() == ring.last() {
+                    ring.pop();
+                }
+                ring
+            })
+            .filter(|ring| ring.len() >= 3)
+            .collect();
+        if rings.is_empty() {
+            return None;
+        }
+        Some(BoardCutouts { rings })
+    }
+}
+
 /// A measurement for the drawing: `dimension { from ... to ... offset 2mm }`.
 ///
 /// Documentation rather than copper or ink: it is drawn in the plot a person
