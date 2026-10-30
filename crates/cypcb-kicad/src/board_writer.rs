@@ -473,19 +473,17 @@ pub fn write_board_with_rules(
             let (w, h) = (size.width, size.height);
             vec![(Nm(0), Nm(0)), (w, Nm(0)), (w, h), (Nm(0), h)]
         });
-    for index in 0..corners.len() {
-        let (x1, y1) = corners[index];
-        let (x2, y2) = corners[(index + 1) % corners.len()];
-        let (sx1, sy1) = on_sheet(origin, x1, y1);
-        let (sx2, sy2) = on_sheet(origin, x2, y2);
-        // literal: how KiCad draws the outline, not where the board ends -
-        // the edge is the geometry in the coordinates, and the stroke is the
-        // pen it is drawn with. No fab table states one.
-        let _ = writeln!(
-            out,
-            "  (gr_line (start {sx1} {sy1}) (end {sx2} {sy2}) (stroke (width 0.1) (type solid)) (layer \"Edge.Cuts\"))"
-        );
-    }
+    // How the edge was drawn where it is not straight: the arcs and circles
+    // the polygons below were sampled from.
+    let curves = world
+        .board_entity()
+        .and_then(|entity| {
+            world
+                .ecs()
+                .get::<cypcb_world::components::EdgeCurves>(entity)
+        })
+        .cloned();
+    write_edge_loop(&mut out, origin, &corners, curves.as_ref().map(|c| &c.ring));
 
     // The holes in the board, each a closed loop on the same layer. They sit
     // inside the outline, which is how KiCad tells a hole from a second board.
@@ -504,18 +502,13 @@ pub fn write_board_with_rules(
                 .collect()
         })
         .unwrap_or_default();
-    for ring in &cutouts {
-        for index in 0..ring.len() {
-            let (x1, y1) = ring[index];
-            let (x2, y2) = ring[(index + 1) % ring.len()];
-            let (sx1, sy1) = on_sheet(origin, x1, y1);
-            let (sx2, sy2) = on_sheet(origin, x2, y2);
-            // literal: how KiCad draws the edge, as above - the pen, not the board
-            let _ = writeln!(
-                out,
-                "  (gr_line (start {sx1} {sy1}) (end {sx2} {sy2}) (stroke (width 0.1) (type solid)) (layer \"Edge.Cuts\"))"
-            );
-        }
+    for (index, ring) in cutouts.iter().enumerate() {
+        write_edge_loop(
+            &mut out,
+            origin,
+            ring,
+            curves.as_ref().and_then(|c| c.cutouts.get(index)),
+        );
     }
 
     write_footprints(world, origin, &net_number, rules.as_ref(), &mut out);
@@ -999,6 +992,56 @@ fn write_zones(
         let _ = writeln!(out, "      (pts {})", xys.join(" "));
         let _ = writeln!(out, "    )");
         let _ = writeln!(out, "  )");
+    }
+}
+
+/// One closed shape on Edge.Cuts. Straight lines, except where the board came
+/// with an arc or a circle: those are written as the arc or the circle, with
+/// the middle point the file gave, and not as the line pieces they were
+/// sampled into.
+fn write_edge_loop(
+    out: &mut String,
+    origin: cypcb_core::Point,
+    points: &[(Nm, Nm)],
+    curves: Option<&cypcb_world::components::CurveSet>,
+) {
+    if let Some((centre, radius)) = curves.and_then(|c| c.circle) {
+        let (cx, cy) = on_sheet(origin, centre.x, centre.y);
+        let (ex, ey) = on_sheet(origin, Nm(centre.x.0 + radius.0), centre.y);
+        // literal: how KiCad draws the edge, as for the lines - the pen, not the board
+        let _ = writeln!(
+            out,
+            "  (gr_circle (center {cx} {cy}) (end {ex} {ey}) (stroke (width 0.1) (type solid)) (fill none) (layer \"Edge.Cuts\"))"
+        );
+        return;
+    }
+    let mut index = 0;
+    while index < points.len() {
+        if let Some(arc) = curves.and_then(|c| c.arcs.iter().find(|a| a.first == index)) {
+            let (sx, sy) = on_sheet(origin, points[arc.first].0, points[arc.first].1);
+            let (mx, my) = on_sheet(origin, arc.mid.x, arc.mid.y);
+            let end = points[arc.last % points.len()];
+            let (ex, ey) = on_sheet(origin, end.0, end.1);
+            // literal: how KiCad draws the edge, as for the lines - the pen, not the board
+            let _ = writeln!(
+                out,
+                "  (gr_arc (start {sx} {sy}) (mid {mx} {my}) (end {ex} {ey}) (stroke (width 0.1) (type solid)) (layer \"Edge.Cuts\"))"
+            );
+            index = arc.last.max(index + 1);
+            continue;
+        }
+        let (x1, y1) = points[index];
+        let (x2, y2) = points[(index + 1) % points.len()];
+        let (sx1, sy1) = on_sheet(origin, x1, y1);
+        let (sx2, sy2) = on_sheet(origin, x2, y2);
+        // literal: how KiCad draws the outline, not where the board ends -
+        // the edge is the geometry in the coordinates, and the stroke is the
+        // pen it is drawn with. No fab table states one.
+        let _ = writeln!(
+            out,
+            "  (gr_line (start {sx1} {sy1}) (end {sx2} {sy2}) (stroke (width 0.1) (type solid)) (layer \"Edge.Cuts\"))"
+        );
+        index += 1;
     }
 }
 

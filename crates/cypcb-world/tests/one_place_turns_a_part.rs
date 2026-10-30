@@ -56,8 +56,8 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ),
     (
         "cypcb-kicad/src/pcb_parser.rs",
-        2,
-        "points on a circle or an arc of the board edge, to see which shape lies inside which",
+        3,
+        "points on a circle or an arc of the board edge, and the error a step count leaves, to polygonise the edge as KiCad does",
     ),
     (
         "cypcb-world/src/teardrop.rs",

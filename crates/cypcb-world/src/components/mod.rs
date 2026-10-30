@@ -41,9 +41,9 @@ pub mod zone;
 
 // Re-export all components
 pub use board::{
-    Board, BoardCutouts, BoardDimension, BoardOutline, BoardSize, BoardText, CopperEnvironment,
-    DrillPair, EdgeConnector, Fab, LayerCoverage, LayerStack, Stackup, StackupLayer,
-    StackupLayerKind, StackupSheet, Teardrops,
+    ArcRun, Board, BoardCutouts, BoardDimension, BoardOutline, BoardSize, BoardText,
+    CopperEnvironment, CurveSet, DrillPair, EdgeConnector, EdgeCurves, Fab, LayerCoverage,
+    LayerStack, Stackup, StackupLayer, StackupLayerKind, StackupSheet, Teardrops,
 };
 pub use electrical::{
     same_net, LcscPart, NetConnections, NetId, PadInstance, PartSpec, PinConnection, RefDes,

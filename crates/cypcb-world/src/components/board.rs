@@ -439,6 +439,52 @@ impl BoardCutouts {
     }
 }
 
+/// One arc of an edge: `points[first..=last]` of the polygon are samples of
+/// the arc that starts at `points[first]`, passes through `mid` and ends at
+/// `points[last]`. A `last` equal to the number of points means the first
+/// point again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArcRun {
+    /// Index of the point the arc starts at.
+    pub first: usize,
+    /// Index of the point the arc ends at.
+    pub last: usize,
+    /// The point in the middle of the arc, as the board file gave it.
+    pub mid: cypcb_core::Point,
+}
+
+/// What one edge shape was drawn as, where it is not all straight lines.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CurveSet {
+    /// The arcs along the shape.
+    pub arcs: Vec<ArcRun>,
+    /// The centre and radius, when the whole shape is one circle.
+    pub circle: Option<(cypcb_core::Point, cypcb_core::Nm)>,
+}
+
+/// How the board edge and its cutouts were drawn where they are not straight.
+///
+/// [`BoardOutline`] and [`BoardCutouts`] hold polygons, and every reader of the
+/// edge reads a polygon. An arc is sampled into one, and this says which of
+/// its points are an arc, so the board file can be written with the arc and
+/// the circle the board came with rather than with their samples. Only the
+/// board file writer reads it.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct EdgeCurves {
+    /// The outline.
+    pub ring: CurveSet,
+    /// One per cutout, in the order of [`BoardCutouts::rings`].
+    pub cutouts: Vec<CurveSet>,
+}
+
+impl EdgeCurves {
+    /// Whether nothing is curved.
+    pub fn is_empty(&self) -> bool {
+        let straight = |set: &CurveSet| set.arcs.is_empty() && set.circle.is_none();
+        straight(&self.ring) && self.cutouts.iter().all(straight)
+    }
+}
+
 /// A measurement for the drawing: `dimension { from ... to ... offset 2mm }`.
 ///
 /// Documentation rather than copper or ink: it is drawn in the plot a person
