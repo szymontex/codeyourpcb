@@ -522,6 +522,7 @@ impl ExportCommand {
                     let rules = cypcb_drc::DesignRules::from_constraints(constraints);
                     cypcb_export::pour::PourOptions {
                         clearance: rules.min_copper_pour_clearance,
+                        edge_clearance: rules.min_edge_clearance,
                         thermal_gap: rules.thermal_relief_gap,
                         spoke_width: rules.thermal_relief_spoke_width,
                     }

@@ -1949,6 +1949,7 @@ impl PcbEngine {
         let rules = DesignRules::from_constraints(&self.preset().constraints());
         let options = cypcb_core::pour::PourOptions {
             clearance: rules.min_copper_pour_clearance,
+            edge_clearance: rules.min_edge_clearance,
             thermal_gap: rules.thermal_relief_gap,
             spoke_width: rules.thermal_relief_spoke_width,
         };

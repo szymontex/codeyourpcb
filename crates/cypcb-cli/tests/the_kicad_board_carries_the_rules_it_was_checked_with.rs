@@ -275,5 +275,9 @@ fn the_relief_is_the_fabs_number_too() {
             export.pour_spoke_width, constraints.thermal_relief_spoke_width,
             "{export_name}: the exporter and the fab table disagree about the spoke"
         );
+        assert_eq!(
+            export.pour_edge_clearance, constraints.min_edge_clearance,
+            "{export_name}: the exporter and the fab table disagree about the edge clearance"
+        );
     }
 }

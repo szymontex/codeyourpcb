@@ -17,7 +17,7 @@ use cypcb_core::{Nm, Point, Rect};
 
 use crate::components::trace::{Trace, Via};
 use crate::components::zone::{Hatch, Zone, ZoneOutline};
-use crate::components::{same_net, KeepoutKind, Layer, NetId};
+use crate::components::{same_net, BoardEdge, KeepoutKind, Layer, NetId};
 use crate::footprint::FootprintLibrary;
 use crate::world::BoardWorld;
 
@@ -128,6 +128,196 @@ fn ring_of(rect: Rect) -> Vec<Point> {
     ]
 }
 
+/// Where a pour is held: inside the board, outside every cutout, and the
+/// fab's edge distance from every edge there is.
+///
+/// KiCad clips the fill to the board outline with its holes
+/// (`zone_filler.cpp:409-410`, `zone.cpp:1558-1564`) and knocks every
+/// Edge.Cuts shape out of it - the outline and each cutout alike - by the edge
+/// clearance (`zone_filler.cpp:2172-2180`). This is the same, on the edge the
+/// checks and the files already read: [`BoardEdge`].
+struct BoardHold {
+    edge: BoardEdge,
+    gap: Nm,
+    /// The board's own rectangle shrunk by the gap, when the board is one
+    /// rectangle with nothing cut out of it. Every cut is then a rectangle cut
+    /// and a pour made of rectangles stays made of them.
+    inset: Option<Option<Rect>>,
+    outer: Vec<Vec<Point>>,
+    cutouts: Vec<Vec<Vec<Point>>>,
+    /// Every edge of every ring, and the corners where a disc is needed.
+    edges: Vec<(Point, Point)>,
+    corners: Vec<Point>,
+}
+
+impl BoardHold {
+    /// The hold of this board, or `None` where the board has no size: a file
+    /// whose outline never closed is a board with no edge to hold a pour to.
+    fn of(world: &BoardWorld, gap: Nm) -> Option<BoardHold> {
+        use cypcb_core::pour_shape;
+
+        let (size, _) = world.board_info()?;
+        if size.width.0 <= 0 || size.height.0 <= 0 {
+            return None;
+        }
+        let edge = BoardEdge::of(world).unwrap_or_else(|| {
+            BoardEdge::new(
+                ring_of(Rect::new(
+                    Point::ORIGIN,
+                    Point::new(size.width, size.height),
+                )),
+                Vec::new(),
+            )
+        });
+        let inset = if edge.cutouts().is_empty() {
+            as_rect(edge.outer()).map(|bounds| {
+                let (lo, hi) = (
+                    Point::new(Nm(bounds.min.x.0 + gap.0), Nm(bounds.min.y.0 + gap.0)),
+                    Point::new(Nm(bounds.max.x.0 - gap.0), Nm(bounds.max.y.0 - gap.0)),
+                );
+                (lo.x.0 < hi.x.0 && lo.y.0 < hi.y.0).then(|| Rect::new(lo, hi))
+            })
+        } else {
+            None
+        };
+        let outer = pour_shape::convex_pieces(edge.outer());
+        let cutouts = edge
+            .cutouts()
+            .iter()
+            .map(|ring| pour_shape::convex_pieces(ring))
+            .collect();
+        let edges: Vec<(Point, Point)> = edge.edges().collect();
+
+        // A disc is needed where the board turns away from the copper: the
+        // band round each side leaves a wedge there that is nearer than the
+        // gap. With the board on the left of every ring, that is a right turn.
+        let mut corners = Vec::new();
+        for (index, ring) in edge.rings().enumerate() {
+            let board_on_left = (pour_shape::twice_area(ring) > 0) == (index == 0);
+            for i in 0..ring.len() {
+                let (before, at, after) = (
+                    ring[(i + ring.len() - 1) % ring.len()],
+                    ring[i],
+                    ring[(i + 1) % ring.len()],
+                );
+                let turn = (i128::from(at.x.0) - i128::from(before.x.0))
+                    * (i128::from(after.y.0) - i128::from(at.y.0))
+                    - (i128::from(at.y.0) - i128::from(before.y.0))
+                        * (i128::from(after.x.0) - i128::from(at.x.0));
+                if (turn < 0) == board_on_left && turn != 0 {
+                    corners.push(at);
+                }
+            }
+        }
+        Some(BoardHold {
+            edge,
+            gap,
+            inset,
+            outer,
+            cutouts,
+            edges,
+            corners,
+        })
+    }
+
+    /// One convex piece of a pour, held to the board.
+    ///
+    /// A piece that lies wholly inside and no nearer than the gap to any edge
+    /// comes back as it is; one wholly outside, or inside a cutout, is gone.
+    fn hold_piece(&self, piece: &[Point]) -> Vec<Vec<Point>> {
+        use cypcb_core::pour_shape;
+
+        let near: Vec<(Point, Point)> = self
+            .edges
+            .iter()
+            .copied()
+            .filter(|(a, b)| pour_shape::comes_within(piece, *a, *b, self.gap))
+            .collect();
+        if near.is_empty() {
+            return if self.edge.contains(piece[0]) {
+                vec![piece.to_vec()]
+            } else {
+                Vec::new()
+            };
+        }
+
+        let mut pieces: Vec<Vec<Point>> = self
+            .outer
+            .iter()
+            .filter_map(|part| pour_shape::intersect_convex(piece, part))
+            .collect();
+        for cutout in self.cutouts.iter().flatten() {
+            pieces = pour_shape::cut_pieces_by(pieces, cutout);
+        }
+        for (a, b) in &near {
+            if let Some(band) = pour_shape::segment_band(*a, *b, self.gap) {
+                pieces = pour_shape::cut_pieces_by(pieces, &band);
+            }
+        }
+        for corner in &self.corners {
+            if near.iter().any(|(a, b)| a == corner || b == corner) {
+                pieces =
+                    pour_shape::cut_pieces_by(pieces, &pour_shape::disc_around(*corner, self.gap));
+            }
+        }
+        pieces
+    }
+
+    /// A pour made of rectangles, held to the board: the rectangles that are
+    /// still rectangles, and the convex pieces of the ones that are not.
+    fn hold_rects(&self, rects: Vec<Rect>) -> (Vec<Rect>, Vec<Vec<Point>>) {
+        if let Some(inset) = self.inset {
+            let kept = inset
+                .map(|inset| {
+                    rects
+                        .iter()
+                        .filter_map(|r| pour::intersect(*r, inset))
+                        .collect()
+                })
+                .unwrap_or_default();
+            return (kept, Vec::new());
+        }
+        let mut kept = Vec::new();
+        let mut shapes = Vec::new();
+        for rect in rects {
+            let ring = ring_of(rect);
+            let held = self.hold_piece(&ring);
+            if held.len() == 1 && held[0] == ring {
+                kept.push(rect);
+            } else {
+                shapes.extend(held);
+            }
+        }
+        (kept, shapes)
+    }
+
+    /// A pour made of convex pieces, held to the board.
+    fn hold_shapes(&self, shapes: Vec<Vec<Point>>) -> Vec<Vec<Point>> {
+        if let Some(inset) = self.inset {
+            return shapes
+                .into_iter()
+                .filter_map(|piece| {
+                    let bounds = cypcb_core::pour_shape::shape_bounds(&piece);
+                    let inset = inset?;
+                    if bounds.min.x.0 >= inset.min.x.0
+                        && bounds.min.y.0 >= inset.min.y.0
+                        && bounds.max.x.0 <= inset.max.x.0
+                        && bounds.max.y.0 <= inset.max.y.0
+                    {
+                        Some(piece)
+                    } else {
+                        cypcb_core::pour_shape::clip_to_rect(&piece, inset)
+                    }
+                })
+                .collect();
+        }
+        shapes
+            .into_iter()
+            .flat_map(|piece| self.hold_piece(&piece))
+            .collect()
+    }
+}
+
 /// Fill one pour that is drawn as a polygon against the board it sits on.
 ///
 /// The same pour as [`fill_zone`] makes of a rectangle, cut from the ring and
@@ -168,6 +358,12 @@ pub fn fill_outlined_zone(
     for cut in pour_cuts(world, layer) {
         shapes = pour_shape::cut_pieces_by(shapes, &cut);
         spoke_shapes = pour_shape::cut_pieces_by(spoke_shapes, &cut);
+    }
+
+    // And the board's own edge, and its cutouts.
+    if let Some(hold) = BoardHold::of(world, options.edge_clearance) {
+        shapes = hold.hold_shapes(shapes);
+        spoke_shapes = hold.hold_shapes(spoke_shapes);
     }
 
     FilledPour {
@@ -249,12 +445,23 @@ pub fn fill_zone(
         pieces = hatched(&pieces, hatch);
     }
 
+    // The board's own edge and its cutouts. A rectangle that meets none of
+    // them stays a rectangle; one that does and is cut at a slant comes back
+    // as the convex pieces a polygon pour is made of.
+    let (mut held_shapes, mut held_spoke_shapes) = (Vec::new(), Vec::new());
+    if let Some(hold) = BoardHold::of(world, options.edge_clearance) {
+        (pieces, held_shapes) = hold.hold_rects(pieces);
+        (spokes, held_spoke_shapes) = hold.hold_rects(spokes);
+    }
+
     // A rule area that is not square to the axes leaves copper that is not a
     // rectangle. The plane and its bridges then come back as the convex pieces
     // a polygon pour is made of, and the rectangles are empty.
     if !slanted.is_empty() {
         let mut shapes: Vec<Vec<Point>> = pieces.iter().copied().map(ring_of).collect();
         let mut spoke_shapes: Vec<Vec<Point>> = spokes.iter().copied().map(ring_of).collect();
+        shapes.extend(held_shapes);
+        spoke_shapes.extend(held_spoke_shapes);
         for cut in &slanted {
             shapes = cypcb_core::pour_shape::cut_pieces_by(shapes, cut);
             spoke_shapes = cypcb_core::pour_shape::cut_pieces_by(spoke_shapes, cut);
@@ -269,7 +476,8 @@ pub fn fill_zone(
     FilledPour {
         pieces,
         spokes,
-        ..FilledPour::default()
+        shapes: held_shapes,
+        spoke_shapes: held_spoke_shapes,
     }
 }
 

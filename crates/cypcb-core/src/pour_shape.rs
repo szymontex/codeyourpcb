@@ -452,6 +452,150 @@ pub fn shape_touches_rect(piece: &[Point], rect: Rect) -> bool {
     shapes_touch(piece, &ring)
 }
 
+/// How far a polygon standing for a circle may lie outside it, which is also
+/// how far a circle may be cut short: KiCad's `ARC_HIGH_DEF_MM`, 0.005mm
+/// (`include/base_units.h:119`), the error it allows an arc turned into
+/// segments.
+pub const ARC_ERROR: Nm = Nm(5_000);
+
+/// The part of a convex piece inside another convex polygon, or `None` when
+/// they share no area.
+///
+/// `other` is read counter-clockwise whichever way it is wound. A corner made
+/// on a slanted edge is out by under a nanometre, as for every cut here.
+pub fn intersect_convex(piece: &[Point], other: &[Point]) -> Option<Vec<Point>> {
+    let other: Vec<Point> = if twice_area(other) < 0 {
+        other.iter().rev().copied().collect()
+    } else {
+        other.to_vec()
+    };
+    if other.len() < 3 || twice_area(&other) == 0 {
+        return None;
+    }
+    let mut rest = piece.to_vec();
+    for i in 0..other.len() {
+        rest = clip_half_plane(&rest, other[i], other[(i + 1) % other.len()], true)?;
+    }
+    Some(rest)
+}
+
+/// Whether the point is closer to the segment `s`-`e` than `gap`.
+fn point_closer_to_segment(p: Point, s: Point, e: Point, gap: i128) -> bool {
+    let (dx, dy) = (
+        i128::from(e.x.0) - i128::from(s.x.0),
+        i128::from(e.y.0) - i128::from(s.y.0),
+    );
+    let (px, py) = (
+        i128::from(p.x.0) - i128::from(s.x.0),
+        i128::from(p.y.0) - i128::from(s.y.0),
+    );
+    let length_squared = dx * dx + dy * dy;
+    let along = px * dx + py * dy;
+    if length_squared == 0 || along <= 0 {
+        return px * px + py * py < gap * gap;
+    }
+    if along >= length_squared {
+        let (qx, qy) = (px - dx, py - dy);
+        return qx * qx + qy * qy < gap * gap;
+    }
+    let side = px * dy - py * dx;
+    side * side < gap * gap * length_squared
+}
+
+/// Whether the segments `a`-`b` and `c`-`d` share a point.
+fn segments_meet(a: Point, b: Point, c: Point, d: Point) -> bool {
+    let sign = |v: i128| v.signum();
+    let (d1, d2) = (sign(cross(c, d, a)), sign(cross(c, d, b)));
+    let (d3, d4) = (sign(cross(a, b, c)), sign(cross(a, b, d)));
+    if d1 * d2 < 0 && d3 * d4 < 0 {
+        return true;
+    }
+    let within = |p: Point, q: Point, r: Point| {
+        cross(p, q, r) == 0
+            && r.x.0 >= p.x.0.min(q.x.0)
+            && r.x.0 <= p.x.0.max(q.x.0)
+            && r.y.0 >= p.y.0.min(q.y.0)
+            && r.y.0 <= p.y.0.max(q.y.0)
+    };
+    within(c, d, a) || within(c, d, b) || within(a, b, c) || within(a, b, d)
+}
+
+/// Whether any part of a convex piece lies closer than `gap` to the segment
+/// `a`-`b`: the segment runs through it, or ends in it, or some corner of the
+/// one is nearer than `gap` to the other. Exactly `gap` away is not closer.
+pub fn comes_within(piece: &[Point], a: Point, b: Point, gap: Nm) -> bool {
+    let bounds = shape_bounds(piece);
+    if a.x.0.max(b.x.0) < bounds.min.x.0 - gap.0
+        || a.x.0.min(b.x.0) > bounds.max.x.0 + gap.0
+        || a.y.0.max(b.y.0) < bounds.min.y.0 - gap.0
+        || a.y.0.min(b.y.0) > bounds.max.y.0 + gap.0
+    {
+        return false;
+    }
+    let gap = i128::from(gap.0);
+    if convex_contains(piece, a) || convex_contains(piece, b) {
+        return true;
+    }
+    (0..piece.len()).any(|i| {
+        let (s, e) = (piece[i], piece[(i + 1) % piece.len()]);
+        segments_meet(s, e, a, b)
+            || point_closer_to_segment(s, a, b, gap)
+            || point_closer_to_segment(a, s, e, gap)
+            || point_closer_to_segment(b, s, e, gap)
+    })
+}
+
+/// A whole-nanometre offset no shorter than the exact one, on each axis.
+fn away_from_zero(v: f64) -> i64 {
+    if v >= 0.0 {
+        v.ceil() as i64
+    } else {
+        v.floor() as i64
+    }
+}
+
+/// Everything within `gap` of the middle of a segment, as a rectangle on it:
+/// the sides run `gap` either side of the line, rounded away from it, and the
+/// ends are square to it at the segment's own ends. `None` for a segment of no
+/// length. The ends of the segment are covered by [`disc_around`].
+pub fn segment_band(a: Point, b: Point, gap: Nm) -> Option<Vec<Point>> {
+    let (dx, dy) = ((b.x.0 - a.x.0) as f64, (b.y.0 - a.y.0) as f64);
+    let length = dx.hypot(dy);
+    if length == 0.0 {
+        return None;
+    }
+    let (nx, ny) = (
+        away_from_zero(-dy / length * gap.0 as f64),
+        away_from_zero(dx / length * gap.0 as f64),
+    );
+    let at = |p: Point, sign: i64| Point::new(Nm(p.x.0 + sign * nx), Nm(p.y.0 + sign * ny));
+    let ring = vec![at(a, -1), at(b, -1), at(b, 1), at(a, 1)];
+    if twice_area(&ring) < 0 {
+        Some(ring.into_iter().rev().collect())
+    } else {
+        Some(ring)
+    }
+}
+
+/// A polygon round a point that holds the circle of radius `gap`, its sides
+/// tangent to the circle, with as many sides as keep the corners within
+/// [`ARC_ERROR`] of it.
+pub fn disc_around(centre: Point, gap: Nm) -> Vec<Point> {
+    let r = gap.0 as f64;
+    let sides =
+        ((std::f64::consts::PI / (r / (r + ARC_ERROR.0 as f64)).acos()).ceil() as usize).max(4);
+    let reach = r / (std::f64::consts::PI / sides as f64).cos();
+    (0..sides)
+        .map(|k| {
+            let angle = (k as f64 + 0.5) * std::f64::consts::TAU / sides as f64;
+            Point::new(
+                Nm(centre.x.0 + away_from_zero(reach * angle.cos())),
+                Nm(centre.y.0 + away_from_zero(reach * angle.sin())),
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -908,5 +1052,77 @@ mod tests {
         let left = cut_convex(&square, &corner);
         let overlap = ring(&[(0, 0), (6, 0), (0, 6)]);
         assert_eq!(area2(&left), 2 * 100 - twice_area(&overlap).abs());
+    }
+
+    #[test]
+    fn a_piece_is_cut_to_the_part_of_it_inside_another() {
+        let square = ring(&[(0, 0), (10, 0), (10, 10), (0, 10)]);
+        let big = ring(&[(5, 5), (20, 5), (20, 20), (5, 20)]);
+        let inside = intersect_convex(&square, &big).expect("they overlap");
+        assert_eq!(twice_area(&inside), 2 * 25);
+        let far = ring(&[(30, 30), (40, 30), (40, 40), (30, 40)]);
+        assert!(intersect_convex(&square, &far).is_none());
+        // Wound the other way, the same polygon.
+        let backwards: Vec<Point> = big.iter().rev().copied().collect();
+        assert_eq!(intersect_convex(&square, &backwards), Some(inside));
+    }
+
+    #[test]
+    fn exactly_the_gap_away_is_not_within_it() {
+        let piece = ring(&[(0, 0), (10, 0), (10, 10), (0, 10)]);
+        // A segment parallel to the right side, 5 away from it.
+        let (a, b) = (p(15, -50), p(15, 50));
+        assert!(!comes_within(&piece, a, b, Nm(5)));
+        assert!(comes_within(&piece, a, b, Nm(6)));
+        // One that runs through the piece, and one that ends inside it.
+        assert!(comes_within(&piece, p(-5, 5), p(15, 5), Nm(1)));
+        assert!(comes_within(&piece, p(5, 5), p(5, 500), Nm(1)));
+        // Far off to one side of a long way along: not within.
+        assert!(!comes_within(&piece, p(100, 0), p(100, 10), Nm(5)));
+    }
+
+    #[test]
+    fn a_band_is_the_gap_either_side_of_its_segment() {
+        let band = segment_band(p(0, 0), p(100, 0), Nm(7)).expect("a band");
+        assert_eq!(twice_area(&band), 2 * 100 * 14);
+        let bounds = shape_bounds(&band);
+        assert_eq!((bounds.min.y.0, bounds.max.y.0), (-7, 7));
+        assert!(segment_band(p(3, 3), p(3, 3), Nm(7)).is_none());
+        // A slanted one is never narrower than the gap: the corners are
+        // rounded away from the line.
+        let slanted = segment_band(p(0, 0), p(100, 100), Nm(7)).expect("a band");
+        let side = (0..slanted.len())
+            .map(|i| {
+                let (s, e) = (slanted[i], slanted[(i + 1) % slanted.len()]);
+                (s, e)
+            })
+            .find(|(s, e)| (e.x.0 - s.x.0) == (e.y.0 - s.y.0) && s != e)
+            .expect("a side along the segment");
+        let across = ((side.0.x.0 - side.0.y.0) as f64).abs() / 2f64.sqrt();
+        assert!(across >= 7.0, "{across}");
+    }
+
+    #[test]
+    fn a_disc_holds_the_circle_and_stays_within_the_arc_error() {
+        let gap = Nm(300_000);
+        let disc = disc_around(p(1_000_000, 2_000_000), gap);
+        // Every side is at least the gap from the centre, and every corner no
+        // further than the gap and the error.
+        for i in 0..disc.len() {
+            let (s, e) = (disc[i], disc[(i + 1) % disc.len()]);
+            let (dx, dy) = ((e.x.0 - s.x.0) as f64, (e.y.0 - s.y.0) as f64);
+            let side = ((s.x.0 - 1_000_000) as f64 * dy - (s.y.0 - 2_000_000) as f64 * dx).abs()
+                / dx.hypot(dy);
+            assert!(
+                side >= gap.0 as f64 - 1.0,
+                "side {i} is {side} from the centre"
+            );
+            let corner = ((s.x.0 - 1_000_000) as f64).hypot((s.y.0 - 2_000_000) as f64);
+            assert!(
+                corner <= (gap.0 + ARC_ERROR.0) as f64 + 1.0,
+                "corner {i} is {corner} out"
+            );
+        }
+        assert!(twice_area(&disc) > 0);
     }
 }

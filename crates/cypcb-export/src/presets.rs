@@ -45,6 +45,13 @@ pub struct ExportPreset {
     /// PCBWay both publish 0.254mm and the default is 0.3mm, so every plane
     /// shipped 0.046mm smaller on every edge than the fab asked for.
     pub pour_clearance: Nm,
+    /// How far a copper pour keeps from the board edge and from the edge of
+    /// every cutout in it.
+    ///
+    /// The house's `min_edge_clearance`, and a test holds the two together.
+    /// KiCad knocks each Edge.Cuts shape out of a pour by this distance
+    /// (`zone_filler.cpp:2172-2180`).
+    pub pour_edge_clearance: Nm,
     /// The gap a pour cuts around a pad on its own net, before the spokes go
     /// back across it.
     ///
@@ -149,6 +156,7 @@ pub fn jlcpcb_2layer() -> ExportPreset {
         silk_clearance: Nm::from_mm(0.127),
         mask_expansion: Nm::from_mm(0.05),
         pour_clearance: Nm::from_mm(0.254),
+        pour_edge_clearance: Nm::from_mm(0.3),
         pour_thermal_gap: Nm::from_mm(0.254),
         pour_spoke_width: Nm::from_mm(0.254),
     }
@@ -202,6 +210,7 @@ pub fn pcbway_standard() -> ExportPreset {
         // `the_mask_opening_is_the_fabs_number_in_both_writers` asserts.
         mask_expansion: Nm::from_mm(0.0508),
         pour_clearance: Nm::from_mm(0.254),
+        pour_edge_clearance: Nm::from_mm(0.25),
         pour_thermal_gap: Nm::from_mm(0.254),
         pour_spoke_width: Nm::from_mm(0.254),
     }
