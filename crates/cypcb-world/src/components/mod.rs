@@ -46,8 +46,8 @@ pub use board::{
     StackupSheet, Teardrops,
 };
 pub use electrical::{
-    LcscPart, NetConnections, NetId, PadInstance, PartSpec, PinConnection, RefDes, TypedValue,
-    Value,
+    same_net, LcscPart, NetConnections, NetId, PadInstance, PartSpec, PinConnection, RefDes,
+    TypedValue, Value,
 };
 pub use metadata::{ComponentKind, Name, SourceSpan};
 pub use physical::{FootprintRef, Layer, Pad, PadShape, Side};

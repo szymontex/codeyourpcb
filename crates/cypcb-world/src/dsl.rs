@@ -303,8 +303,9 @@ fn traces_as_dsl_filtered(world: &mut BoardWorld, only_routed: bool) -> String {
     let mut net_vias: BTreeMap<String, Vec<&Via>> = BTreeMap::new();
 
     for (trace, neck, curve) in &trace_data {
-        let net_name = world
-            .net_name(trace.net_id)
+        let net_name = trace
+            .net_id
+            .and_then(|net| world.net_name(net))
             .unwrap_or("unknown")
             .to_string();
         net_traces
@@ -331,7 +332,11 @@ fn traces_as_dsl_filtered(world: &mut BoardWorld, only_routed: bool) -> String {
     }
 
     for via in &via_data {
-        let net_name = world.net_name(via.net_id).unwrap_or("unknown").to_string();
+        let net_name = via
+            .net_id
+            .and_then(|net| world.net_name(net))
+            .unwrap_or("unknown")
+            .to_string();
         net_vias.entry(net_name).or_default().push(via);
     }
 
@@ -625,28 +630,27 @@ fn zone_as_dsl(
     out
 }
 
-/// The raw id of every net that has copper on it, trace or via.
+/// The raw id of every net that has copper on it, trace or via, and whether
+/// any copper is on no net at all.
 ///
 /// The writer emits a `trace` block per net that carries copper, whether or
 /// not any pin is on that net, so this is the set of names the file has to
 /// declare on top of the ones the parts imply.
-fn copper_nets(world: &mut BoardWorld) -> Vec<u32> {
-    let mut ids: Vec<u32> = {
-        let ecs = world.ecs_mut();
-        in_build_order::<&Trace>(ecs)
+fn copper_nets(world: &mut BoardWorld) -> (Vec<u32>, bool) {
+    let mut nets: Vec<Option<crate::components::NetId>> = in_build_order::<&Trace>(world.ecs_mut())
+        .into_iter()
+        .map(|trace| trace.net_id)
+        .collect();
+    nets.extend(
+        in_build_order::<&Via>(world.ecs_mut())
             .into_iter()
-            .map(|trace| trace.net_id.0)
-            .collect()
-    };
-    let ecs = world.ecs_mut();
-    ids.extend(
-        in_build_order::<&Via>(ecs)
-            .into_iter()
-            .map(|via| via.net_id.0),
+            .map(|via| via.net_id),
     );
+    let on_no_net = nets.iter().any(Option::is_none);
+    let mut ids: Vec<u32> = nets.into_iter().flatten().map(|net| net.0).collect();
     ids.sort_unstable();
     ids.dedup();
-    ids
+    (ids, on_no_net)
 }
 
 /// A `stackup` block as a `board` block writes it, indented to sit inside one.
@@ -1450,19 +1454,17 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     // Copper on no net - KiCad's net 0, which a board holds for a track nobody
     // connected - is written on a net called `unknown`, here and in the trace
     // writer. Declared too: the trace named a net the file never had.
-    let mut on_no_net = false;
-    for net_id in copper_nets(world) {
+    let (copper_net_ids, mut on_no_net) = copper_nets(world);
+    for net_id in copper_net_ids {
         match net_names.get(&net_id) {
             Some(name) => {
                 pins_by_net.entry(name.clone()).or_default();
             }
-            None => {
-                pins_by_net.entry("unknown".to_string()).or_default();
-                on_no_net = true;
-            }
+            None => on_no_net = true,
         }
     }
     if on_no_net {
+        pins_by_net.entry("unknown".to_string()).or_default();
         not_written.push(
             "copper on no net is written on a net called unknown: the language has no copper \
              without one"

@@ -38,7 +38,7 @@ impl DrcRule for TraceCurrentRule {
                 .filter_map(|(entity, trace)| {
                     Some((
                         entity,
-                        trace.net_id,
+                        trace.net_id?,
                         trace.layer,
                         trace.width,
                         midpoint(trace)?,
@@ -182,7 +182,7 @@ mod tests {
             )],
             width: Nm::from_mm(width_mm),
             layer,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
             source: TraceSource::Manual,
         };

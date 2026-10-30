@@ -86,7 +86,7 @@ fn cut(world: &mut BoardWorld, library: &FootprintLibrary, how: Cut) {
             let mut groups: std::collections::BTreeMap<_, Trace> = Default::default();
             for (_, trace) in &traces {
                 let key = (
-                    trace.net_id.id(),
+                    trace.net_id.map(|net| net.id()),
                     format!("{:?}", trace.layer),
                     trace.width.0,
                     trace.locked,
@@ -177,8 +177,10 @@ fn cut(world: &mut BoardWorld, library: &FootprintLibrary, how: Cut) {
         }
     }
     for piece in pieces {
-        let net = piece.net_id;
-        world.spawn_entity((piece, net));
+        match piece.net_id {
+            Some(net) => world.spawn_entity((piece, net)),
+            None => world.spawn_entity((piece,)),
+        };
     }
     world.rebuild_spatial_index_from_library(library);
 }

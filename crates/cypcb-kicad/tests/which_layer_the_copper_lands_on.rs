@@ -199,7 +199,7 @@ fn a_board_written_here_comes_back_on_the_layers_it_left_on() {
                     end: Point::from_mm(14.0, y),
                     width: None,
                 }],
-                net_id: net,
+                net_id: Some(net),
                 locked: false,
                 source: TraceSource::Manual,
             },

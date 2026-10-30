@@ -202,7 +202,7 @@ pub fn apply_routes_as(world: &mut BoardWorld, result: &RoutingResult, source: T
             segments,
             width,
             layer,
-            net_id,
+            net_id: Some(net_id),
             locked: false,
             source,
         };
@@ -231,7 +231,7 @@ pub fn apply_routes_as(world: &mut BoardWorld, result: &RoutingResult, source: T
             outer_diameter: via_placement.outer_diameter,
             start_layer: via_placement.start_layer,
             end_layer: via_placement.end_layer,
-            net_id: via_placement.net_id,
+            net_id: Some(via_placement.net_id),
             locked: false,
         };
 
@@ -310,7 +310,7 @@ mod tests {
         assert_eq!(traces.len(), 1);
 
         let trace = traces[0];
-        assert_eq!(trace.net_id, vcc);
+        assert_eq!(trace.net_id, Some(vcc));
         assert_eq!(trace.layer, Layer::TopCopper);
         assert_eq!(trace.source, TraceSource::Autorouted);
         assert!(!trace.locked);
@@ -356,7 +356,12 @@ mod tests {
 
         let order: Vec<_> = spawned
             .iter()
-            .map(|(_, trace)| (trace.net_id.id(), trace.layer))
+            .map(|(_, trace)| {
+                (
+                    trace.net_id.expect("a routed trace has a net").id(),
+                    trace.layer,
+                )
+            })
             .collect();
 
         let mut expected = order.clone();
@@ -389,7 +394,7 @@ mod tests {
         assert_eq!(vias.len(), 1);
 
         let via = vias[0];
-        assert_eq!(via.net_id, vcc);
+        assert_eq!(via.net_id, Some(vcc));
         assert_eq!(via.position, Point::from_mm(5.0, 5.0));
         assert!(!via.locked);
     }
@@ -407,7 +412,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: vcc,
+            net_id: Some(vcc),
             locked: false,
             source: TraceSource::Autorouted,
         };
@@ -449,7 +454,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: vcc,
+            net_id: Some(vcc),
             locked: true, // Locked!
             source: TraceSource::Manual,
         };
@@ -480,7 +485,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: vcc,
+            net_id: Some(vcc),
             locked: true,
             source: TraceSource::Manual,
         };
@@ -494,7 +499,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: vcc,
+            net_id: Some(vcc),
             locked: false,
             source: TraceSource::Autorouted,
         };
@@ -545,11 +550,11 @@ mod tests {
         assert_eq!(traces.len(), 2);
 
         // VCC trace should have 2 segments
-        let vcc_trace = traces.iter().find(|t| t.net_id == vcc).unwrap();
+        let vcc_trace = traces.iter().find(|t| t.net_id == Some(vcc)).unwrap();
         assert_eq!(vcc_trace.segments.len(), 2);
 
         // GND trace should have 1 segment
-        let gnd_trace = traces.iter().find(|t| t.net_id == gnd).unwrap();
+        let gnd_trace = traces.iter().find(|t| t.net_id == Some(gnd)).unwrap();
         assert_eq!(gnd_trace.segments.len(), 1);
     }
 }

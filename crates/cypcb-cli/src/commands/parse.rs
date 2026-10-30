@@ -87,7 +87,7 @@ struct NetModel {
 
 #[derive(Serialize)]
 struct TraceModel {
-    net: String,
+    net: Option<String>,
     layer: String,
     width_nm: i64,
     locked: bool,
@@ -104,7 +104,7 @@ struct SegmentModel {
 
 #[derive(Serialize)]
 struct ViaModel {
-    net: String,
+    net: Option<String>,
     x_nm: i64,
     y_nm: i64,
     drill_nm: i64,
@@ -299,7 +299,7 @@ fn board_model(world: &mut BoardWorld, library: &FootprintLibrary) -> BoardModel
         let rows: Vec<Trace> = query.iter(world.ecs()).cloned().collect();
         rows.into_iter()
             .map(|trace| TraceModel {
-                net: net_name(world, trace.net_id),
+                net: trace.net_id.map(|id| net_name(world, id)),
                 layer: format!("{:?}", trace.layer),
                 width_nm: trace.width.0,
                 locked: trace.locked,
@@ -322,7 +322,7 @@ fn board_model(world: &mut BoardWorld, library: &FootprintLibrary) -> BoardModel
         let rows: Vec<Via> = query.iter(world.ecs()).cloned().collect();
         rows.into_iter()
             .map(|via| ViaModel {
-                net: net_name(world, via.net_id),
+                net: via.net_id.map(|id| net_name(world, id)),
                 x_nm: via.position.x.0,
                 y_nm: via.position.y.0,
                 drill_nm: via.drill.0,
@@ -355,5 +355,36 @@ fn board_model(world: &mut BoardWorld, library: &FootprintLibrary) -> BoardModel
         traces,
         vias,
         zones,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cypcb_core::{Nm, Point};
+    use cypcb_world::components::trace::{TraceSegment, Via};
+
+    #[test]
+    fn copper_on_no_net_is_listed_on_no_net() {
+        let mut world = BoardWorld::new();
+        world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
+        // The first net on the board, which copper on no net used to be
+        // listed on.
+        let first = world.intern_net("FIRST");
+        let mut on_none = Trace::new(first);
+        on_none.net_id = None;
+        on_none.add_segment(TraceSegment::new(
+            Point::from_mm(1.0, 1.0),
+            Point::from_mm(5.0, 1.0),
+        ));
+        world.spawn_entity((on_none,));
+        let mut via = Via::new(Point::from_mm(8.0, 8.0), first);
+        via.net_id = None;
+        world.spawn_entity((via,));
+
+        let model = board_model(&mut world, &FootprintLibrary::new());
+        let json = serde_json::to_value(&model).expect("the model serialises");
+        assert!(json["traces"][0]["net"].is_null(), "{json}");
+        assert!(json["vias"][0]["net"].is_null(), "{json}");
     }
 }

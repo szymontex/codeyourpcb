@@ -49,7 +49,7 @@ fn trace(world: &mut BoardWorld, from: (i64, i64), to: (i64, i64), net: NetId) {
             )],
             width: Nm(2 * HALF_WIDTH_NM),
             layer: Layer::TopCopper,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
             source: TraceSource::Autorouted,
         },

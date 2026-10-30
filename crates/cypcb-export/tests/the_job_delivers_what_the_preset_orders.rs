@@ -212,7 +212,7 @@ fn an_unrouted_board_says_so_and_a_routed_one_does_not() {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
             source: TraceSource::Autorouted,
         },

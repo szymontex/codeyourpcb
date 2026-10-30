@@ -83,7 +83,7 @@ fn spawn_trace(
         )],
         width: Nm::from_mm(width_mm),
         layer,
-        net_id,
+        net_id: Some(net_id),
         locked: false,
         source: TraceSource::Manual,
     };
@@ -104,7 +104,7 @@ fn spawn_via(
         outer_diameter: Nm::from_mm(outer_mm),
         start_layer: Layer::TopCopper,
         end_layer: Layer::BottomCopper,
-        net_id,
+        net_id: Some(net_id),
         locked: false,
     };
     world.spawn_entity((via, net_id))

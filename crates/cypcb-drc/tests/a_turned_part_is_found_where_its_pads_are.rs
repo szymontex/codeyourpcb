@@ -243,7 +243,7 @@ fn clearance_rows_beside_pad_2(footprint: &str, degrees: f64) -> usize {
             segments: vec![TraceSegment::new(from, to)],
             width: Nm::from_mm(0.1),
             layer: Layer::TopCopper,
-            net_id: NetId::new(3),
+            net_id: Some(NetId::new(3)),
             locked: false,
             source: TraceSource::Autorouted,
         },

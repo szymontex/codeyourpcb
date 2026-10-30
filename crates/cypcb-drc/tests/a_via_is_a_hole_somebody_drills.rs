@@ -40,7 +40,7 @@ fn board(copper_layers: u8, start: Layer, end: Layer, pairs: &[(Layer, Layer)]) 
             position: Point::from_mm(15.0, 10.0),
             drill: Nm::from_mm(0.3),
             outer_diameter: Nm::from_mm(0.6),
-            net_id,
+            net_id: Some(net_id),
             start_layer: start,
             end_layer: end,
             locked: false,

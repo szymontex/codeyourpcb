@@ -496,7 +496,7 @@ impl RoutingGrid {
                         [seg.end.x.raw(), seg.end.y.raw()],
                         layer_idx,
                         radius_cells,
-                        trace.net_id.id(),
+                        trace.net_id.map_or(FIXED_CONTESTED, |net| net.id()),
                     );
                 }
             }
@@ -575,7 +575,7 @@ impl RoutingGrid {
                     self.nm_to_grid_y(via.position.y.raw()),
                     layer as usize,
                     ring_cells + clearance_cells,
-                    via.net_id.id(),
+                    via.net_id.map_or(FIXED_CONTESTED, |net| net.id()),
                 );
             }
         }

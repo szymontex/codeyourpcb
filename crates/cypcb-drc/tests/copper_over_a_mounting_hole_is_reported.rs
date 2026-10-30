@@ -89,7 +89,7 @@ fn spawn_horizontal_trace(world: &mut BoardWorld, y: f64, layer: Layer) {
             )],
             width: Nm::from_mm(0.2),
             layer,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
             source: TraceSource::Autorouted,
         },

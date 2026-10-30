@@ -282,7 +282,7 @@ fn test_locked_trace_export() {
         ],
         width: Nm::from_mm(0.3), // 0.3mm = ~12 mil
         layer: Layer::TopCopper,
-        net_id: vcc,
+        net_id: Some(vcc),
         locked: true,
         source: TraceSource::Manual,
     };

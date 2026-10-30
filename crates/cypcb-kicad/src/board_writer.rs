@@ -1070,7 +1070,11 @@ fn write_copper(
         let Some(layer) = copper_layer(trace.layer) else {
             continue;
         };
-        let net = net_number.get(&trace.net_id).copied().unwrap_or(0);
+        // Copper on no net is `(net 0)`, KiCad's own number for it.
+        let net = trace
+            .net_id
+            .and_then(|id| net_number.get(&id).copied())
+            .unwrap_or(0);
 
         if let Some(curve) = curve {
             if let (Some(first), Some(last)) = (trace.segments.first(), trace.segments.last()) {
@@ -1138,7 +1142,10 @@ fn write_copper(
         else {
             continue;
         };
-        let net = net_number.get(&via.net_id).copied().unwrap_or(0);
+        let net = via
+            .net_id
+            .and_then(|id| net_number.get(&id).copied())
+            .unwrap_or(0);
         let _ = writeln!(
             out,
             "  (via{} (at {} {}) (size {}) (drill {}) (layers \"{start}\" \"{end}\") (net {net}))",

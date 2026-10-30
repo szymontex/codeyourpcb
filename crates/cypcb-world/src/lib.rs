@@ -111,6 +111,7 @@ pub mod world;
 
 // Re-export all component types at crate root for convenience
 pub use components::{
+    same_net,
     // Trace components
     trace::{Trace, TraceSegment, TraceSource, Via},
     // Board components

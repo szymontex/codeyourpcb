@@ -30,7 +30,7 @@ fn routed_board() -> BoardWorld {
         )],
         width: Nm::from_mm(0.2),
         layer,
-        net_id: net,
+        net_id: Some(net),
         locked: false,
         source: TraceSource::Autorouted,
     };
@@ -44,7 +44,7 @@ fn routed_board() -> BoardWorld {
             outer_diameter: Nm::from_mm(0.8),
             start_layer: Layer::TopCopper,
             end_layer: Layer::BottomCopper,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
         },
         net,
@@ -144,7 +144,7 @@ fn four_layer_board() -> BoardWorld {
         )],
         width: Nm::from_mm(0.2),
         layer,
-        net_id: net,
+        net_id: Some(net),
         locked: false,
         source: TraceSource::Autorouted,
     };

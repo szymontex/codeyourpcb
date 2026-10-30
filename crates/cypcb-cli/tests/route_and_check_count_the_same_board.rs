@@ -260,7 +260,11 @@ fn copper(world: &mut BoardWorld, only_routed: bool) -> (Vec<String>, Vec<String
     };
     let mut segments = Vec::new();
     for trace in &traces {
-        let net = world.net_name(trace.net_id).unwrap_or("?").to_string();
+        let net = trace
+            .net_id
+            .and_then(|net| world.net_name(net))
+            .unwrap_or("?")
+            .to_string();
         for segment in &trace.segments {
             let (a, b) = (
                 (segment.start.x.0, segment.start.y.0),
@@ -280,7 +284,9 @@ fn copper(world: &mut BoardWorld, only_routed: bool) -> (Vec<String>, Vec<String
         .map(|via| {
             format!(
                 "{} {:?} {} {} {:?} {:?}",
-                world.net_name(via.net_id).unwrap_or("?"),
+                via.net_id
+                    .and_then(|net| world.net_name(net))
+                    .unwrap_or("?"),
                 (via.position.x.0, via.position.y.0),
                 via.drill.0,
                 via.outer_diameter.0,

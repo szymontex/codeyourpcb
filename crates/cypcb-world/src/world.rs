@@ -1284,7 +1284,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1362,7 +1362,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1394,7 +1394,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::BottomCopper,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
             locked: false,
             source: TraceSource::Manual,
         };

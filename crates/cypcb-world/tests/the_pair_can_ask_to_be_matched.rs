@@ -41,7 +41,7 @@ fn length_of(world: &mut BoardWorld, net: &str) -> i64 {
     let mut query = world.ecs_mut().query::<&Trace>();
     query
         .iter(world.ecs())
-        .filter(|trace| trace.net_id == id)
+        .filter(|trace| trace.net_id == Some(id))
         .map(|trace| trace.total_length().0)
         .sum()
 }

@@ -46,7 +46,7 @@ fn board_with_a_corner(degrees: f64) -> BoardWorld {
                 segments: vec![TraceSegment::new(start, end)],
                 width: Nm::from_mm(0.2),
                 layer: Layer::TopCopper,
-                net_id: net,
+                net_id: Some(net),
                 locked: false,
                 source: TraceSource::Autorouted,
             },

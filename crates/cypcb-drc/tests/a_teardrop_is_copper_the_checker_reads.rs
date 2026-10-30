@@ -85,7 +85,7 @@ fn track(world: &mut BoardWorld, net: NetId, width: f64, points: &[(f64, f64)]) 
             segments,
             width: Nm::from_mm(width),
             layer: Layer::TopCopper,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
             source: TraceSource::Manual,
         },

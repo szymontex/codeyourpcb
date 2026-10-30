@@ -17,7 +17,7 @@ use cypcb_core::{Nm, Point, Rect};
 
 use crate::components::trace::{Trace, Via};
 use crate::components::zone::{Hatch, Zone, ZoneOutline};
-use crate::components::{Layer, NetId};
+use crate::components::{same_net, Layer, NetId};
 use crate::footprint::FootprintLibrary;
 use crate::world::BoardWorld;
 
@@ -320,7 +320,7 @@ pub fn copper_on_layer(
             .collect()
     };
     for trace in traces {
-        if trace.layer != layer || Some(trace.net_id) == pour_net {
+        if trace.layer != layer || same_net(trace.net_id, pour_net) {
             continue;
         }
         let half = trace.width.0 / 2;
@@ -346,7 +346,7 @@ pub fn copper_on_layer(
             .collect()
     };
     for via in vias {
-        if Some(via.net_id) == pour_net {
+        if same_net(via.net_id, pour_net) {
             continue;
         }
         let radius = via.outer_diameter.0 / 2;
@@ -501,5 +501,50 @@ mod tests {
             pad_boxes(Rotation::ZERO, Rotation::ZERO),
             "the control"
         );
+    }
+    /// How many pieces of copper `pour_net` keeps off, with one 10mm trace
+    /// and one via added on `copper_net`.
+    fn boxes_with_copper_on(copper_net: Option<NetId>, pour_net: Option<NetId>) -> usize {
+        use crate::components::trace::{Trace, TraceSegment, Via};
+        let (mut world, library) = board_with_one_pad(1);
+        let before = copper_on_layer(&mut world, &library, Layer::TopCopper, pour_net)
+            .0
+            .len();
+        let mut trace = Trace::new(NetId::new(0));
+        trace.net_id = copper_net;
+        trace.add_segment(TraceSegment::new(
+            Point::from_mm(2.0, 2.0),
+            Point::from_mm(8.0, 2.0),
+        ));
+        world.spawn_entity((trace,));
+        let mut via = Via::new(Point::from_mm(4.0, 4.0), NetId::new(0));
+        via.net_id = copper_net;
+        world.spawn_entity((via,));
+        copper_on_layer(&mut world, &library, Layer::TopCopper, pour_net)
+            .0
+            .len()
+            - before
+    }
+
+    #[test]
+    fn a_pour_keeps_off_copper_of_another_net_and_not_its_own() {
+        assert_eq!(
+            boxes_with_copper_on(Some(NetId::new(2)), Some(NetId::new(1))),
+            2
+        );
+        assert_eq!(
+            boxes_with_copper_on(Some(NetId::new(1)), Some(NetId::new(1))),
+            0
+        );
+    }
+
+    #[test]
+    fn copper_on_no_net_is_never_the_pours_own() {
+        // A pour on no net and copper on no net are not the same net, so the
+        // pour keeps off it, as it keeps off copper on any other net. Written
+        // with `==` the pair read as equal and the pour poured over it.
+        assert_eq!(boxes_with_copper_on(None, None), 2);
+        // And a pour on a net keeps off copper on none.
+        assert_eq!(boxes_with_copper_on(None, Some(NetId::new(1))), 2);
     }
 }

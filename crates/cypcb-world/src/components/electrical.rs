@@ -37,6 +37,30 @@ impl NetId {
     }
 }
 
+/// Whether two pieces of copper are on the same net.
+///
+/// Copper on no net (`None`) is foreign to every net and to other copper on
+/// no net: it is not the same net as anything, so this is `false` whenever
+/// either side is `None`. Comparing two `Option<NetId>` with `==` says the
+/// opposite for a pair of `None`, and would make two unconnected pieces of
+/// copper one conductor.
+///
+/// ```
+/// use cypcb_world::{same_net, NetId};
+///
+/// assert!(same_net(Some(NetId(1)), Some(NetId(1))));
+/// assert!(!same_net(Some(NetId(1)), Some(NetId(2))));
+/// assert!(!same_net(Some(NetId(1)), None));
+/// assert!(!same_net(None, None));
+/// ```
+#[inline]
+pub fn same_net(a: Option<NetId>, b: Option<NetId>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
 impl std::fmt::Display for NetId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Net({})", self.0)

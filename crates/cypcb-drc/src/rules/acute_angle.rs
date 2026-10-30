@@ -55,7 +55,12 @@ pub struct AcuteAngleRule;
 type Segment = (Entity, Point, Point);
 
 /// Every segment of one net on one layer, which is where copper meets copper.
-type Groups = BTreeMap<(u32, u32), Vec<Segment>>;
+/// The copper a junction can be formed with: every trace of one net on one
+/// layer, or - for copper on no net, which is foreign to every net and to
+/// other copper on no net - one trace alone.
+type Owner = (Option<u32>, Option<u32>);
+
+type Groups = BTreeMap<(Owner, u32), Vec<Segment>>;
 
 /// One arm of a junction: the segment's far end, and the trace it belongs to.
 #[derive(Clone, Copy)]
@@ -147,19 +152,24 @@ impl DrcRule for AcuteAngleRule {
                 if (segment.start.x.0, segment.start.y.0) == (segment.end.x.0, segment.end.y.0) {
                     continue;
                 }
+                let owner: Owner = match trace.net_id {
+                    Some(net) => (Some(net.0), None),
+                    None => (None, Some(entity.index())),
+                };
                 groups
-                    .entry((trace.net_id.0, trace.layer.to_copper_mask()))
+                    .entry((owner, trace.layer.to_copper_mask()))
                     .or_default()
                     .push((*entity, segment.start, segment.end));
             }
         }
 
         let mut violations = Vec::new();
-        let mut said: BTreeSet<u32> = BTreeSet::new();
+        let mut said: BTreeSet<Owner> = BTreeSet::new();
 
-        for ((net_id, _), segments) in &groups {
-            let net_name = world
-                .net_name(cypcb_world::NetId(*net_id))
+        for ((owner, _), segments) in &groups {
+            let net_name = owner
+                .0
+                .and_then(|net| world.net_name(cypcb_world::NetId(net)))
                 .unwrap_or("unnamed")
                 .to_string();
 
@@ -220,7 +230,7 @@ impl DrcRule for AcuteAngleRule {
                 segments.iter().any(|(_, a, b)| inside(p, *a, *b))
             });
             if let Some((x, y)) = tee {
-                if said.insert(*net_id) {
+                if said.insert(*owner) {
                     let at = Point::new(cypcb_core::Nm(*x), cypcb_core::Nm(*y));
                     let entity = segments[0].0;
                     let mut violation = DrcViolation::acid_trap(entity, String::new(), at);

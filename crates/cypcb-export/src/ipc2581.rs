@@ -611,8 +611,10 @@ pub fn export_ipc2581_with(
         // to which connection - which is the whole reason this format exists
         // beside Gerber.
         for (trace, curve) in &on_this_layer {
-            let net = world
-                .net_name(trace.net_id)
+            // Copper on no net is written as a pour on no net is.
+            let net = trace
+                .net_id
+                .and_then(|net| world.net_name(net))
                 .unwrap_or("unknown")
                 .to_string();
             let _ = writeln!(out, "          <Set net=\"{}\">", qualified(&net));

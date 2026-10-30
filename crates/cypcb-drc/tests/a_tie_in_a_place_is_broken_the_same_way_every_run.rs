@@ -42,7 +42,7 @@ fn trace(world: &mut BoardWorld, net: u32, points: &[(f64, f64)]) -> u32 {
                 segments,
                 width: Nm::from_mm(0.1),
                 layer: Layer::TopCopper,
-                net_id: net,
+                net_id: Some(net),
                 locked: false,
                 source: TraceSource::Autorouted,
             },

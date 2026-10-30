@@ -509,7 +509,9 @@ fn write_wiring(world: &mut BoardWorld, output: &mut impl Write) -> Result<(), D
 
     // Now process the collected traces
     for trace in locked_traces {
-        let net_name = world.net_name(trace.net_id).unwrap_or("unknown");
+        // Copper on no net is a fixed wire with no `(net ...)`: an obstacle
+        // to every net.
+        let net_name = trace.net_id.and_then(|net| world.net_name(net));
         let layer_name = layer_to_dsn_name(trace.layer);
         let width_mil = nm_to_mil(trace.width.0);
 
@@ -532,7 +534,9 @@ fn write_wiring(world: &mut BoardWorld, output: &mut impl Write) -> Result<(), D
         }
 
         writeln!(output, ")")?;
-        writeln!(output, "      (net {})", quote_dsn(net_name))?;
+        if let Some(net_name) = net_name {
+            writeln!(output, "      (net {})", quote_dsn(net_name))?;
+        }
         writeln!(output, "      (type fix)")?; // Fixed, don't reroute
         writeln!(output, "    )")?;
     }
@@ -573,6 +577,43 @@ mod tests {
         assert_eq!(layer_to_dsn_name(Layer::BottomCopper), "B.Cu");
         assert_eq!(layer_to_dsn_name(Layer::Inner(0)), "In1.Cu");
         assert_eq!(layer_to_dsn_name(Layer::Inner(1)), "In2.Cu");
+    }
+
+    #[test]
+    fn a_locked_trace_on_no_net_is_a_wire_with_no_net() {
+        use cypcb_world::components::trace::{Trace, TraceSegment};
+        use cypcb_world::NetId;
+
+        let build = |net: Option<NetId>| {
+            let mut world = BoardWorld::new();
+            world.set_board(
+                "TestBoard".to_string(),
+                (Nm::from_mm(50.0), Nm::from_mm(30.0)),
+                2,
+            );
+            world.intern_net("FIRST");
+            let mut trace = Trace::new(NetId::new(0));
+            trace.net_id = net;
+            trace.locked = true;
+            trace.add_segment(TraceSegment::new(
+                Point::from_mm(10.0, 10.0),
+                Point::from_mm(20.0, 10.0),
+            ));
+            world.spawn_entity((trace,));
+            let mut output = Vec::new();
+            export_dsn(&mut world, &FootprintLibrary::new(), &mut output).unwrap();
+            String::from_utf8(output).unwrap()
+        };
+
+        // Control: on the first net the wire says so.
+        let on_a_net = build(Some(NetId::new(0)));
+        assert!(on_a_net.contains("      (net \"FIRST\")"), "{on_a_net}");
+        // On none it is a fixed wire with no `(net ...)`, an obstacle to every
+        // net, and not a wire of the first one.
+        let on_none = build(None);
+        assert!(on_none.contains("(wire"), "{on_none}");
+        assert!(!on_none.contains("      (net \"FIRST\")"), "{on_none}");
+        assert!(!on_none.contains("      (net "), "{on_none}");
     }
 
     #[test]
@@ -683,7 +724,7 @@ mod tests {
             ],
             width: Nm::from_mm(0.3),
             layer: Layer::TopCopper,
-            net_id: vcc,
+            net_id: Some(vcc),
             locked: true,
             source: TraceSource::Manual,
         };
@@ -726,7 +767,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.3),
             layer: Layer::TopCopper,
-            net_id: vcc,
+            net_id: Some(vcc),
             locked: false, // Not locked
             source: TraceSource::Autorouted,
         };

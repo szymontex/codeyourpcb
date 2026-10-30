@@ -237,6 +237,11 @@ pub fn teardrops_of(
 
     let mut found = Vec::new();
     for trace in in_build_order::<&Trace>(world.ecs_mut()) {
+        // A pad of no net is not a pad this trace joins, and copper on no net
+        // joins none: it has no land to grow a teardrop toward.
+        let Some(net) = trace.net_id else {
+            continue;
+        };
         let mask = trace.layer.to_copper_mask();
         for segment in &trace.segments {
             // Both ends of every segment, as the Gerber writer always took them.
@@ -258,7 +263,7 @@ pub fn teardrops_of(
                                 order: found.len() as u32,
                                 land: Some((*part, number.clone())),
                             },
-                            trace.net_id,
+                            net,
                         ));
                     }
                     break;

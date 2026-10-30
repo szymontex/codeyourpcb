@@ -642,7 +642,7 @@ impl PcbEngine {
             segments,
             width: Nm(width_nm),
             layer,
-            net_id,
+            net_id: Some(net_id),
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1229,7 +1229,7 @@ impl PcbEngine {
             )],
             width: Nm(width),
             layer,
-            net_id: NetId::new(net_id_num),
+            net_id: Some(NetId::new(net_id_num)),
             locked: false,
             source: TraceSource::Autorouted,
         };
@@ -1265,7 +1265,7 @@ impl PcbEngine {
             outer_diameter: Nm(drill * 2), // Default annular ring
             start_layer,
             end_layer,
-            net_id: NetId::new(net_id_num),
+            net_id: Some(NetId::new(net_id_num)),
             locked: false,
         };
 
@@ -2066,9 +2066,9 @@ impl PcbEngine {
                 _ => "Top".to_string(),
             };
 
-            let net_name = self
-                .world
-                .net_name(trace.net_id)
+            let net_name = trace
+                .net_id
+                .and_then(|net| self.world.net_name(net))
                 .unwrap_or("(no net)")
                 .to_string();
 
@@ -2127,9 +2127,9 @@ impl PcbEngine {
         // Now process with net names
         let mut vias: Vec<ViaInfo> = Vec::new();
         for (entity_id, via) in via_data {
-            let net_name = self
-                .world
-                .net_name(via.net_id)
+            let net_name = via
+                .net_id
+                .and_then(|net| self.world.net_name(net))
                 .unwrap_or("(no net)")
                 .to_string();
 
@@ -3062,6 +3062,37 @@ mod tests {
         assert_eq!(snapshot.traces[0].layer, "Top");
         assert_eq!(snapshot.traces[0].width, 200_000.0);
         assert!(!snapshot.traces[0].locked);
+    }
+
+    #[test]
+    fn copper_on_no_net_is_shown_on_no_net() {
+        // The first net on the board is what copper on no net used to be
+        // shown on.
+        let mut engine = PcbEngine::new();
+        let loaded = engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+        assert!(loaded.is_empty(), "{loaded}");
+        engine.world.intern_net("FIRST");
+        let mut trace = Trace::new(cypcb_world::NetId::new(0));
+        trace.net_id = None;
+        trace.add_segment(cypcb_world::components::trace::TraceSegment::new(
+            Point::from_mm(5.0, 5.0),
+            Point::from_mm(20.0, 5.0),
+        ));
+        engine.world.spawn_entity((trace,));
+        let mut via = Via::new(Point::from_mm(10.0, 10.0), cypcb_world::NetId::new(0));
+        via.net_id = None;
+        engine.world.spawn_entity((via,));
+
+        let snapshot = engine.build_snapshot();
+        assert_eq!(snapshot.traces.len(), 1);
+        assert_eq!(snapshot.traces[0].net_name, "(no net)");
+        assert_eq!(snapshot.vias.len(), 1);
+        assert_eq!(snapshot.vias[0].net_name, "(no net)");
     }
 
     #[test]

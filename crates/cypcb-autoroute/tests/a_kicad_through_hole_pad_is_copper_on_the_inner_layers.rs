@@ -157,7 +157,7 @@ fn shorts_of_pa13_across_j3_1_on(layer: Layer) -> usize {
             )],
             width: Nm::from_mm(0.2),
             layer,
-            net_id: pa13,
+            net_id: Some(pa13),
             locked: false,
             source: TraceSource::Manual,
         },
@@ -223,14 +223,14 @@ fn the_router_keeps_other_nets_off_the_pads_on_the_inner_layers() {
                 if distance_to_segment(pad.centre, segment.start, segment.end) >= reach {
                     continue;
                 }
-                if pad.net == Some(trace.net_id) {
+                if cypcb_world::same_net(pad.net, trace.net_id) {
                     own += 1;
                 } else {
                     foreign.push(format!(
                         "{} ({:?}) under {:?} on {:?}",
                         pad.name,
                         pad.shape,
-                        world.net_name(trace.net_id),
+                        trace.net_id.and_then(|net| world.net_name(net)),
                         trace.layer
                     ));
                 }

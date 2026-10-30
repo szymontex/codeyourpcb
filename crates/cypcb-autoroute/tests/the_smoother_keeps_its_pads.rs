@@ -111,7 +111,7 @@ fn r8_open(world: &mut BoardWorld, library: &FootprintLibrary, copper: &[RouteSe
                 segments: vec![TraceSegment::new(seg.start, seg.end)],
                 width: seg.width,
                 layer: seg.layer,
-                net_id: seg.net_id,
+                net_id: Some(seg.net_id),
                 locked: false,
                 source: TraceSource::Autorouted,
             },

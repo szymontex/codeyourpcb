@@ -46,11 +46,15 @@ impl DrcRule for DiffPairSkewRule {
         {
             let ecs = world.ecs_mut();
             for trace in in_build_order::<&Trace>(ecs) {
+                // Copper on no net is not a leg of any pair.
+                let Some(net) = trace.net_id else {
+                    continue;
+                };
                 for segment in &trace.segments {
                     let run = distance(segment.start, segment.end);
-                    let total = length.entry(trace.net_id).or_insert(Nm(0));
+                    let total = length.entry(net).or_insert(Nm(0));
                     *total = Nm(total.0 + run.0);
-                    somewhere.entry(trace.net_id).or_insert(segment.start);
+                    somewhere.entry(net).or_insert(segment.start);
                 }
             }
         }

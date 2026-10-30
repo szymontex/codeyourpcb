@@ -581,7 +581,7 @@ pub fn entry_records(world: &mut BoardWorld) -> Vec<EntryRecord> {
             let mask = if mask == 0 { u32::MAX } else { mask };
 
             for (trace_index, trace) in traces.iter().enumerate() {
-                if trace.net_id != net {
+                if trace.net_id != Some(net) {
                     continue;
                 }
                 match layer_bit(trace.layer) {

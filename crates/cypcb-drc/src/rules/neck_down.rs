@@ -65,7 +65,7 @@ impl DrcRule for NeckDownRule {
                 .filter_map(|(entity, trace, own)| {
                     let neck = own
                         .copied()
-                        .or_else(|| net_neck.get(&trace.net_id.id()).copied())?;
+                        .or_else(|| net_neck.get(&trace.net_id?.id()).copied())?;
                     Some(Measured {
                         entity,
                         neck_width: neck.width,
