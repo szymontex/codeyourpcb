@@ -120,6 +120,7 @@ pub enum ExportError {
 fn pour_options(job: &ExportJob) -> crate::pour::PourOptions {
     crate::pour::PourOptions {
         clearance: job.preset.pour_clearance,
+        edge_clearance: job.preset.pour_edge_clearance,
         thermal_gap: job.preset.pour_thermal_gap,
         spoke_width: job.preset.pour_spoke_width,
     }

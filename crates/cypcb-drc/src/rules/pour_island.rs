@@ -45,6 +45,7 @@ pub struct PourIslandRule;
 fn pour_options(rules: &DesignRules) -> PourOptions {
     PourOptions {
         clearance: rules.min_copper_pour_clearance,
+        edge_clearance: rules.min_edge_clearance,
         thermal_gap: rules.thermal_relief_gap,
         spoke_width: rules.thermal_relief_spoke_width,
     }
@@ -93,15 +94,24 @@ impl DrcRule for PourIslandRule {
                     .copied();
                 let filled =
                     cypcb_world::copper::fill_zone(world, &library, layer, &zone, hatch, &options);
-                if !filled.pieces.is_empty() {
-                    for island in unconnected_islands(&filled.pieces, &filled.spokes) {
-                        violations.push(DrcViolation::pour_island(entity, island));
+                //
+                // A pour cut at a slant, or held to a board edge that is not
+                // square to the axes, comes back as convex pieces, and the
+                // pieces the cut spared stay rectangles. Rectangles and convex
+                // pieces are one sheet when they touch, so a pour made of both
+                // is measured as convex pieces throughout.
+                if filled.shapes.is_empty() && filled.spoke_shapes.is_empty() {
+                    if !filled.pieces.is_empty() {
+                        for island in unconnected_islands(&filled.pieces, &filled.spokes) {
+                            violations.push(DrcViolation::pour_island(entity, island));
+                        }
                     }
-                }
-                // A pour a rule area cuts at a slant comes back as convex pieces.
-                if !filled.shapes.is_empty() {
-                    for island in unconnected_island_shapes(&filled.shapes, &filled.spoke_shapes) {
-                        violations.push(DrcViolation::pour_island(entity, island));
+                } else {
+                    let (pieces, spokes) = as_shapes(&filled);
+                    if !pieces.is_empty() {
+                        for island in unconnected_island_shapes(&pieces, &spokes) {
+                            violations.push(DrcViolation::pour_island(entity, island));
+                        }
                     }
                 }
             }
@@ -124,6 +134,30 @@ impl DrcRule for PourIslandRule {
 
         violations
     }
+}
+
+/// A fill as convex pieces and spokes alone: its rectangles as the rings of
+/// their corners, then the convex pieces it already has.
+fn as_shapes(filled: &cypcb_world::copper::FilledPour) -> (Vec<Vec<Point>>, Vec<Vec<Point>>) {
+    let ring = |rect: &Rect| {
+        vec![
+            rect.min,
+            Point::new(rect.max.x, rect.min.y),
+            rect.max,
+            Point::new(rect.min.x, rect.max.y),
+        ]
+    };
+    let join = |rects: &[Rect], shapes: &[Vec<Point>]| -> Vec<Vec<Point>> {
+        rects
+            .iter()
+            .map(ring)
+            .chain(shapes.iter().cloned())
+            .collect()
+    };
+    (
+        join(&filled.pieces, &filled.shapes),
+        join(&filled.spokes, &filled.spoke_shapes),
+    )
 }
 
 /// Group the pieces into sheets of touching copper and return the sheets no

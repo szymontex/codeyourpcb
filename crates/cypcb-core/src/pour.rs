@@ -242,6 +242,11 @@ mod tests {
 pub struct PourOptions {
     /// Distance kept from copper on another net.
     pub clearance: Nm,
+    /// Distance kept from the board edge, and from the edge of every cutout in
+    /// it: the fab's `min_edge_clearance`. KiCad knocks each Edge.Cuts shape
+    /// out of a pour by the larger of this and the electrical clearance
+    /// (`zone_filler.cpp:2172-2180`).
+    pub edge_clearance: Nm,
     /// Gap cut around a pad on the pour's own net, before the spokes go back.
     pub thermal_gap: Nm,
     /// Width of each spoke bridging that gap.
@@ -252,8 +257,12 @@ impl Default for PourOptions {
     fn default() -> Self {
         // Generous where a wrong guess is only a smaller pour, and matching
         // the fab presets where a wrong guess would be a bad joint.
+        let clearance = Nm::from_mm(0.3);
         PourOptions {
-            clearance: Nm::from_mm(0.3),
+            clearance,
+            // The same generous figure: a pour that keeps this far from foreign
+            // copper keeps this far from the edge.
+            edge_clearance: clearance,
             thermal_gap: Nm::from_mm(0.254),
             spoke_width: Nm::from_mm(0.254),
         }

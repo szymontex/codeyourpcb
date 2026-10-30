@@ -86,6 +86,7 @@ fn board() -> BoardWorld {
 fn options(rules: &DesignRules) -> PourOptions {
     PourOptions {
         clearance: rules.min_clearance,
+        edge_clearance: rules.min_edge_clearance,
         thermal_gap: rules.thermal_relief_gap,
         spoke_width: rules.thermal_relief_spoke_width,
     }

@@ -50,9 +50,11 @@ fn area_mm2(filled: &cypcb_world::copper::FilledPour) -> f64 {
 }
 
 fn fill(world: &mut BoardWorld, zone: &Zone) -> cypcb_world::copper::FilledPour {
-    // No clearance: the area is the only thing to cut away.
+    // No clearance, from copper or from the board edge (the pour sits in the
+    // board's corner): the area is the only thing to cut away.
     let options = PourOptions {
         clearance: Nm::ZERO,
+        edge_clearance: Nm::ZERO,
         ..PourOptions::default()
     };
     fill_zone(
@@ -177,6 +179,7 @@ fn a_pour_drawn_as_a_polygon_is_cut_the_same_way() {
     triangle_area(&mut world);
     let options = PourOptions {
         clearance: Nm::ZERO,
+        edge_clearance: Nm::ZERO,
         ..PourOptions::default()
     };
     let filled = fill_outlined_zone(

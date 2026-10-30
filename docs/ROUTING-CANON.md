@@ -605,9 +605,9 @@ citing IPC-2221B and IPC-7093; not the text of either standard.
 In this repo: partly enforced. On the export path the geometry takes its
 relief numbers from the house preset - `pour_thermal_gap` and `pour_spoke_width`
 on `ExportPreset`, handed to the filler by `pour_options`
-(`crates/cypcb-export/src/job.rs:120-124`). Two things are still outside that
+(`crates/cypcb-export/src/job.rs:120-125`). Two things are still outside that
 wiring. The spoke count is not a parameter at all: `thermal_spokes()`
-(`crates/cypcb-core/src/pour.rs:272`) cuts a fixed cross of four whatever a house
+(`crates/cypcb-core/src/pour.rs:281`) cuts a fixed cross of four whatever a house
 preset asks for, and `thermal_relief_spokes` has no reader. And the pour the
 viewer draws still fills from `PourOptions::default()`
 (`crates/cypcb-render/src/lib.rs:1959`), so what a designer sees on screen is
@@ -1073,7 +1073,7 @@ four-layer rule onto a two-layer board:
 - The reference is not a plane but a pour, and the pour is cut by the traces
   routed on that same layer. Coverage has to be measured against the filled
   geometry - the pieces and spokes `fill_zone` returns
-  (`crates/cypcb-world/src/copper.rs:184`) - and never against the zone's
+  (`crates/cypcb-world/src/copper.rs:380`) - and never against the zone's
   declared rectangle, which covers copper that is not there.
 - Every trace on the opposite layer is itself a gap in the reference of the
   trace above it. A two-layer board with any routing on the reference layer
@@ -1278,10 +1278,10 @@ components too.
 
 - *Spoke width and gap against the house table:* geometry from the filled pour,
   numbers from the design rules. `PourOptions` carries `thermal_gap`
-  (`crates/cypcb-core/src/pour.rs:246`) and `spoke_width` (`:248`). Checkable
+  (`crates/cypcb-core/src/pour.rs:251`) and `spoke_width` (`:253`). Checkable
   today.
 - *Surviving spoke count:* the arm mapping R-09 specifies, on the same filled
-  pour. `thermal_spokes` (`crates/cypcb-core/src/pour.rs:272`) cuts a fixed
+  pour. `thermal_spokes` (`crates/cypcb-core/src/pour.rs:281`) cuts a fixed
   cross of four whatever any table says, and `thermal_relief_spokes` still has
   zero readers outside its own crate - `git grep -ln thermal_relief_spokes
   -- 'crates/*.rs' | grep -v cypcb-rules | wc -l` returns `0`. So the

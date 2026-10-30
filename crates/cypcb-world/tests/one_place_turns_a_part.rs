@@ -55,6 +55,11 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "cell centres turned back into a pad's own frame, and a span rounded up so the scan covers the pad",
     ),
     (
+        "cypcb-core/src/pour_shape.rs",
+        3,
+        "the corners of a polygon round a point, to hold the circle the edge clearance describes, not a turn",
+    ),
+    (
         "cypcb-kicad/src/pcb_parser.rs",
         3,
         "points on a circle or an arc of the board edge, and the error a step count leaves, to polygonise the edge as KiCad does",
