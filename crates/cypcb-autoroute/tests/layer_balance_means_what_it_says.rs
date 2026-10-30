@@ -55,7 +55,7 @@ fn board(layers: u8, spread: &[(Layer, usize)]) -> BoardWorld {
                     )],
                     width: Nm::from_mm(0.2),
                     layer: *layer,
-                    net_id: net,
+                    net_id: Some(net),
                     locked: false,
                     source: TraceSource::Autorouted,
                 },

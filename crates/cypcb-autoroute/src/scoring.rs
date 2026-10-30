@@ -36,7 +36,7 @@ use cypcb_core::Nm;
 use cypcb_drc::rules::clearance::segment_distance;
 use cypcb_drc::{run_drc, DesignRules, ViolationKind};
 use cypcb_world::components::trace::{Trace, Via};
-use cypcb_world::BoardWorld;
+use cypcb_world::{same_net, BoardWorld};
 
 /// Quality score for a routed PCB board.
 ///
@@ -264,7 +264,7 @@ struct TraceData {
     entity: Entity,
     segments: Vec<TraceSegment>,
     layer: Layer,
-    net_id: NetId,
+    net_id: Option<NetId>,
 }
 
 impl TraceData {
@@ -339,9 +339,14 @@ fn compute_smoothness(traces: &[TraceData]) -> f64 {
     let mut by_net_and_layer: std::collections::HashMap<(NetId, Layer), Vec<&TraceSegment>> =
         std::collections::HashMap::new();
     for trace in traces {
+        // Copper on no net meets no other copper as the same net, so it bends
+        // at no joint this walks.
+        let Some(net) = trace.net_id else {
+            continue;
+        };
         for segment in &trace.segments {
             by_net_and_layer
-                .entry((trace.net_id, trace.layer))
+                .entry((net, trace.layer))
                 .or_default()
                 .push(segment);
         }
@@ -478,7 +483,7 @@ fn compute_crossings(world: &mut BoardWorld, traces: &[TraceData]) -> u32 {
                 };
 
                 // Skip same-net (junctions, not crossings)
-                if candidate.net_id == trace.net_id {
+                if same_net(candidate.net_id, trace.net_id) {
                     continue;
                 }
 
@@ -746,7 +751,7 @@ mod tests {
                 Point::from_mm(10.0, 0.0),
             )],
             layer,
-            net_id: NetId::new(net_id),
+            net_id: Some(NetId::new(net_id)),
         }
     }
 
@@ -823,7 +828,7 @@ mod tests {
                 Point::from_mm(10.0, 0.0),
             )],
             layer: Layer::TopCopper,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
         }];
         assert!(
             (compute_smoothness(&traces) - 1.0).abs() < 1e-10,
@@ -841,7 +846,7 @@ mod tests {
                 TraceSegment::new(Point::from_mm(10.0, 0.0), Point::from_mm(10.0, 10.0)),
             ],
             layer: Layer::TopCopper,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
         }];
         let smoothness = compute_smoothness(&traces);
         assert!(
@@ -860,7 +865,7 @@ mod tests {
                 TraceSegment::new(Point::from_mm(10.0, 0.0), Point::from_mm(20.0, 10.0)),
             ],
             layer: Layer::TopCopper,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
         }];
         let smoothness = compute_smoothness(&traces);
         assert!(
@@ -880,7 +885,7 @@ mod tests {
                 TraceSegment::new(Point::from_mm(10.0, 0.0), Point::from_mm(10.0, 10.0)),
             ],
             layer: Layer::TopCopper,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
         }];
         let smoothness = compute_smoothness(&traces);
         // Should not panic, and the valid bend (0° to 90°) should still be computed
@@ -1078,7 +1083,7 @@ mod tests {
                     segments: vec![TraceSegment::new(from, to)],
                     width: Nm::from_mm(0.1),
                     layer: Layer::TopCopper,
-                    net_id: NetId::new(net),
+                    net_id: Some(NetId::new(net)),
                     locked: false,
                     source: TraceSource::Manual,
                 });
@@ -1145,7 +1150,7 @@ mod tests {
             ],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: NetId::new(1),
+            net_id: Some(NetId::new(1)),
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1210,7 +1215,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: NetId::new(1),
+            net_id: Some(NetId::new(1)),
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1221,7 +1226,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: NetId::new(2),
+            net_id: Some(NetId::new(2)),
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1241,6 +1246,76 @@ mod tests {
     }
 
     #[test]
+    fn a_sharp_joint_between_runs_on_no_net_is_not_a_bend() {
+        // Two straight runs that end at one point and leave it 22 degrees
+        // apart. On one net that is a sharp bend and costs smoothness; on no
+        // net they are not the same copper, so they do not meet as a bend.
+        let smoothness = |net: Option<NetId>| {
+            let mut world = BoardWorld::new();
+            world.set_board(
+                "Test".to_string(),
+                (Nm::from_mm(50.0), Nm::from_mm(50.0)),
+                2,
+            );
+            for (from, to) in [((0.0, 0.0), (10.0, 0.0)), ((10.0, 0.0), (0.0, 4.0))] {
+                world.spawn_entity(Trace {
+                    segments: vec![TraceSegment::new(
+                        Point::from_mm(from.0, from.1),
+                        Point::from_mm(to.0, to.1),
+                    )],
+                    width: Nm::from_mm(0.2),
+                    layer: Layer::TopCopper,
+                    net_id: net,
+                    locked: false,
+                    source: TraceSource::Manual,
+                });
+            }
+            world.rebuild_spatial_index_from_library(&FootprintLibrary::new());
+            score_board(
+                &mut world,
+                &DesignRules::default(),
+                &ScoreWeights::default(),
+            )
+            .smoothness
+        };
+        assert!(smoothness(Some(NetId::new(0))) < 1.0, "the control");
+        assert!((smoothness(None) - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn crossings_between_copper_on_no_net_are_counted() {
+        // An X of two traces that are both on no net. They are not the same
+        // net as each other, so this is a crossing, not a junction. Compared
+        // with `==` the pair of `None` read equal and it was not counted.
+        let mut world = BoardWorld::new();
+        world.set_board(
+            "Test".to_string(),
+            (Nm::from_mm(50.0), Nm::from_mm(50.0)),
+            2,
+        );
+        for (from, to) in [((0.0, 0.0), (10.0, 10.0)), ((0.0, 10.0), (10.0, 0.0))] {
+            world.spawn_entity(Trace {
+                segments: vec![TraceSegment::new(
+                    Point::from_mm(from.0, from.1),
+                    Point::from_mm(to.0, to.1),
+                )],
+                width: Nm::from_mm(0.2),
+                layer: Layer::TopCopper,
+                net_id: None,
+                locked: false,
+                source: TraceSource::Manual,
+            });
+        }
+        world.rebuild_spatial_index_from_library(&FootprintLibrary::new());
+        let score = score_board(
+            &mut world,
+            &DesignRules::default(),
+            &ScoreWeights::default(),
+        );
+        assert!(score.crossings >= 1, "got {}", score.crossings);
+    }
+
+    #[test]
     fn test_crossings_same_net_not_counted() {
         let mut world = BoardWorld::new();
         world.set_board(
@@ -1257,7 +1332,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: NetId::new(1),
+            net_id: Some(NetId::new(1)),
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1268,7 +1343,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: NetId::new(1), // Same net
+            net_id: Some(NetId::new(1)), // Same net
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1303,7 +1378,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::TopCopper,
-            net_id: NetId::new(1),
+            net_id: Some(NetId::new(1)),
             locked: false,
             source: TraceSource::Manual,
         };
@@ -1314,7 +1389,7 @@ mod tests {
             )],
             width: Nm::from_mm(0.2),
             layer: Layer::BottomCopper, // Different layer
-            net_id: NetId::new(2),
+            net_id: Some(NetId::new(2)),
             locked: false,
             source: TraceSource::Manual,
         };

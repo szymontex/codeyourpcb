@@ -42,7 +42,7 @@ fn board(width: Nm, current_ma: f64) -> BoardWorld {
         )],
         width,
         layer: Layer::TopCopper,
-        net_id: net,
+        net_id: Some(net),
         locked: false,
         source: TraceSource::Manual,
     };

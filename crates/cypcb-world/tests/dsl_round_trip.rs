@@ -25,8 +25,9 @@ fn segments(world: &mut BoardWorld) -> BTreeSet<(String, String, i64, i64, i64, 
 
     let mut out = BTreeSet::new();
     for trace in traces {
-        let net = world
-            .net_name(trace.net_id)
+        let net = trace
+            .net_id
+            .and_then(|net| world.net_name(net))
             .unwrap_or("unnamed")
             .to_string();
         for segment in &trace.segments {
@@ -55,7 +56,11 @@ fn vias(world: &mut BoardWorld) -> BTreeSet<(String, i64, i64, i64)> {
     placed
         .into_iter()
         .map(|via| {
-            let net = world.net_name(via.net_id).unwrap_or("unnamed").to_string();
+            let net = via
+                .net_id
+                .and_then(|net| world.net_name(net))
+                .unwrap_or("unnamed")
+                .to_string();
             (
                 net,
                 via.position.x.raw(),
@@ -209,7 +214,7 @@ fn a_branching_net_does_not_gain_copper_between_its_branches() {
             ],
             width: cypcb_core::Nm::from_mm(0.127),
             layer: Layer::TopCopper,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
             source: TraceSource::Autorouted,
         },
@@ -254,7 +259,7 @@ fn an_inner_layer_trace_survives_being_written() {
             )],
             width: cypcb_core::Nm::from_mm(0.2),
             layer: Layer::Inner(0),
-            net_id: net,
+            net_id: Some(net),
             locked: true,
             source: TraceSource::Autorouted,
         },

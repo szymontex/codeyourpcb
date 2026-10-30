@@ -34,8 +34,9 @@ fn census(world: &mut BoardWorld) -> BTreeMap<String, usize> {
     };
     let mut out = BTreeMap::new();
     for trace in traces {
-        let net = world
-            .net_name(trace.net_id)
+        let net = trace
+            .net_id
+            .and_then(|net| world.net_name(net))
             .unwrap_or("unnamed")
             .to_string();
         *out.entry(net).or_insert(0) += 1;
@@ -52,8 +53,9 @@ fn segments(world: &mut BoardWorld) -> Vec<(String, String, i64, i64, i64, i64)>
     };
     let mut out = Vec::new();
     for trace in &traces {
-        let net = world
-            .net_name(trace.net_id)
+        let net = trace
+            .net_id
+            .and_then(|net| world.net_name(net))
             .unwrap_or("unnamed")
             .to_string();
         for segment in &trace.segments {
@@ -81,7 +83,11 @@ fn vias(world: &mut BoardWorld) -> Vec<(String, i64, i64, i64, i64)> {
     let mut out: Vec<_> = placed
         .into_iter()
         .map(|via| {
-            let net = world.net_name(via.net_id).unwrap_or("unnamed").to_string();
+            let net = via
+                .net_id
+                .and_then(|net| world.net_name(net))
+                .unwrap_or("unnamed")
+                .to_string();
             (
                 net,
                 via.position.x.raw(),
@@ -142,7 +148,7 @@ fn add_trace(world: &mut BoardWorld, net: &str, layer: Layer, segments: Vec<Trac
             segments,
             width: Nm::from_mm(0.25),
             layer,
-            net_id,
+            net_id: Some(net_id),
             locked: false,
             source: TraceSource::Manual,
         },
@@ -335,7 +341,7 @@ fn a_via_survives_and_its_diameter_is_the_documented_casualty() {
             drill: Nm::from_mm(0.3),
             // Deliberately not twice the drill.
             outer_diameter: Nm::from_mm(0.9),
-            net_id,
+            net_id: Some(net_id),
             start_layer: Layer::TopCopper,
             end_layer: Layer::BottomCopper,
             locked: false,
@@ -412,7 +418,7 @@ fn a_net_carrying_only_a_via_is_declared_too() {
             position: Point::from_mm(20.0, 10.0),
             drill: Nm::from_mm(0.3),
             outer_diameter: Nm::from_mm(0.6),
-            net_id,
+            net_id: Some(net_id),
             start_layer: Layer::TopCopper,
             end_layer: Layer::BottomCopper,
             locked: false,

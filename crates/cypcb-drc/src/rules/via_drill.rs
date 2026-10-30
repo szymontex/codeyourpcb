@@ -62,7 +62,7 @@ mod tests {
             outer_diameter: Nm::from_mm(drill_mm * 2.0),
             start_layer: Layer::TopCopper,
             end_layer: Layer::BottomCopper,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
         });
         world

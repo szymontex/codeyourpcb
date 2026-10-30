@@ -15,6 +15,11 @@ use cypcb_world::{BoardWorld, FootprintRef, Layer, NetConnections, NetId, Positi
 
 use crate::grid::{index_to_layer, layer_to_index};
 
+/// The owner of a drawn trace that is on no net. Interned nets count up from
+/// zero, so no routed net is `NO_NET`: every net sees such a trace as another
+/// net's copper and keeps its clearance from it.
+const NO_NET: NetId = NetId(u32::MAX);
+
 /// Copper and keepouts the board had before routing, which a replacement
 /// segment has to clear as much as the routed copper.
 ///
@@ -147,7 +152,7 @@ impl BoardObstacles {
                 continue;
             }
             pads.push(PadCopper {
-                net: Some(via.net_id),
+                net: via.net_id,
                 center: via.position,
                 radius: Nm::new(via.outer_diameter.raw() / 2),
                 layers,
@@ -170,7 +175,7 @@ impl BoardObstacles {
             .flat_map(|trace| {
                 trace.segments.iter().enumerate().map(|(i, seg)| {
                     RouteSegment::new(
-                        trace.net_id,
+                        trace.net_id.unwrap_or(NO_NET),
                         trace.layer,
                         trace.width_at(i),
                         seg.start,
@@ -885,6 +890,51 @@ mod tests {
             start,
             end,
         )
+    }
+
+    #[test]
+    fn a_via_on_no_net_is_in_the_way_of_every_net() {
+        // The direct top segment between the pair runs through a via the
+        // designer placed on no net. Net 0 is the first net on the board -
+        // what copper on no net used to be read as - and its pair may not
+        // take a path through that via.
+        use cypcb_world::components::trace::Via;
+        let build = |obstacle: bool| {
+            let mut world = BoardWorld::new();
+            world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(20.0)), 2);
+            world.intern_net("FIRST");
+            if obstacle {
+                let mut via = Via::new(Point::from_mm(15.0, 0.0), NetId::new(0));
+                via.net_id = None;
+                world.spawn_entity((via,));
+            }
+            BoardObstacles::from_board(&mut world, &FootprintLibrary::new())
+        };
+        let pair = || {
+            (
+                vec![
+                    make_seg(0, Layer::TopCopper, 0.0, 0.0, 10.0, 0.0),
+                    make_seg(0, Layer::BottomCopper, 10.0, 0.0, 20.0, 0.0),
+                    make_seg(0, Layer::TopCopper, 20.0, 0.0, 30.0, 0.0),
+                ],
+                vec![
+                    make_via(0, 10.0, 0.0, Layer::TopCopper, Layer::BottomCopper),
+                    make_via(0, 20.0, 0.0, Layer::BottomCopper, Layer::TopCopper),
+                ],
+            )
+        };
+        let optimize = |board: &BoardObstacles| {
+            let (segments, vias) = pair();
+            optimize_vias(segments, vias, board, Nm::from_mm(0.127), Nm(0))
+                .1
+                .len()
+        };
+        assert_eq!(
+            optimize(&build(false)),
+            0,
+            "the control: nothing in the way"
+        );
+        assert_eq!(optimize(&build(true)), 2, "a via on no net is in the way");
     }
 
     #[test]

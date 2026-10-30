@@ -42,7 +42,7 @@ fn crossing_board(same_layer: bool) -> BoardWorld {
                 )],
                 width: Nm::from_mm(0.2),
                 layer,
-                net_id: net,
+                net_id: Some(net),
                 locked: false,
                 source: TraceSource::Autorouted,
             },

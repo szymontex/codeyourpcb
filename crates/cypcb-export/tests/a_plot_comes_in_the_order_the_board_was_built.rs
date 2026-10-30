@@ -107,7 +107,7 @@ fn board(split: bool) -> (BoardWorld, FootprintLibrary) {
                 )],
                 width: Nm::from_mm(0.2),
                 layer: Layer::TopCopper,
-                net_id: net,
+                net_id: Some(net),
                 locked: false,
                 source: TraceSource::Manual,
             },

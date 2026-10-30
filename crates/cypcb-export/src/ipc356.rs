@@ -266,7 +266,12 @@ pub fn export_ipc356(
     for via in vias {
         let through = via.is_through_hole();
         let (upper, lower) = via.span();
-        let Some(net) = world.net_name(via.net_id).map(str::to_string) else {
+        // A via on no net is not a test point, as a pad on no net is not.
+        let Some(net) = via
+            .net_id
+            .and_then(|id| world.net_name(id))
+            .map(str::to_string)
+        else {
             continue;
         };
         points.push(TestPoint {

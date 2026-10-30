@@ -97,7 +97,7 @@ fn a_via_never_lands_on_foreign_copper() {
         }],
         width: mm(0.5),
         layer: Layer::TopCopper,
-        net_id: signal,
+        net_id: Some(signal),
         locked: false,
         source: TraceSource::Manual,
     });

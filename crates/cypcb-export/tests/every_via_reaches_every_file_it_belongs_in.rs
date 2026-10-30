@@ -84,7 +84,7 @@ fn board(vias: &[&Case]) -> (BoardWorld, FootprintLibrary) {
     let net = world.intern_net("GND");
     for case in vias {
         let mut via = case.via;
-        via.net_id = net;
+        via.net_id = Some(net);
         world.ecs_mut().spawn((via, net));
     }
     (world, FootprintLibrary::new())

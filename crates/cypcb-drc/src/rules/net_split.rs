@@ -234,11 +234,16 @@ pub fn copper_pieces(world: &mut BoardWorld) -> Vec<NetCopper> {
 
     for trace in &traces {
         let layer_mask = trace.layer.to_copper_mask();
-        if layer_mask == 0 || !by_net.contains_key(&trace.net_id.id()) {
+        // Copper on no net belongs to no net's pieces, so it can neither
+        // join nor cut one.
+        let Some(net) = trace.net_id else {
+            continue;
+        };
+        if layer_mask == 0 || !by_net.contains_key(&net.id()) {
             continue;
         }
         let half_width = trace.width.0 / 2;
-        let features = by_net.entry(trace.net_id.id()).or_default();
+        let features = by_net.entry(net.id()).or_default();
         for segment in &trace.segments {
             let a = [segment.start.x.0, segment.start.y.0];
             let b = [segment.end.x.0, segment.end.y.0];
@@ -261,7 +266,7 @@ pub fn copper_pieces(world: &mut BoardWorld) -> Vec<NetCopper> {
     }
 
     for via in &vias {
-        let Some(features) = by_net.get_mut(&via.net_id.id()) else {
+        let Some(features) = via.net_id.and_then(|net| by_net.get_mut(&net.id())) else {
             continue;
         };
         let copper = Copper::circle(
@@ -561,12 +566,44 @@ mod tests {
                 segments,
                 width: Nm::from_mm(0.25),
                 layer,
-                net_id: net,
+                net_id: Some(net),
                 locked: false,
                 source: TraceSource::Manual,
             },
             net,
         ));
+    }
+
+    fn trace_on_no_net(world: &mut BoardWorld, layer: Layer, points: &[(f64, f64)]) {
+        let segments = points
+            .windows(2)
+            .map(|pair| {
+                TraceSegment::new(
+                    Point::from_mm(pair[0].0, pair[0].1),
+                    Point::from_mm(pair[1].0, pair[1].1),
+                )
+            })
+            .collect();
+        world.spawn_entity((Trace {
+            segments,
+            width: Nm::from_mm(0.25),
+            layer,
+            net_id: None,
+            locked: false,
+            source: TraceSource::Manual,
+        },));
+    }
+
+    fn via_on_no_net(world: &mut BoardWorld, at: (f64, f64)) {
+        world.spawn_entity((Via {
+            position: Point::from_mm(at.0, at.1),
+            drill: Nm::from_mm(0.3),
+            outer_diameter: Nm::from_mm(0.6),
+            start_layer: Layer::TopCopper,
+            end_layer: Layer::BottomCopper,
+            net_id: None,
+            locked: false,
+        },));
     }
 
     fn via(world: &mut BoardWorld, net: NetId, at: (f64, f64)) {
@@ -577,7 +614,7 @@ mod tests {
                 outer_diameter: Nm::from_mm(0.6),
                 start_layer: Layer::TopCopper,
                 end_layer: Layer::BottomCopper,
-                net_id: net,
+                net_id: Some(net),
                 locked: false,
             },
             net,
@@ -592,7 +629,7 @@ mod tests {
                 outer_diameter: Nm::from_mm(0.6),
                 start_layer: Layer::TopCopper,
                 end_layer: Layer::Inner(1),
-                net_id: net,
+                net_id: Some(net),
                 locked: false,
             },
             net,
@@ -648,6 +685,45 @@ mod tests {
             &[(r3.0, 20.0), (r3.0, 10.0)],
         );
         assert!(splits(&mut world).is_empty());
+    }
+
+    #[test]
+    fn copper_on_no_net_joins_nothing() {
+        // The track that would join R3 to the rest, drawn on no net: the net
+        // is as cut as it was. Read as the first net on the board - GND here -
+        // it joined them.
+        let (mut world, _, [_, _, r3]) = cut_board();
+        trace_on_no_net(&mut world, Layer::TopCopper, &[(r3.0, 20.0), (r3.0, 10.0)]);
+        let found = splits(&mut world);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(
+            found[0],
+            "net GND is in pieces: no copper joins R3.1 to R1.1, R2.1"
+        );
+    }
+
+    #[test]
+    fn a_via_on_no_net_joins_no_layers() {
+        // The bottom-layer branch of the next test with the via that closes it
+        // on no net: still cut.
+        let mut world = BoardWorld::new();
+        let gnd = world.intern_net("GND");
+        let r1 = part(&mut world, "R1", (10.0, 10.0), gnd);
+        let r2 = part(&mut world, "R2", (30.0, 10.0), gnd);
+        trace(&mut world, gnd, Layer::TopCopper, &[r1, r2]);
+        trace(
+            &mut world,
+            gnd,
+            Layer::BottomCopper,
+            &[(20.0, r1.1), (20.0, 25.0)],
+        );
+        via(&mut world, gnd, (20.0, 25.0));
+        let r3 = part(&mut world, "R3", (25.0, 25.0), gnd);
+        trace(&mut world, gnd, Layer::TopCopper, &[(20.0, 25.0), r3]);
+        via_on_no_net(&mut world, (20.0, r1.1));
+        let found = splits(&mut world);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("no copper joins R3.1 to R1.1, R2.1"));
     }
 
     #[test]

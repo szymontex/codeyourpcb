@@ -205,3 +205,45 @@ fn a_curve_is_left_alone() {
 
     assert_eq!(corners(&mut world), Vec::<String>::new());
 }
+
+/// A board carrying one trace per polyline, each on no net.
+fn board_on_no_net(polylines: &[&[(f64, f64)]]) -> BoardWorld {
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(40.0)), 2);
+    for points in polylines {
+        let mut trace = Trace::new(cypcb_world::NetId::new(0));
+        trace.net_id = None;
+        trace.width = Nm::from_mm(0.25);
+        for pair in points.windows(2) {
+            trace.add_segment(TraceSegment::new(
+                Point::from_mm(pair[0].0, pair[0].1),
+                Point::from_mm(pair[1].0, pair[1].1),
+            ));
+        }
+        world.ecs_mut().spawn((trace,));
+    }
+    world
+}
+
+#[test]
+fn a_corner_in_copper_on_no_net_is_still_a_trap() {
+    // A 45 degree corner in one run is an acid trap whatever net it is on.
+    let mut world = board_on_no_net(&[&[(0.0, 0.0), (10.0, 0.0), (0.0, 4.0)]]);
+    assert_eq!(corners(&mut world).len(), 1);
+}
+
+#[test]
+fn two_runs_on_no_net_that_meet_sharply_are_not_one_net() {
+    // Two straight runs ending at one point and leaving it 22 degrees apart.
+    // On one net that is a corner; on no net they are not the same copper, so
+    // there is no junction to measure.
+    let runs: [&[(f64, f64)]; 2] = [&[(0.0, 0.0), (10.0, 0.0)], &[(10.0, 0.0), (0.0, 4.0)]];
+    let mut on_no_net = board_on_no_net(&runs);
+    assert_eq!(corners(&mut on_no_net), Vec::<String>::new());
+
+    let mut on_one_net = board(&[
+        ("SIG", Layer::TopCopper, runs[0]),
+        ("SIG", Layer::TopCopper, runs[1]),
+    ]);
+    assert_eq!(corners(&mut on_one_net).len(), 1, "the control");
+}

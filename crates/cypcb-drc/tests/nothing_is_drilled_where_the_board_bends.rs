@@ -42,7 +42,7 @@ fn board(via_x: f64, bends: bool, name: Option<&str>) -> BoardWorld {
             position: Point::from_mm(via_x, 10.0),
             drill: Nm::from_mm(0.3),
             outer_diameter: Nm::from_mm(0.6),
-            net_id,
+            net_id: Some(net_id),
             start_layer: Layer::TopCopper,
             end_layer: Layer::BottomCopper,
             locked: false,

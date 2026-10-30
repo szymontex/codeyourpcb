@@ -363,7 +363,7 @@ fn how_many_pins_no_copper_reaches() {
                 let ecs = world.ecs_mut();
                 let mut query = ecs.query::<&cypcb_world::components::trace::Trace>();
                 for trace in query.iter(ecs) {
-                    if trace.net_id != net {
+                    if trace.net_id != Some(net) {
                         continue;
                     }
                     for segment in &trace.segments {
@@ -411,7 +411,7 @@ fn how_many_pins_no_copper_reaches() {
                 let mut query = ecs.query::<&cypcb_world::components::trace::Via>();
                 let mut nearest_via = f64::MAX;
                 for via in query.iter(ecs) {
-                    if via.net_id != net {
+                    if via.net_id != Some(net) {
                         continue;
                     }
                     let dx = (via.position.x.0 - violation.location.x.0) as f64 / 1_000_000.0;
@@ -431,7 +431,7 @@ fn how_many_pins_no_copper_reaches() {
                 let ecs = world.ecs_mut();
                 let mut query = ecs.query::<&cypcb_world::components::trace::Trace>();
                 for trace in query.iter(ecs) {
-                    if trace.net_id != net {
+                    if trace.net_id != Some(net) {
                         continue;
                     }
                     for segment in &trace.segments {

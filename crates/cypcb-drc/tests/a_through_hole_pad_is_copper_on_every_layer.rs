@@ -96,7 +96,7 @@ fn board(through_hole: bool, track: (NetId, Layer, Point, Point)) -> BoardWorld 
             segments: vec![TraceSegment::new(start, end)],
             width: Nm::from_mm(0.2),
             layer,
-            net_id: net,
+            net_id: Some(net),
             locked: false,
             source: TraceSource::Autorouted,
         },

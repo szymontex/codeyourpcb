@@ -91,8 +91,10 @@ impl DrcRule for MinTraceWidthRule {
         in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
             .into_iter()
             .filter_map(|(entity, trace)| {
-                let required = net_width
-                    .get(&trace.net_id.id())
+                // Copper on no net states no width of its own.
+                let required = trace
+                    .net_id
+                    .and_then(|net| net_width.get(&net.id()))
                     .copied()
                     .map_or(min_width, |stated| min_width.max(stated));
                 (trace.width < required).then(|| {
@@ -118,7 +120,7 @@ mod tests {
             )],
             width: Nm::from_mm(width_mm),
             layer: Layer::TopCopper,
-            net_id: NetId::new(1),
+            net_id: Some(NetId::new(1)),
             locked: false,
             source: TraceSource::Manual,
         };

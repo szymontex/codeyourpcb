@@ -247,7 +247,7 @@ fn copper_reaches(
     mask: u32,
 ) -> bool {
     for trace in traces {
-        if trace.net_id != net {
+        if trace.net_id != Some(net) {
             continue;
         }
         match layer_bit(trace.layer) {
@@ -273,7 +273,7 @@ fn copper_reaches(
     }
 
     for via in vias {
-        if via.net_id != net {
+        if via.net_id != Some(net) {
             continue;
         }
         let disc = Copper::circle(

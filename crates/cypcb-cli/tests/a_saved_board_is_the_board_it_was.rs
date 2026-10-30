@@ -194,7 +194,16 @@ fn content(world: &mut BoardWorld) -> Content {
             .flat_map(|t| {
                 t.segments
                     .iter()
-                    .map(|s| format!("{}|{:?}|{:?}|{:?}", net(t.net_id.0), t.layer, t.width, s))
+                    .map(|s| {
+                        format!(
+                            "{}|{:?}|{:?}|{:?}",
+                            t.net_id
+                                .map_or_else(|| "(no net)".to_string(), |n| net(n.0)),
+                            t.layer,
+                            t.width,
+                            s
+                        )
+                    })
                     .collect::<Vec<_>>()
             })
             .collect()
@@ -207,7 +216,8 @@ fn content(world: &mut BoardWorld) -> Content {
             .map(|v| {
                 format!(
                     "{}|{:?}|{:?}|{:?}|{:?}|{:?}|{}",
-                    net(v.net_id.0),
+                    v.net_id
+                        .map_or_else(|| "(no net)".to_string(), |n| net(n.0)),
                     v.position,
                     v.drill,
                     v.outer_diameter,

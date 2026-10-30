@@ -28,7 +28,7 @@
 //!     segments,
 //!     width: Nm::from_mm(0.2),
 //!     layer: Layer::TopCopper,
-//!     net_id: NetId::new(0),
+//!     net_id: Some(NetId::new(0)),
 //!     locked: false,
 //!     source: TraceSource::Manual,
 //! };
@@ -233,7 +233,8 @@ pub enum TraceSource {
 /// - `segments`: The polyline path as a vector of segments
 /// - `width`: Trace width in nanometers
 /// - `layer`: Which copper layer the trace is on
-/// - `net_id`: Which net this trace belongs to
+/// - `net_id`: Which net this trace belongs to, or `None` for copper on no net
+///   (KiCad's net 0), which is foreign to every net and to other copper on no net
 /// - `locked`: If true, autorouter should not modify this trace
 /// - `source`: Whether trace was manual or autorouted
 ///
@@ -250,7 +251,7 @@ pub enum TraceSource {
 ///     ],
 ///     width: Nm::from_mm(0.2),
 ///     layer: Layer::TopCopper,
-///     net_id: NetId::new(0),
+///     net_id: Some(NetId::new(0)),
 ///     locked: true,
 ///     source: TraceSource::Manual,
 /// };
@@ -267,7 +268,7 @@ pub struct Trace {
     /// Which copper layer this trace is on.
     pub layer: Layer,
     /// The net this trace belongs to.
-    pub net_id: NetId,
+    pub net_id: Option<NetId>,
     /// If true, autorouter should not modify this trace.
     pub locked: bool,
     /// Origin of this trace (manual or autorouted).
@@ -608,7 +609,7 @@ impl Trace {
             segments: Vec::new(),
             width: Nm::from_mm(0.2), // Default 0.2mm trace width
             layer: Layer::TopCopper,
-            net_id,
+            net_id: Some(net_id),
             locked: false,
             source: TraceSource::Manual,
         }
@@ -701,7 +702,8 @@ impl Trace {
 /// - `outer_diameter`: Total via diameter including annular ring
 /// - `start_layer`: Upper layer connection
 /// - `end_layer`: Lower layer connection
-/// - `net_id`: Which net this via belongs to
+/// - `net_id`: Which net this via belongs to, or `None` for a via on no net, as for
+///   a trace
 /// - `locked`: If true, autorouter should not modify this via
 ///
 /// # Example
@@ -717,7 +719,7 @@ impl Trace {
 ///     outer_diameter: Nm::from_mm(0.6),
 ///     start_layer: Layer::TopCopper,
 ///     end_layer: Layer::BottomCopper,
-///     net_id: NetId::new(0),
+///     net_id: Some(NetId::new(0)),
 ///     locked: false,
 /// };
 ///
@@ -736,7 +738,7 @@ pub struct Via {
     /// Lower layer connection.
     pub end_layer: Layer,
     /// The net this via belongs to.
-    pub net_id: NetId,
+    pub net_id: Option<NetId>,
     /// If true, autorouter should not modify this via.
     pub locked: bool,
 }
@@ -770,7 +772,7 @@ impl Via {
             outer_diameter: Nm::from_mm(0.6),
             start_layer: Layer::TopCopper,
             end_layer: Layer::BottomCopper,
-            net_id,
+            net_id: Some(net_id),
             locked: false,
         }
     }
@@ -790,7 +792,7 @@ impl Via {
     ///     outer_diameter: Nm::from_mm(0.6),
     ///     start_layer: cypcb_world::Layer::TopCopper,
     ///     end_layer: cypcb_world::Layer::BottomCopper,
-    ///     net_id: NetId::new(0),
+    ///     net_id: Some(NetId::new(0)),
     ///     locked: false,
     /// };
     ///
@@ -930,7 +932,7 @@ mod tests {
         assert!(trace.segments.is_empty());
         assert_eq!(trace.width, Nm::from_mm(0.2));
         assert_eq!(trace.layer, Layer::TopCopper);
-        assert_eq!(trace.net_id, NetId::new(42));
+        assert_eq!(trace.net_id, Some(NetId::new(42)));
         assert!(!trace.locked);
         assert_eq!(trace.source, TraceSource::Manual);
     }
@@ -1005,7 +1007,7 @@ mod tests {
         assert_eq!(via.outer_diameter, Nm::from_mm(0.6));
         assert_eq!(via.start_layer, Layer::TopCopper);
         assert_eq!(via.end_layer, Layer::BottomCopper);
-        assert_eq!(via.net_id, NetId::new(5));
+        assert_eq!(via.net_id, Some(NetId::new(5)));
         assert!(!via.locked);
     }
 
@@ -1017,7 +1019,7 @@ mod tests {
             outer_diameter: Nm::from_mm(0.6),
             start_layer: Layer::TopCopper,
             end_layer: Layer::BottomCopper,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
             locked: false,
         };
 
@@ -1036,7 +1038,7 @@ mod tests {
             outer_diameter: Nm::from_mm(0.4),
             start_layer: Layer::TopCopper,
             end_layer: Layer::Inner(1), // Not bottom
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
             locked: false,
         };
         assert!(!blind_via.is_through_hole());
@@ -1050,7 +1052,7 @@ mod tests {
             outer_diameter: Nm::from_mm(0.4),
             start_layer,
             end_layer,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
             locked: false,
         };
         let bits = |layers: &[Layer]| layers.iter().fold(0, |m, l| m | l.to_copper_mask());
@@ -1086,7 +1088,7 @@ mod tests {
             outer_diameter: Nm::from_mm(0.4),
             start_layer,
             end_layer,
-            net_id: NetId::new(0),
+            net_id: Some(NetId::new(0)),
             locked: false,
         };
         let stack = [

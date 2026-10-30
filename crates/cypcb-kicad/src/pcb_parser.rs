@@ -515,13 +515,19 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     // Copper on a layer this importer has no word for, named rather than moved.
     let mut track_refusals: Vec<String> = Vec::new();
     let mut route_segments: Vec<RouteSegment> = Vec::new();
+    let mut no_net_segments: Vec<FileSegment> = Vec::new();
     for elem in elements {
         if let Some(name) = list_name(elem) {
             if name == "segment" {
                 if let Some(seg) =
                     parse_segment(elem, &kicad_net_map, board_origin, &mut track_refusals)?
                 {
-                    route_segments.push(seg);
+                    match seg.net {
+                        Some(net) => route_segments.push(RouteSegment::new(
+                            net, seg.layer, seg.width, seg.start, seg.end,
+                        )),
+                        None => no_net_segments.push(seg),
+                    }
                 }
             }
         }
@@ -542,8 +548,12 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         if let Some((trace, curve)) =
             parse_track_arc(elem, &kicad_net_map, board_origin, &mut track_refusals)?
         {
-            let net_id = trace.net_id;
-            world.spawn_entity((trace, net_id, curve));
+            // Copper on no net carries no `NetId`: the checker reads a missing
+            // component as "belongs to no net", which is what it is.
+            match trace.net_id {
+                Some(net_id) => world.spawn_entity((trace, net_id, curve)),
+                None => world.spawn_entity((trace, curve)),
+            };
             arc_count += 1;
         }
     }
@@ -551,16 +561,70 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
 
     // 7. Extract vias
     let mut via_placements: Vec<ViaPlacement> = Vec::new();
+    let mut no_net_vias: Vec<FileVia> = Vec::new();
     for elem in elements {
         if let Some(name) = list_name(elem) {
             if name == "via" {
                 if let Some(via) =
                     parse_via(elem, &kicad_net_map, board_origin, &mut track_refusals)?
                 {
-                    via_placements.push(via);
+                    match via.net {
+                        Some(net) => via_placements.push(match via.outer_diameter {
+                            Some(size) => ViaPlacement::from_file(
+                                net,
+                                via.position,
+                                via.drill,
+                                size,
+                                via.start_layer,
+                                via.end_layer,
+                            ),
+                            None => ViaPlacement::new(
+                                net,
+                                via.position,
+                                via.drill,
+                                via.start_layer,
+                                via.end_layer,
+                            ),
+                        }),
+                        None => no_net_vias.push(via),
+                    }
                 }
             }
         }
+    }
+
+    // 7b. Copper on no net (`(net 0)`, KiCad's unconnected net).
+    //
+    // It is not handed over as reference routes: a `RouteSegment` and a
+    // `ViaPlacement` belong to a net, and giving these one is how they came
+    // to join the first net on the board. Each is spawned alone, as a trace
+    // or a via with no net and no `NetId` component. Copper on no net is
+    // foreign to every net and to the other copper on no net, so two pieces
+    // of it are never merged into one trace.
+    for seg in &no_net_segments {
+        world.spawn_entity((cypcb_world::components::trace::Trace {
+            segments: vec![cypcb_world::components::trace::TraceSegment::new(
+                seg.start, seg.end,
+            )],
+            width: seg.width,
+            layer: seg.layer,
+            net_id: None,
+            locked: false,
+            source: cypcb_world::components::trace::TraceSource::Manual,
+        },));
+    }
+    for via in &no_net_vias {
+        world.spawn_entity((cypcb_world::components::trace::Via {
+            position: via.position,
+            drill: via.drill,
+            // The router's own ring for a via the file gives no size, as
+            // `ViaPlacement::new` takes it.
+            outer_diameter: via.outer_diameter.unwrap_or(Nm(via.drill.0 * 2)),
+            start_layer: via.start_layer,
+            end_layer: via.end_layer,
+            net_id: None,
+            locked: false,
+        },));
     }
 
     // 8. Extract copper pours and rule areas
@@ -617,8 +681,8 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     }
 
     // Build reference routes
-    let trace_segment_count = route_segments.len();
-    let via_count_val = via_placements.len();
+    let trace_segment_count = route_segments.len() + no_net_segments.len();
+    let via_count_val = via_placements.len() + no_net_vias.len();
     let reference_routes = if route_segments.is_empty() && via_placements.is_empty() {
         None
     } else {
@@ -2190,6 +2254,26 @@ fn axis_aligned_rectangle(points: &[(f64, f64)]) -> Option<Rect> {
     ))
 }
 
+/// A track segment as the file states it. `net` is `None` for `(net 0)`, the
+/// unconnected net, and for a net number the file never named.
+struct FileSegment {
+    net: Option<NetId>,
+    layer: Layer,
+    width: Nm,
+    start: Point,
+    end: Point,
+}
+
+/// A via as the file states it, with the same `net`.
+struct FileVia {
+    net: Option<NetId>,
+    position: Point,
+    drill: Nm,
+    outer_diameter: Option<Nm>,
+    start_layer: Layer,
+    end_layer: Layer,
+}
+
 /// Read one `(segment ...)`.
 ///
 /// `origin` is the board's own corner in file coordinates, and it is
@@ -2206,7 +2290,7 @@ fn parse_segment(
     kicad_net_map: &NetIndex,
     origin: (f64, f64),
     refusals: &mut Vec<String>,
-) -> Result<Option<RouteSegment>, KicadPcbError> {
+) -> Result<Option<FileSegment>, KicadPcbError> {
     let list = match sexp.list() {
         Ok(l) => l,
         Err(_) => return Ok(None),
@@ -2220,7 +2304,7 @@ fn parse_segment(
     // is then refused rather than moved, because moving it is silent and a
     // refusal is not.
     let mut unknown_layer: Option<String> = None;
-    let mut net_id = NetId::new(0);
+    let mut net: Option<NetId> = None;
 
     for child in &list[1..] {
         if let Some(name) = list_name(child) {
@@ -2264,7 +2348,7 @@ fn parse_segment(
                 }
                 "net" => {
                     if let Some(id) = kicad_net_map.resolve(child) {
-                        net_id = id;
+                        net = Some(id);
                     }
                 }
                 _ => {}
@@ -2280,7 +2364,13 @@ fn parse_segment(
     }
 
     Ok(match (start, end) {
-        (Some(s), Some(e)) => Some(RouteSegment::new(net_id, layer, width, s, e)),
+        (Some(start), Some(end)) => Some(FileSegment {
+            net,
+            layer,
+            width,
+            start,
+            end,
+        }),
         _ => None,
     })
 }
@@ -2318,7 +2408,7 @@ fn parse_track_arc(
     // is then refused rather than moved, because moving it is silent and a
     // refusal is not.
     let mut unknown_layer: Option<String> = None;
-    let mut net_id = NetId::new(0);
+    let mut net_id: Option<NetId> = None;
 
     for child in &list[1..] {
         let Some(name) = list_name(child) else {
@@ -2359,7 +2449,7 @@ fn parse_track_arc(
             }
             "net" => {
                 if let Some(id) = kicad_net_map.resolve(child) {
-                    net_id = id;
+                    net_id = Some(id);
                 }
             }
             _ => {}
@@ -2418,7 +2508,7 @@ fn parse_via(
     kicad_net_map: &NetIndex,
     origin: (f64, f64),
     refusals: &mut Vec<String>,
-) -> Result<Option<ViaPlacement>, KicadPcbError> {
+) -> Result<Option<FileVia>, KicadPcbError> {
     let list = match sexp.list() {
         Ok(l) => l,
         Err(_) => return Ok(None),
@@ -2438,7 +2528,7 @@ fn parse_via(
     let mut unknown_layer: Option<String> = None;
     let mut start_layer = Layer::TopCopper;
     let mut end_layer = Layer::BottomCopper;
-    let mut net_id = NetId::new(0);
+    let mut net: Option<NetId> = None;
 
     for child in &list[1..] {
         if let Some(name) = list_name(child) {
@@ -2492,7 +2582,7 @@ fn parse_via(
                 }
                 "net" => {
                     if let Some(id) = kicad_net_map.resolve(child) {
-                        net_id = id;
+                        net = Some(id);
                     }
                 }
                 _ => {}
@@ -2508,9 +2598,13 @@ fn parse_via(
         return Ok(None);
     }
 
-    Ok(position.map(|pos| match outer_diameter {
-        Some(size) => ViaPlacement::from_file(net_id, pos, drill, size, start_layer, end_layer),
-        None => ViaPlacement::new(net_id, pos, drill, start_layer, end_layer),
+    Ok(position.map(|position| FileVia {
+        net,
+        position,
+        drill,
+        outer_diameter,
+        start_layer,
+        end_layer,
     }))
 }
 

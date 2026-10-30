@@ -1021,9 +1021,9 @@ fn match_diff_pair_lengths(
             let mut positive_length = 0i64;
             let mut negative_length = 0i64;
             for trace in in_build_order::<&Trace>(world.ecs_mut()) {
-                if trace.net_id == positive_id {
+                if trace.net_id == Some(positive_id) {
                     positive_length += trace.total_length().0;
-                } else if trace.net_id == negative_id {
+                } else if trace.net_id == Some(negative_id) {
                     negative_length += trace.total_length().0;
                 }
             }
@@ -1049,7 +1049,7 @@ fn match_diff_pair_lengths(
         let target = {
             in_build_order::<(Entity, &Trace)>(world.ecs_mut())
                 .into_iter()
-                .filter(|(_, trace)| trace.net_id == short_net)
+                .filter(|(_, trace)| trace.net_id == Some(short_net))
                 .flat_map(|(entity, trace)| {
                     trace
                         .segments
@@ -1821,7 +1821,7 @@ fn place_stitching_vias(world: &mut BoardWorld, footprint_lib: &FootprintLibrary
                     outer_diameter: spec.diameter,
                     start_layer: crate::Layer::TopCopper,
                     end_layer: crate::Layer::BottomCopper,
-                    net_id: net,
+                    net_id: Some(net),
                     locked: false,
                 },
                 crate::components::Stitched,
@@ -1980,7 +1980,7 @@ fn sync_trace(
                             segments,
                             width,
                             layer: current_layer,
-                            net_id,
+                            net_id: Some(net_id),
                             locked: trace_def.locked,
                             source: TraceSource::Manual,
                         };
@@ -2041,7 +2041,7 @@ fn sync_trace(
                             segments,
                             width,
                             layer: current_layer,
-                            net_id,
+                            net_id: Some(net_id),
                             locked: trace_def.locked,
                             source: TraceSource::Manual,
                         };
@@ -2121,7 +2121,7 @@ fn sync_trace(
             segments,
             width,
             layer,
-            net_id,
+            net_id: Some(net_id),
             locked: trace_def.locked,
             source: TraceSource::Manual,
         };
@@ -4475,7 +4475,7 @@ fn spawn_via(
         outer_diameter,
         start_layer,
         end_layer,
-        net_id,
+        net_id: Some(net_id),
         locked: trace_def.locked,
     };
     let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end);

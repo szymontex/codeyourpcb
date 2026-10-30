@@ -71,7 +71,7 @@ impl DrcRule for ImpedanceRule {
                 .filter_map(|(entity, trace)| {
                     Some((
                         entity,
-                        trace.net_id,
+                        trace.net_id?,
                         trace.layer,
                         trace.width,
                         midpoint(trace)?,
@@ -203,7 +203,7 @@ fn unchecked_without_a_stack(world: &mut BoardWorld) -> Vec<DrcViolation> {
         let ecs = world.ecs_mut();
         in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
             .into_iter()
-            .filter_map(|(entity, trace)| Some((entity, trace.net_id, midpoint(trace)?)))
+            .filter_map(|(entity, trace)| Some((entity, trace.net_id?, midpoint(trace)?)))
             .collect()
     };
 
