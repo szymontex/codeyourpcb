@@ -186,6 +186,10 @@ pub fn find_path_with_zones(
                 continue;
             }
             let target = (nx, ny, target_layer);
+            // A rule area that forbids vias keeps one out whatever else the cell holds.
+            if grid.via_forbidden(nx as u32, ny as u32, grid.via_layers(nl, target_layer)) {
+                continue;
+            }
             if grid.is_free(nx as u32, ny as u32, target_layer as usize)
                 || success(&target)
                 || in_pad_zone(nx, ny, pad_zones)

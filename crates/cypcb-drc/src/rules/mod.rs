@@ -206,19 +206,29 @@ impl DrcRule for KeepoutRule {
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let mut violations = Vec::new();
 
-        // Collect all keepout zones
-        let zones: Vec<_> = world
-            .zones()
+        // The keepout zones that forbid footprints. A rule area that forbids
+        // only copper pour or only tracks says nothing about where a part may
+        // stand, and flagging the parts in it reports the area, not the board.
+        let forbids_footprints =
+            |world: &BoardWorld, entity, zone: &cypcb_world::components::Zone| {
+                world.forbids(
+                    entity,
+                    zone,
+                    cypcb_world::components::KeepoutKind::Footprints,
+                )
+            };
+        let rects = world.zones();
+        let zones: Vec<_> = rects
             .into_iter()
-            .filter(|(_, zone)| zone.is_keepout())
+            .filter(|(entity, zone)| forbids_footprints(world, *entity, zone))
             .collect();
 
         // The keepouts drawn as a polygon. A part's centre is in one or it is
         // not, and a notch of a concave outline is not.
-        let outlined: Vec<_> = world
-            .outlined_zones()
+        let polygons = world.outlined_zones();
+        let outlined: Vec<_> = polygons
             .into_iter()
-            .filter(|(_, zone, _)| zone.is_keepout())
+            .filter(|(entity, zone, _)| forbids_footprints(world, *entity, zone))
             .collect();
 
         // If no keepout zones, skip

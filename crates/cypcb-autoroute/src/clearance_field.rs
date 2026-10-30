@@ -237,8 +237,10 @@ impl ClearanceField {
 
     fn seed_zones(&mut self, world: &mut BoardWorld, grid: &RoutingGrid) {
         let zones = world.zones();
-        for (_entity, zone) in &zones {
-            if !zone.is_keepout() {
+        for (entity, zone) in &zones {
+            // The field is the distance a track keeps from copper and keepouts:
+            // the areas that forbid tracks.
+            if !world.forbids(*entity, zone, cypcb_world::components::KeepoutKind::Tracks) {
                 continue;
             }
             let min_gx = grid.nm_to_grid_x(zone.bounds.min.x.raw());
@@ -262,8 +264,8 @@ impl ClearanceField {
         }
 
         // The keepouts drawn as a polygon: the cells the outline reaches.
-        for (_entity, zone, outline) in world.outlined_zones() {
-            if !zone.is_keepout() {
+        for (entity, zone, outline) in world.outlined_zones() {
+            if !world.forbids(entity, &zone, cypcb_world::components::KeepoutKind::Tracks) {
                 continue;
             }
             let cells = grid.cells_meeting(&outline, 0);

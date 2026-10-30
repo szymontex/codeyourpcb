@@ -16,7 +16,7 @@ use cypcb_core::{Nm, Point, Rect};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::components::rotate_about_origin;
 use cypcb_world::components::trace::Via;
-use cypcb_world::components::ZoneOutline;
+use cypcb_world::components::{KeepoutKind, ZoneOutline};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Layer, NetId};
 
@@ -128,6 +128,14 @@ pub struct RoutingGrid {
     /// either and went round its own wire - measured on a two-pad board, a
     /// detour through two vias to reach a pad the hand trace already touched.
     fixed_net: Vec<u32>,
+
+    /// Cells where a via may not be placed, whatever else the cell holds.
+    ///
+    /// Apart from `layers` for the reason a flag there would be wrong: a cell
+    /// flagged in `layers` is blocked to tracks too, and a rule area that
+    /// forbids vias leaves tracks alone. Empty until a keepout forbids vias
+    /// and not tracks, which is no board at all in most designs.
+    no_via: Vec<bool>,
 
     /// The cells inside each piece of hand copper a pad of the ratsnest sits
     /// on, keyed by net and by the pad's own cell.
@@ -251,6 +259,7 @@ impl RoutingGrid {
             net_map,
             pad_net,
             fixed_net,
+            no_via: Vec::new(),
             hand_copper: HashMap::new(),
             fixed_holes: Vec::new(),
         };
@@ -406,10 +415,15 @@ impl RoutingGrid {
     /// Populate zone obstacles from all zones in the world.
     fn populate_zones(&mut self, world: &mut BoardWorld, clearance_cells: u32) {
         let zones = world.zones();
-        for (_entity, zone) in &zones {
-            if !zone.is_keepout() {
-                // Copper pour zones are not obstacles for routing
-                // (they fill around traces, not block them)
+        for (entity, zone) in &zones {
+            // Copper pour zones are not obstacles for routing (they fill
+            // around traces, not block them). A keepout is one for the kinds
+            // it forbids: tracks block the cells to everything, vias block the
+            // placing of a via alone, and pads, footprints and pour are not
+            // things the router lays down.
+            let tracks = world.forbids(*entity, zone, KeepoutKind::Tracks);
+            let vias = world.forbids(*entity, zone, KeepoutKind::Vias);
+            if !tracks && !vias {
                 continue;
             }
 
@@ -429,7 +443,11 @@ impl RoutingGrid {
                 if zone.on_layer(layer_idx) {
                     for gy in min_gy..=max_gy {
                         for gx in min_gx..=max_gx {
-                            self.set_cell(gx, gy, layer_idx as usize, CELL_ZONE);
+                            if tracks {
+                                self.set_cell(gx, gy, layer_idx as usize, CELL_ZONE);
+                            } else {
+                                self.forbid_via_at(gx, gy, layer_idx as usize);
+                            }
                         }
                     }
                 }
@@ -438,19 +456,49 @@ impl RoutingGrid {
 
         // The keepouts drawn as a polygon: the cells the outline reaches and
         // not the cells of its box.
-        for (_entity, zone, outline) in world.outlined_zones() {
-            if !zone.is_keepout() {
+        for (entity, zone, outline) in world.outlined_zones() {
+            let tracks = world.forbids(entity, &zone, KeepoutKind::Tracks);
+            let vias = world.forbids(entity, &zone, KeepoutKind::Vias);
+            if !tracks && !vias {
                 continue;
             }
             let cells = self.cells_meeting(&outline, clearance_cells);
             for layer_idx in 0..self.layer_count {
                 if zone.on_layer(layer_idx) {
                     for &(gx, gy) in &cells {
-                        self.set_cell(gx, gy, layer_idx as usize, CELL_ZONE);
+                        if tracks {
+                            self.set_cell(gx, gy, layer_idx as usize, CELL_ZONE);
+                        } else {
+                            self.forbid_via_at(gx, gy, layer_idx as usize);
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// Mark a cell as one a via may not be placed in.
+    fn forbid_via_at(&mut self, x: u32, y: u32, layer: usize) {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
+            return;
+        }
+        if self.no_via.is_empty() {
+            self.no_via = vec![false; self.layers.len()];
+        }
+        let idx = self.cell_index(x, y, layer);
+        self.no_via[idx] = true;
+    }
+
+    /// Whether a via at this cell, spanning the routing layers in `layers`
+    /// (a mask from [`via_layers`](Self::via_layers)), would sit in an area
+    /// that forbids vias on any layer it passes.
+    #[inline]
+    pub fn via_forbidden(&self, x: u32, y: u32, layers: u32) -> bool {
+        if self.no_via.is_empty() || x >= self.width || y >= self.height {
+            return false;
+        }
+        self.layers_in(layers)
+            .any(|layer| self.no_via[self.cell_index(x, y, layer as usize)])
     }
 
     /// Populate locked trace obstacles.
@@ -1406,6 +1454,7 @@ pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -
         net_map: vec![u32::MAX; total],
         pad_net: vec![u32::MAX; total],
         fixed_net: vec![u32::MAX; total],
+        no_via: Vec::new(),
         hand_copper: HashMap::new(),
         fixed_holes: Vec::new(),
     }

@@ -11,9 +11,8 @@
 //! five.
 //!
 //! What is held here: an area that allows all five is left out, and says so; an
-//! area that forbids anything is still carried, as it was. The model has one kind
-//! of keepout and no per-kind switches, so a partial area is carried as a whole
-//! keepout - a known gap, kept visible by the controls below.
+//! area that forbids anything is carried, for the kinds it forbids
+//! (`a_rule_area_keeps_out_only_what_it_forbids`).
 
 use cypcb_kicad::pcb_parser::{parse_kicad_pcb_str, KicadPcbParseResult};
 use cypcb_world::components::zone::{Zone, ZoneKind};
@@ -112,7 +111,7 @@ fn control_an_area_that_forbids_everything_is_a_keepout() {
 
 #[test]
 fn control_an_area_that_forbids_one_thing_is_still_carried_as_a_keepout() {
-    // The model has one kind of keepout. Each of the five alone keeps the area.
+    // Each of the five alone keeps the area.
     for which in 0..5 {
         let mut switches = ["allowed"; 5];
         switches[which] = "not_allowed";

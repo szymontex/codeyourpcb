@@ -1059,6 +1059,7 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
     // bounding box a pour would be copper where the shape was drawn to avoid
     // it. It is counted and named in `not_written`.
     let mut outlined_zones = 0usize;
+    let mut partial_keepouts = 0usize;
     let zones: Vec<WrittenZone> = {
         let ecs = world.ecs_mut();
         in_build_order::<(
@@ -1066,14 +1067,19 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
             Option<&crate::components::StitchPitch>,
             Option<&crate::components::BendRadius>,
             Option<&crate::components::Hatch>,
+            Option<&crate::components::KeepoutKinds>,
             Option<&crate::components::ZoneOutline>,
         )>(ecs)
         .into_iter()
-        .filter(|(.., outline)| {
+        .filter(|(zone, _, _, _, kinds, outline)| {
             outlined_zones += usize::from(outline.is_some());
+            if outline.is_none() && zone.is_keepout() {
+                partial_keepouts +=
+                    usize::from(!crate::components::KeepoutKinds::of(*kinds).is_all());
+            }
             outline.is_none()
         })
-        .map(|(zone, pitch, radius, hatch, _)| {
+        .map(|(zone, pitch, radius, hatch, _, _)| {
             (
                 zone.clone(),
                 pitch.map(|p| p.0),
@@ -1660,6 +1666,16 @@ pub fn board_as_dsl_reporting(world: &mut BoardWorld) -> WrittenBoard {
             "{outlined_zones} zone(s) that are not rectangles not written: the language has \
              no word for a polygon, and a bounding box would be copper where the shape was \
              drawn to avoid it"
+        ));
+    }
+
+    // A keepout that forbids only some kinds. The language's `keepout` forbids
+    // all five, so one written for a rule area that forbids fewer would keep
+    // out more than the board asked.
+    if partial_keepouts > 0 {
+        not_written.push(format!(
+            "{partial_keepouts} keepout(s) written as forbidding everything: the language has no \
+             word for forbidding only some of tracks, vias, pads, copper pour and footprints"
         ));
     }
 

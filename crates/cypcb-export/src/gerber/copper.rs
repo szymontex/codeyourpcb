@@ -346,6 +346,10 @@ fn export_pours(
         for piece in filled.all() {
             emit_region(*piece, output, format);
         }
+        // A pour a rule area cuts at a slant comes back as convex pieces.
+        for shape in filled.all_shapes() {
+            emit_polygon(shape, output, format);
+        }
     }
 
     // The pours drawn as a polygon, as the convex pieces the filler laid down.
