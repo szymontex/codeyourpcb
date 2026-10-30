@@ -53,6 +53,12 @@ const COMPARES_PLAIN_NETS: &[(&str, usize, &str)] = &[
         1,
         "`NetCopper::net` against the net to route: both are a NetId",
     ),
+    (
+        "crates/cypcb-autoroute/src/postprocess.rs",
+        4,
+        "`join_pins` asks whether a RouteSegment or a ViaPlacement is on the net of a pad: the \
+         copper is the router's own and carries a NetId, and `NetPad::net` is a NetId",
+    ),
 ];
 
 /// A line of code with its comments cut and its test module gone.

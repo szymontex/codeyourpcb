@@ -646,7 +646,7 @@ asymmetric.
 new points then runs on a multiple of 45 degrees and the two joints it creates
 are 90 and 135 degrees. A symmetric cut - equal trim on both arms - puts the
 chord at 112.5 degrees, which is not a multiple of 45 and which this project's
-own `is_valid_angle` (`crates/cypcb-autoroute/src/smoother.rs:23`) rejects.
+own `is_valid_angle` (`crates/cypcb-autoroute/src/smoother.rs:25`) rejects.
 
 **The floor.** `a >= 1.5 * w`, where `w` is trace width. Two bands of width `w`
 whose centre lines meet at 45 degrees have already merged into one piece of
@@ -680,12 +680,12 @@ the verification block, and `stop_at_own_copper` moves it.
 **In this repo:** the junctions are counted and none are cut. `acute-angle`
 (`crates/cypcb-drc/src/rules/acute_angle.rs`) reports them; no pass in
 `crates/cypcb-autoroute` rewrites them. `chamfer_corners`
-(`crates/cypcb-autoroute/src/smoother.rs:584`) acts only on a 90 degree bend
+(`crates/cypcb-autoroute/src/smoother.rs:622`) acts only on a 90 degree bend
 and cannot reach this case: it classifies both segments and proceeds only when
 one is horizontal and the other vertical - `is_90_bend = (dir_a == Horizontal
 && dir_b == Vertical) || (dir_a == Vertical && dir_b == Horizontal)`, and `if
 !is_90_bend` pushes the segment through untouched
-(`crates/cypcb-autoroute/src/smoother.rs:620-630`).
+(`crates/cypcb-autoroute/src/smoother.rs:658-668`).
 
 #### What the sources bound, and what they do not
 
@@ -895,7 +895,14 @@ entry - 16 to 10 in all - and two kinds rise: edge clearance 0 to 4 and hole
 to edge 0 to 1**, with hole to hole 2 to 0. So the sentence "no kind rising"
 no longer holds on this board: the flag is named as paying for its acute
 corners in edge reports, which is a trade the flat price still cannot weigh.
-Measured 2026-09-25 by the same test, which now holds that list of two.
+Measured 2026-09-25 by the same test, which then held that list of two.
+
+Measured again on 2026-10-30, after the router learned the edge of the board
+and kept copper out of the band the fab leaves along it: the same board goes
+**12 to 3 acute, 0 to 0 clearance and 3 to 2 pad entry - 16 to 6 in all**, with
+hole to hole 1 to 1, and **no kind rises**: the edge clearance and hole to edge
+rows the flag cost on 2026-09-25 were copper laid beside an edge the router
+could not see, and they are gone with it. The test holds the empty list again.
 
 **Tier 1 has a second form, and the ranking counts only the first.** A
 connection the router gave up on is counted by the router and reported by
@@ -1484,7 +1491,7 @@ sentence. A board whose pads collide on the grid is a board
 fault; the grid is only how it is detected.
 
 **1. What the resolution is a function of.** One cell is one legal track
-position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:392`)
+position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:393`)
 takes the fab table for net 0 and returns `min_trace_width + min_clearance`,
 floored at 10 um. The comment records the measurement that settled it: a
 half-clearance grid let two nets sit in adjacent cells whose copper overlapped -
@@ -1512,7 +1519,7 @@ last clause is the rule.
 
 **2. What the grid costs in accuracy, and it is worse than half a cell.** A pad
 centre is snapped by integer division, not by rounding: `nm_to_grid_x`
-(`crates/cypcb-autoroute/src/grid.rs:848`) computes `(nm - origin) / resolution`,
+(`crates/cypcb-autoroute/src/grid.rs:1004`) computes `(nm - origin) / resolution`,
 which truncates toward zero. The node therefore sits at or below the pad centre
 on each axis, and the error approaches a whole cell per axis rather than half of
 one. Worst case radially is `resolution * sqrt(2)`.

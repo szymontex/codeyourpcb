@@ -133,6 +133,8 @@ pub struct NetPad {
     pub net: NetId,
     /// The copper layers the pad is on, as `PadDef::copper_mask()` gives them.
     pub mask: u32,
+    /// Where the pad's centre sits on the board.
+    pub centre: Point,
     copper: Copper,
 }
 
@@ -145,6 +147,16 @@ impl NetPad {
             segments: vec![([from.x.0, from.y.0], [to.x.0, to.y.0])],
         };
         trace_to_copper_distance(&trace, &self.copper).1 <= half_width
+    }
+
+    /// How far the centre line from `from` to `to` is from the pad's copper,
+    /// zero when it reaches into it.
+    pub fn distance_to(&self, from: Point, to: Point) -> i64 {
+        let trace = TraceData {
+            half_width: 0,
+            segments: vec![([from.x.0, from.y.0], [to.x.0, to.y.0])],
+        };
+        trace_to_copper_distance(&trace, &self.copper).1
     }
 }
 
@@ -166,6 +178,7 @@ pub fn net_pads(world: &mut BoardWorld, library: &FootprintLibrary) -> Vec<NetPa
             pads.push(NetPad {
                 net,
                 mask: if mask == 0 { u32::MAX } else { mask },
+                centre: pad_centre(pad, position, rotation),
                 copper: pad_copper(pad, position.0, rotation.to_degrees()),
             });
         }

@@ -28,6 +28,7 @@ use crate::astar_grid::{astar_grid_from, GridSearchScratch};
 use crate::clearance_field::ClearanceField;
 use crate::congestion::CongestionMap;
 use crate::cost::RoutingCost;
+use crate::edge_guard::EdgeGuard;
 use crate::grid::{RoutingGrid, CELL_OBSTACLE, CELL_PAD};
 use crate::orchestrator::{
     build_spanning_tree, extract_ratsnest, is_multi_layer, order_nets, pad_to_grid_node, NetRoute,
@@ -35,7 +36,7 @@ use crate::orchestrator::{
 use crate::pathfinder::{GridNode, PadZone};
 use crate::postprocess;
 use crate::repair::Blocker;
-use crate::smoother::smooth_routes_on_pads;
+use crate::smoother::smooth_routes_within_edge;
 use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
@@ -213,6 +214,8 @@ impl PathFinderStrategy {
 
         // Smooth traces and optimize vias
         let min_clearance = rules.constraints_for_net(0).min_clearance;
+        let edge_guard =
+            EdgeGuard::of_board(world, rules.constraints_for_net(0).min_edge_clearance);
         let pre_smooth_segments = all_segments.len();
         let pre_smooth_vias = all_vias.len();
 
@@ -248,13 +251,14 @@ impl PathFinderStrategy {
                 .filter(|v| v.net_id == *net_id)
                 .map(|v| v.position)
                 .collect();
-            let smoothed = smooth_routes_on_pads(
+            let smoothed = smooth_routes_within_edge(
                 &net_segs,
                 &other_segs,
                 &net_vias,
                 &pads,
                 min_clearance,
                 config.params.roundness,
+                edge_guard.as_ref(),
             );
             smoothed_segments.extend(smoothed);
         }
@@ -270,12 +274,28 @@ impl PathFinderStrategy {
         let (optimized_segments, optimized_vias) = optimize_vias(
             all_segments,
             all_vias,
-            &BoardObstacles::from_board(world, library),
+            &BoardObstacles::from_board_with_edge(
+                world,
+                library,
+                rules.constraints_for_net(0).min_edge_clearance,
+            ),
             min_clearance,
             rules.constraints_for_net(0).min_hole_to_hole,
         );
         all_segments = optimized_segments;
         all_vias = optimized_vias;
+
+        // A route ends in the cell that holds its pin, which on a coarse grid
+        // can be beside a small pad and not on it.
+        let joined = postprocess::join_pins(
+            &mut all_segments,
+            &all_vias,
+            &pads,
+            cypcb_core::Nm(grid.resolution()),
+            min_clearance,
+            edge_guard.as_ref(),
+        );
+        tracing::info!(joined, "pins joined to the copper that ended beside them");
 
         tracing::info!(
             pre_smooth_segments,

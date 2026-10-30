@@ -42,7 +42,7 @@
 //! are small - stm32_breakout is 296 x 256 x 2, about 151 thousand cells -
 //! against roughly 900 A* searches per iteration over the same grid.
 
-use cypcb_world::components::rotate_about_origin;
+use cypcb_world::components::{rotate_about_origin, BoardEdge};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
@@ -105,6 +105,7 @@ impl ClearanceField {
 
         field.seed_pads(world, library, grid);
         field.seed_zones(world, grid);
+        field.seed_edge(world, grid);
         field.seed_copper(world, grid);
         field.seed_teardrops(world, grid);
         field.transform();
@@ -275,6 +276,25 @@ impl ClearanceField {
                         self.seed(gx, gy, layer_idx as usize);
                     }
                 }
+            }
+        }
+    }
+
+    /// The edge of the board: the cells off it, and the cells its edges pass
+    /// through. The grid shuts the cells off the board and the cells near its
+    /// edge to a track, so the field has to put them at the distance of
+    /// copper, as it does for a keepout.
+    fn seed_edge(&mut self, world: &BoardWorld, grid: &RoutingGrid) {
+        let Some(edge) = BoardEdge::of_or_size(world) else {
+            return;
+        };
+        let cells = grid
+            .cells_off_the_board(&edge)
+            .into_iter()
+            .chain(grid.cells_on_the_edge(&edge));
+        for (gx, gy) in cells {
+            for layer in 0..self.layer_count as usize {
+                self.seed(gx, gy, layer);
             }
         }
     }

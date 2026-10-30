@@ -173,7 +173,7 @@ fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
     // to 2 until 2026-09-25, on the mirrored board; read the right way up they
     // are 11 to 3, 1 to 0 and 2 to 2.
     const CANON_FIGURES: &[(&str, usize, usize)] =
-        &[("AcidTrap", 11, 3), ("Clearance", 1, 0), ("PadEntry", 2, 2)];
+        &[("AcidTrap", 12, 3), ("Clearance", 0, 0), ("PadEntry", 3, 2)];
     for (kind, before, after) in CANON_FIGURES {
         assert_eq!(
             (
@@ -197,11 +197,12 @@ fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
 
     // What it claimed until 2026-09-25: no kind rises. That was the assertion
     // that would have caught the optimizer, the one rule going the other way.
-    // Measured on the board read the right way up, the flag takes the report
-    // from 16 rows to 10 and two kinds do rise: edge clearance 0 to 4 and hole
-    // to edge 0 to 1. What it claims now: those two, and only those, rise - a
-    // price the flag is named as paying on this board, held exactly so a third
-    // kind joining them, or either of them going, is read rather than missed.
+    // Measured on the board read the right way up, the flag took the report
+    // from 16 rows to 10 and two kinds did rise: edge clearance 0 to 4 and hole
+    // to edge 0 to 1. Those two were the router laying copper beside an edge it
+    // could not see. Since 2026-10-30 the grid shuts the cells near the edge,
+    // the report goes from 16 rows to 6 and no kind rises, which is the
+    // assertion that came first, held exactly again.
     let mut rising = Vec::new();
     for kind in kinds_of(&off, &on) {
         let before = off.get(&kind).copied().unwrap_or(0);
@@ -213,7 +214,7 @@ fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
     }
     assert_eq!(
         rising,
-        ["EdgeClearance", "HoleToEdge"],
+        Vec::<String>::new(),
         "the kinds the flag costs shift_driver"
     );
 }
@@ -282,7 +283,12 @@ fn the_flag_shorts_no_board_the_default_routes_clean() {
     // pair of trace entities, and a run of copper across one pad that had
     // been several rows became one. Counted that way `qfp_fanout` goes
     // 67 -> 66 with the flag, and across the six 171 -> 143. No board is named.
-    const THE_FLAG_SHORTS_MORE: &[&str] = &[];
+    //
+    // It started again on 2026-10-30, when the router learned the edge of the
+    // board and the order in which the search meets equal-cost cells moved:
+    // `qfp_fanout` goes 67 -> 77 with the flag, and across the six 175 -> 150.
+    // The board is named for the same reason the others were.
+    const THE_FLAG_SHORTS_MORE: &[&str] = &["qfp_fanout.kicad_pcb"];
     let mut boards_the_flag_shorts_more = Vec::new();
     let mut off_total = 0;
     let mut on_total = 0;

@@ -433,11 +433,14 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     // way up, and the census it is read beside counts eight. Ten since
     // 2026-09-27, when two pads of one net that touch became one piece and
     // `multi_ic` routes three GND connections fewer: J4.2, J5.2 and C5.2 came
-    // in sharp on the copper laid around them and C11.2 left.
+    // in sharp on the copper laid around them and C11.2 left. Eleven since
+    // 2026-10-30, when the router learned the edge of the board and
+    // `shift_driver` routes to other copper of the same cost: U1.13, D2.2 and
+    // U2.13 are sharp where two entries were.
     assert_eq!(
         sharp.len(),
-        10,
-        "the census reports ten sharp entries across the six fixtures"
+        11,
+        "the census reports eleven sharp entries across the six fixtures"
     );
 
     // The first reading, and the denominator that kills it. Every sharp pad is

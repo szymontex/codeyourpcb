@@ -16,7 +16,7 @@ use cypcb_core::{Nm, Point, Rect};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::components::rotate_about_origin;
 use cypcb_world::components::trace::Via;
-use cypcb_world::components::{KeepoutKind, ZoneOutline};
+use cypcb_world::components::{BoardEdge, KeepoutKind, ZoneOutline};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Layer, NetId};
 
@@ -279,6 +279,18 @@ impl RoutingGrid {
         // Mark zones as obstacles
         grid.populate_zones(world, clearance_cells);
 
+        // The edge of the board is an obstacle too: nothing is routed off it,
+        // through a cutout, or within the fab's edge clearance of it.
+        if let Some(edge) = BoardEdge::of_or_size(world) {
+            let edge_gap = constraints.min_edge_clearance.raw();
+            grid.populate_edge(
+                &edge,
+                edge_gap + constraints.min_trace_width.raw() / 2,
+                // The via the router places has a ring twice its drill across.
+                edge_gap + constraints.min_via_drill.raw(),
+            );
+        }
+
         // Mark locked traces as obstacles
         grid.populate_locked_traces(world, clearance_cells);
 
@@ -474,6 +486,150 @@ impl RoutingGrid {
                     }
                 }
             }
+        }
+    }
+
+    /// Close the cells the board edge keeps copper out of.
+    ///
+    /// A track is drawn along the centres of cells, so a cell is shut to it
+    /// when its centre is off the board, in a cutout, or nearer an edge than
+    /// `track_reach_nm`: the fab's edge clearance and half a track. A via is
+    /// shut out of the cells nearer than `via_reach_nm`, which has its ring
+    /// in place of half a track, so a cell can be open to a track and shut to
+    /// a via. The same rule as a keepout, `CELL_ZONE` for tracks and the
+    /// `no_via` map for vias, and read from the same [`BoardEdge`] the checks
+    /// and the fabrication files read.
+    fn populate_edge(&mut self, edge: &BoardEdge, track_reach_nm: i64, via_reach_nm: i64) {
+        for (gx, gy) in self.cells_off_the_board(edge) {
+            self.close_to_track(gx, gy);
+            self.forbid_via_everywhere(gx, gy);
+        }
+
+        // Near an edge: every edge of the outline and of every cutout, in
+        // pieces short enough that the cells of a piece's box are about the
+        // cells of its band.
+        let piece_nm = 64.0 * self.resolution as f64;
+        for (a, b) in edge.edges() {
+            let (a, b) = (
+                (a.x.raw() as f64, a.y.raw() as f64),
+                (b.x.raw() as f64, b.y.raw() as f64),
+            );
+            let length = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+            let pieces = (length / piece_nm).ceil().max(1.0) as u32;
+            for k in 0..pieces {
+                let (t0, t1) = (
+                    f64::from(k) / f64::from(pieces),
+                    f64::from(k + 1) / f64::from(pieces),
+                );
+                let from = (a.0 + (b.0 - a.0) * t0, a.1 + (b.1 - a.1) * t0);
+                let to = (a.0 + (b.0 - a.0) * t1, a.1 + (b.1 - a.1) * t1);
+                self.close_near(from, to, track_reach_nm as f64, via_reach_nm as f64);
+            }
+        }
+    }
+
+    /// The cells whose centre is off the board or in a cutout.
+    ///
+    /// A row at a time, from the spans of the row, rather than a question to
+    /// every edge for every cell.
+    pub fn cells_off_the_board(&self, edge: &BoardEdge) -> Vec<(u32, u32)> {
+        let mut cells = Vec::new();
+        for gy in 0..self.height {
+            let spans = edge.spans_at(self.grid_to_nm_y(gy));
+            let mut next = 0;
+            for gx in 0..self.width {
+                let x = self.grid_to_nm_x(gx) as f64;
+                while next < spans.len() && x >= spans[next].1 {
+                    next += 1;
+                }
+                if next < spans.len() && x >= spans[next].0 {
+                    continue;
+                }
+                cells.push((gx, gy));
+            }
+        }
+        cells
+    }
+
+    /// The cells the edge itself passes through: every edge of the outline and
+    /// of every cutout, walked in steps of half a cell so none is skipped.
+    pub fn cells_on_the_edge(&self, edge: &BoardEdge) -> Vec<(u32, u32)> {
+        let step = (self.resolution as f64 / 2.0).max(1.0);
+        let mut cells = Vec::new();
+        for (a, b) in edge.edges() {
+            let (dx, dy) = (
+                (b.x.raw() - a.x.raw()) as f64,
+                (b.y.raw() - a.y.raw()) as f64,
+            );
+            let steps = ((dx * dx + dy * dy).sqrt() / step).ceil().max(1.0) as u32;
+            for k in 0..=steps {
+                let t = f64::from(k) / f64::from(steps);
+                let point = Point::new(
+                    Nm::new(a.x.raw() + (dx * t).round() as i64),
+                    Nm::new(a.y.raw() + (dy * t).round() as i64),
+                );
+                cells.push(self.nm_to_grid(point));
+            }
+        }
+        cells.sort_unstable();
+        cells.dedup();
+        cells
+    }
+
+    /// Shut the cells within `track_reach` of a stretch of edge to tracks and
+    /// the cells within `via_reach` of it to vias.
+    fn close_near(&mut self, from: (f64, f64), to: (f64, f64), track_reach: f64, via_reach: f64) {
+        let reach = track_reach.max(via_reach);
+        let res = self.resolution as f64;
+        let first =
+            |low: f64, origin: i64| (((low - reach - origin as f64) / res).floor().max(0.0)) as u32;
+        let last = |high: f64, origin: i64, cells: u32| {
+            (((high + reach - origin as f64) / res).floor().max(0.0) as u32)
+                .min(cells.saturating_sub(1))
+        };
+        let (min_gx, max_gx) = (
+            first(from.0.min(to.0), self.origin_x),
+            last(from.0.max(to.0), self.origin_x, self.width),
+        );
+        let (min_gy, max_gy) = (
+            first(from.1.min(to.1), self.origin_y),
+            last(from.1.max(to.1), self.origin_y, self.height),
+        );
+        let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+        let length_sq = dx * dx + dy * dy;
+        for gy in min_gy..=max_gy {
+            let cy = self.grid_to_nm_y(gy) as f64;
+            for gx in min_gx..=max_gx {
+                let cx = self.grid_to_nm_x(gx) as f64;
+                let along = if length_sq == 0.0 {
+                    0.0
+                } else {
+                    (((cx - from.0) * dx + (cy - from.1) * dy) / length_sq).clamp(0.0, 1.0)
+                };
+                let apart = ((cx - (from.0 + along * dx)).powi(2)
+                    + (cy - (from.1 + along * dy)).powi(2))
+                .sqrt();
+                if apart < track_reach {
+                    self.close_to_track(gx, gy);
+                }
+                if apart < via_reach {
+                    self.forbid_via_everywhere(gx, gy);
+                }
+            }
+        }
+    }
+
+    /// Shut a cell to tracks on every layer.
+    fn close_to_track(&mut self, x: u32, y: u32) {
+        for layer in 0..self.layer_count as usize {
+            self.set_cell(x, y, layer, CELL_ZONE);
+        }
+    }
+
+    /// Shut a cell to vias on every layer.
+    fn forbid_via_everywhere(&mut self, x: u32, y: u32) {
+        for layer in 0..self.layer_count as usize {
+            self.forbid_via_at(x, y, layer);
         }
     }
 

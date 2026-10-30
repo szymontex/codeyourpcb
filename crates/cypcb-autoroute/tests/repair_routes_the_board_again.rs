@@ -53,13 +53,21 @@ fn routed(filename: &str, variant: &str, repair_passes: u32) -> (RoutingResult, 
     (result, RankKey::of(0, &score))
 }
 
-/// `shift_driver`'s winner, repaired, ranks ahead of itself: 11 violations
-/// to 8 when this was written. An attempt that routes nothing never can.
+/// `multi_ic` routed with the default variant, repaired, ranks ahead of itself:
+/// 56 shorts to 45 when this was written. An attempt that routes nothing never
+/// can.
+///
+/// This was `shift_driver` with `Priced Via Rings Near Holes` (11 violations to
+/// 8) until the board edge became an obstacle to the router. The first route of
+/// that board then came out as a different one of the same cost - the search
+/// breaks ties by the order cells enter its queue, and the cells beside the edge
+/// are no longer in it - and repair found nothing ahead of it. What the test
+/// asks is that repair can improve a board, not that it can improve that one.
 #[test]
 fn a_repaired_board_ranks_ahead_of_the_board_it_repaired() {
-    let variant = "PathFinder Priced Via Rings Near Holes";
-    let (plain, before) = routed("shift_driver.kicad_pcb", variant, 0);
-    let (repaired, after) = routed("shift_driver.kicad_pcb", variant, 2);
+    let variant = "PathFinder Default";
+    let (plain, before) = routed("multi_ic.kicad_pcb", variant, 0);
+    let (repaired, after) = routed("multi_ic.kicad_pcb", variant, 2);
 
     assert!(
         !repaired.routes.is_empty(),

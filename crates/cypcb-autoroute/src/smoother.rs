@@ -11,6 +11,8 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_drc::rules::clearance::segment_distance;
+
+use crate::edge_guard::EdgeGuard;
 use cypcb_drc::rules::NetPad;
 use cypcb_router::types::RouteSegment;
 use cypcb_world::{Layer, NetId};
@@ -75,6 +77,30 @@ pub fn smooth_routes_on_pads(
     min_clearance: Nm,
     roundness: f64,
 ) -> Vec<RouteSegment> {
+    smooth_routes_within_edge(
+        segments,
+        other_net_segments,
+        anchors,
+        pads,
+        min_clearance,
+        roundness,
+        None,
+    )
+}
+
+/// [`smooth_routes_on_pads`], and no smoothed piece leaves the board or comes
+/// nearer its edge than `edge` allows. A chamfer cuts the inside of a bend,
+/// which is the side of a notch's corner, so a path that went round a corner
+/// of the board came out across it.
+pub fn smooth_routes_within_edge(
+    segments: &[RouteSegment],
+    other_net_segments: &[RouteSegment],
+    anchors: &[Point],
+    pads: &[NetPad],
+    min_clearance: Nm,
+    roundness: f64,
+    edge: Option<&EdgeGuard>,
+) -> Vec<RouteSegment> {
     if segments.is_empty() {
         return Vec::new();
     }
@@ -110,6 +136,7 @@ pub fn smooth_routes_on_pads(
             &group_pads,
             min_clearance,
             roundness,
+            edge,
         );
         tracing::debug!(
             net_id = net_id.id(),
@@ -173,12 +200,13 @@ fn smooth_net_layer_group(
     pads: &[&NetPad],
     min_clearance: Nm,
     roundness: f64,
+    edge: Option<&EdgeGuard>,
 ) -> Vec<RouteSegment> {
     let mut held = anchors.to_vec();
-    let mut smoothed = smooth_held(group, others, &held, min_clearance, roundness);
+    let mut smoothed = smooth_held(group, others, &held, min_clearance, roundness, edge);
     if pieces(&smoothed) > pieces(group) {
         held.extend(joints(group));
-        smoothed = smooth_held(group, others, &held, min_clearance, roundness);
+        smoothed = smooth_held(group, others, &held, min_clearance, roundness, edge);
     }
     let lost: Vec<&NetPad> = pads
         .iter()
@@ -197,7 +225,7 @@ fn smooth_net_layer_group(
             })
             .flat_map(|seg| [seg.start, seg.end]),
     );
-    smooth_held(group, others, &held, min_clearance, roundness)
+    smooth_held(group, others, &held, min_clearance, roundness, edge)
 }
 
 /// Whether any segment of `group` touches `pad`.
@@ -214,6 +242,7 @@ fn smooth_held(
     anchors: &[Point],
     min_clearance: Nm,
     roundness: f64,
+    edge: Option<&EdgeGuard>,
 ) -> Vec<RouteSegment> {
     let cut: Vec<RouteSegment> = group
         .iter()
@@ -221,7 +250,7 @@ fn smooth_held(
         .collect();
     let smoothed: Vec<RouteSegment> = cut
         .split_inclusive(|seg| anchors.contains(&seg.end))
-        .flat_map(|run| smooth_run(run, others, min_clearance, roundness))
+        .flat_map(|run| smooth_run(run, others, min_clearance, roundness, edge))
         .collect();
     // A straight line through a via still covers it, so the pieces that
     // came out collinear go back together.
@@ -350,6 +379,7 @@ fn smooth_run(
     others: &[RouteSegment],
     min_clearance: Nm,
     roundness: f64,
+    edge: Option<&EdgeGuard>,
 ) -> Vec<RouteSegment> {
     if group.is_empty() {
         return Vec::new();
@@ -364,7 +394,7 @@ fn smooth_run(
         others.iter().filter(|s| s.layer == layer).collect();
 
     // Pass 1: Staircase-to-diagonal collapse
-    let after_staircase = collapse_staircases(group, &same_layer_others, min_clearance);
+    let after_staircase = collapse_staircases(group, &same_layer_others, min_clearance, edge);
 
     // Pass 2: Corner chamfering
     let after_chamfer = chamfer_corners(
@@ -372,6 +402,7 @@ fn smooth_run(
         &same_layer_others,
         min_clearance,
         roundness,
+        edge,
     );
 
     // Pass 3: Collinear segment merge
@@ -423,11 +454,17 @@ fn classify_direction(start: Point, end: Point) -> Direction {
 fn is_drc_clean(
     new_start: Point,
     new_end: Point,
+    width: Nm,
     others: &[&RouteSegment],
     min_clearance: Nm,
+    edge: Option<&EdgeGuard>,
 ) -> bool {
     let p1 = [new_start.x.0, new_start.y.0];
     let p2 = [new_end.x.0, new_end.y.0];
+
+    if edge.is_some_and(|guard| !guard.allows(p1, p2, width)) {
+        return false;
+    }
 
     for other in others {
         let p3 = [other.start.x.0, other.start.y.0];
@@ -455,6 +492,7 @@ fn collapse_staircases(
     segments: &[RouteSegment],
     others: &[&RouteSegment],
     min_clearance: Nm,
+    edge: Option<&EdgeGuard>,
 ) -> Vec<RouteSegment> {
     if segments.len() < 2 {
         return segments.to_vec();
@@ -538,7 +576,7 @@ fn collapse_staircases(
         debug_assert!(is_valid_angle(stair_start, diag_end));
 
         // Check DRC safety of the diagonal
-        if is_drc_clean(stair_start, diag_end, others, min_clearance) {
+        if is_drc_clean(stair_start, diag_end, width, others, min_clearance, edge) {
             // Emit the diagonal
             result.push(RouteSegment::new(
                 net_id,
@@ -551,7 +589,7 @@ fn collapse_staircases(
             // If there's remaining distance, emit an orthogonal segment
             if diag_end != stair_finish {
                 debug_assert!(is_valid_angle(diag_end, stair_finish));
-                if is_drc_clean(diag_end, stair_finish, others, min_clearance) {
+                if is_drc_clean(diag_end, stair_finish, width, others, min_clearance, edge) {
                     result.push(RouteSegment::new(
                         net_id,
                         layer,
@@ -586,6 +624,7 @@ fn chamfer_corners(
     others: &[&RouteSegment],
     min_clearance: Nm,
     roundness: f64,
+    edge: Option<&EdgeGuard>,
 ) -> Vec<RouteSegment> {
     if segments.len() < 2 {
         return segments.to_vec();
@@ -690,7 +729,14 @@ fn chamfer_corners(
         }
 
         // Check DRC safety of the chamfer segment
-        if !is_drc_clean(chamfer_start, chamfer_end, others, min_clearance) {
+        if !is_drc_clean(
+            chamfer_start,
+            chamfer_end,
+            width,
+            others,
+            min_clearance,
+            edge,
+        ) {
             result.push(seg_a.clone());
             i += 1;
             continue;
