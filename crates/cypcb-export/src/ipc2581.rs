@@ -509,24 +509,25 @@ pub fn export_ipc2581_with(
 
     let _ = writeln!(out, "      <Step name=\"{board}\">");
     out.push_str("        <Datum x=\"0\" y=\"0\"/>\n");
-    out.push_str("        <Profile>\n          <Polygon>\n");
-    // The outline the board states, or the rectangle it is.
-    let outline: Vec<cypcb_core::Point> = {
-        let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&cypcb_world::components::BoardOutline>();
-        query
-            .iter(ecs)
-            .next()
-            .map(|outline| outline.points.clone())
-            .unwrap_or_else(|| {
+    out.push_str("        <Profile>\n");
+    // The edge the board states - its outline and every cutout - or the
+    // rectangle it is. KiCad writes the outer ring as the Polygon and each hole
+    // as a Cutout of the Profile (pcb_io_ipc2581.cpp:2741-2762 generateProfile,
+    // :2650-2672 addPolygonCutouts).
+    let (outline, cutouts): (Vec<cypcb_core::Point>, Vec<Vec<cypcb_core::Point>>) =
+        match cypcb_world::components::BoardEdge::of(world) {
+            Some(edge) => (edge.outer().to_vec(), edge.cutouts().to_vec()),
+            None => (
                 vec![
                     cypcb_core::Point::new(Nm(0), Nm(0)),
                     cypcb_core::Point::new(size.width, Nm(0)),
                     cypcb_core::Point::new(size.width, size.height),
                     cypcb_core::Point::new(Nm(0), size.height),
-                ]
-            })
-    };
+                ],
+                Vec::new(),
+            ),
+        };
+    out.push_str("          <Polygon>\n");
     let first = outline
         .first()
         .copied()
@@ -552,7 +553,29 @@ pub fn export_ipc2581_with(
         mm(first.x),
         mm(first.y)
     );
-    out.push_str("          </Polygon>\n        </Profile>\n");
+    out.push_str("          </Polygon>\n");
+    for ring in &cutouts {
+        let Some(start) = ring.first().copied() else {
+            continue;
+        };
+        out.push_str("          <Cutout>\n");
+        let _ = writeln!(
+            out,
+            "            <PolyBegin x=\"{}\" y=\"{}\"/>",
+            mm(start.x),
+            mm(start.y)
+        );
+        for point in ring.iter().skip(1).chain(Some(&start)) {
+            let _ = writeln!(
+                out,
+                "            <PolyStepSegment x=\"{}\" y=\"{}\"/>",
+                mm(point.x),
+                mm(point.y)
+            );
+        }
+        out.push_str("          </Cutout>\n");
+    }
+    out.push_str("        </Profile>\n");
 
     // The copper, one section per layer. A layer with nothing on it gets no
     // section rather than an empty one: the schema wants at least one `Set`

@@ -5,7 +5,7 @@
 //! copper exposure when the board is routed (cut to shape).
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::{BoardOutline, BoardSize};
+use cypcb_world::components::{BoardEdge, BoardSize};
 use cypcb_world::BoardWorld;
 
 use super::clearance::{segment_distance, EntryCopper, Piece};
@@ -58,11 +58,14 @@ impl DrcRule for EdgeClearanceRule {
             None => return violations,
         };
 
-        // The real edge when the board states one; otherwise the rectangle
-        // `BoardSize` describes. A cutout, a slot and a chamfer all live inside
-        // the same bounding box, so measuring against the box passes copper
-        // that sits outside the actual edge.
-        let outline = world.ecs().get::<BoardOutline>(board_entity).cloned();
+        // The real edge when the board states one - its outline and every
+        // cutout in it, which KiCad measures copper against like any other
+        // Edge.Cuts shape (drc_test_provider_edge_clearance.cpp:272-279,
+        // :358-361) - otherwise the rectangle `BoardSize` describes. A cutout,
+        // a slot and a chamfer all live inside the same bounding box, so
+        // measuring against the box passes copper that sits outside the
+        // actual edge.
+        let outline = BoardEdge::of(world);
 
         // Board edges are at x=0, x=width, y=0, y=height
         let board_w = board_size.width.0;
@@ -192,13 +195,14 @@ impl DrcRule for EdgeClearanceRule {
     }
 }
 
-/// How far a ring of corners sits from the board's edge, which is itself a ring.
+/// How far a ring of corners sits from the board's edge: its outline and each
+/// cutout in it.
 ///
 /// Every edge of the one against every edge of the other, which is exact for two
 /// shapes that do not overlap and gives zero when an edge crosses. A ring with a
 /// corner off the board reads as zero, for the reason a box does: copper off the
 /// board is not "well clear of the edge".
-fn ring_to_outline(outline: &BoardOutline, corners: &[Point]) -> i64 {
+fn ring_to_outline(outline: &BoardEdge, corners: &[Point]) -> i64 {
     if corners.iter().any(|c| !outline.contains(*c)) {
         return 0;
     }
@@ -220,7 +224,7 @@ fn ring_to_outline(outline: &BoardOutline, corners: &[Point]) -> i64 {
 
 /// The corner of the ring that is nearest the board's edge: where to say the
 /// violation is.
-fn nearest_corner(outline: &BoardOutline, corners: &[Point]) -> Point {
+fn nearest_corner(outline: &BoardEdge, corners: &[Point]) -> Point {
     corners
         .iter()
         .copied()
@@ -247,7 +251,7 @@ fn nearest_corner(outline: &BoardOutline, corners: &[Point]) -> Point {
 /// do. A box whose centre falls outside the ring reads as zero rather than a
 /// positive distance: copper off the board is not "well clear of the edge".
 pub(crate) fn distance_to_outline(
-    outline: &BoardOutline,
+    outline: &BoardEdge,
     min_x: i64,
     min_y: i64,
     max_x: i64,
@@ -281,7 +285,7 @@ pub(crate) fn distance_to_outline(
 ///
 /// Measured against every edge of the ring, as a box is. A segment whose
 /// midpoint falls outside the ring reads as zero, for the reason a box does.
-fn stroke_to_outline(outline: &BoardOutline, from: [i64; 2], to: [i64; 2]) -> i64 {
+fn stroke_to_outline(outline: &BoardEdge, from: [i64; 2], to: [i64; 2]) -> i64 {
     let middle = Point::new(Nm((from[0] + to[0]) / 2), Nm((from[1] + to[1]) / 2));
     if !outline.contains(middle) {
         return 0;
@@ -524,21 +528,23 @@ mod tests {
     /// nearest one. Nothing named it in a test.
     #[test]
     fn a_box_is_measured_from_its_own_sides_to_the_ring() {
-        use cypcb_world::components::BoardOutline;
+        use cypcb_world::components::BoardEdge;
 
         // The U from `examples/cutout.cypcb`: 40 by 30 with a slot cut down
         // from the top edge between x = 15 and x = 25.
-        let u = BoardOutline::new(vec![
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(40.0, 0.0),
-            Point::from_mm(40.0, 30.0),
-            Point::from_mm(25.0, 30.0),
-            Point::from_mm(25.0, 10.0),
-            Point::from_mm(15.0, 10.0),
-            Point::from_mm(15.0, 30.0),
-            Point::from_mm(0.0, 30.0),
-        ])
-        .expect("a ring");
+        let u = BoardEdge::new(
+            vec![
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(40.0, 0.0),
+                Point::from_mm(40.0, 30.0),
+                Point::from_mm(25.0, 30.0),
+                Point::from_mm(25.0, 10.0),
+                Point::from_mm(15.0, 10.0),
+                Point::from_mm(15.0, 30.0),
+                Point::from_mm(0.0, 30.0),
+            ],
+            vec![],
+        );
 
         let mm = |v: f64| Nm::from_mm(v).raw();
 
