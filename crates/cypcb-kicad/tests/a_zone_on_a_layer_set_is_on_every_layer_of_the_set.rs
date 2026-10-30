@@ -195,14 +195,11 @@ fn a_zone_on_the_two_faces_keeps_its_copper_through_to_kicad_and_back() {
     let text = write_board(&mut parsed.world, "cypcb");
     let mut back = read(&text);
     let after = zones(&mut back);
-    // KiCad reads one zone for each layer, so the copper is the same and the
-    // mask is split between two zones.
-    let union = after.iter().fold(0, |m, z| m | z.layer_mask);
-    assert_eq!(union, TOP | BOTTOM, "{after:?}");
-    for zone in &after {
-        assert_eq!(zone.bounds, before[0].bounds);
-        assert_eq!(zone.net, before[0].net);
-    }
+    // One zone in, one zone out, on the same two layers: the file lists them.
+    assert_eq!(after.len(), 1, "{after:?}");
+    assert_eq!(after[0].layer_mask, TOP | BOTTOM, "{after:?}");
+    assert_eq!(after[0].bounds, before[0].bounds);
+    assert_eq!(after[0].net, before[0].net);
 }
 
 #[test]

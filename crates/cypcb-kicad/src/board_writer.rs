@@ -848,116 +848,126 @@ fn write_zones(
             .and_then(|id| world.net_name(id))
             .unwrap_or_default();
 
-        for layer in copper_layers_of(zone.layer_mask) {
-            let keepout = matches!(zone.kind, ZoneKind::Keepout);
-            let _ = writeln!(out, "  (zone");
-            let _ = writeln!(out, "    (net {net})");
-            let _ = writeln!(out, "    (net_name \"{net_name}\")");
-            let _ = writeln!(out, "    (layer \"{layer}\")");
-            if let Some(name) = &zone.name {
-                let _ = writeln!(out, "    (name \"{name}\")");
-            }
-            // `(hatch edge ...)` used to be written here as a literal. It sets
-            // how KiCad *draws* the zone outline on screen - the format calls it
-            // the outline display hatch style and pitch - so it is a property of
-            // somebody else's view of this board rather than of the board. The
-            // bar a literal has to meet is the one `(version ...)` meets: not a
-            // property of the board at all. A display setting fails it from the
-            // other side - it is not ours to state - so nothing is written and
-            // KiCad draws the outline however its reader prefers.
-            if keepout {
-                // A keepout is an area rule rather than copper: KiCad calls it
-                // a zone with nothing allowed in it, and fills nothing.
-                let switch = |kind: KeepoutKind| {
-                    if kinds.forbids(kind) {
-                        "not_allowed"
-                    } else {
-                        "allowed"
-                    }
-                };
+        // One zone for the whole set, as KiCad writes it: the zone is one object
+        // that lives on several layers, and a copy per layer is a different
+        // board - `n` zones where the design has one, none of which knows the
+        // others are the same pour. KiCad lists the layers of a copper zone, one
+        // by one, in layer order, and never the `F&B.Cu` and `*.Cu` set names
+        // (`pcb_io_kicad_sexpr.cpp` `format( const ZONE* )` asks `formatLayers`
+        // to enumerate for a zone on copper). One layer is `(layer ...)`, more
+        // are `(layers ...)`.
+        let layers = copper_layers_of(zone.layer_mask);
+        if layers.is_empty() {
+            continue;
+        }
+        let keepout = matches!(zone.kind, ZoneKind::Keepout);
+        let _ = writeln!(out, "  (zone");
+        let _ = writeln!(out, "    (net {net})");
+        let _ = writeln!(out, "    (net_name \"{net_name}\")");
+        let _ = writeln!(out, "    {}", zone_layers(&layers));
+        if let Some(name) = &zone.name {
+            let _ = writeln!(out, "    (name \"{name}\")");
+        }
+        // `(hatch edge ...)` used to be written here as a literal. It sets
+        // how KiCad *draws* the zone outline on screen - the format calls it
+        // the outline display hatch style and pitch - so it is a property of
+        // somebody else's view of this board rather than of the board. The
+        // bar a literal has to meet is the one `(version ...)` meets: not a
+        // property of the board at all. A display setting fails it from the
+        // other side - it is not ours to state - so nothing is written and
+        // KiCad draws the outline however its reader prefers.
+        if keepout {
+            // A keepout is an area rule rather than copper: KiCad calls it
+            // a zone with nothing allowed in it, and fills nothing.
+            let switch = |kind: KeepoutKind| {
+                if kinds.forbids(kind) {
+                    "not_allowed"
+                } else {
+                    "allowed"
+                }
+            };
+            let _ = writeln!(
+                out,
+                "    (keepout (tracks {}) (vias {}) (pads {}) (copperpour {}) (footprints {}))",
+                switch(KeepoutKind::Tracks),
+                switch(KeepoutKind::Vias),
+                switch(KeepoutKind::Pads),
+                switch(KeepoutKind::Pour),
+                switch(KeepoutKind::Footprints)
+            );
+        } else {
+            // Both of these were literals, and both are fab numbers the design
+            // rules already carry.
+            //
+            // `connect_pads` clearance is the distance the pour keeps from
+            // pads it does not connect to - an antipad, not the thermal gap,
+            // which is a different number written below. The literal was
+            // 0.5mm against tables holding 0.2 to 0.3, so an exported pour
+            // stood roughly twice as far off every pad as the house asks.
+            //
+            // `min_thickness` is the narrowest fill the pour will keep, and
+            // anything thinner is not drawn - the same question as the
+            // narrowest trace the house will etch. The literal was 0.25mm,
+            // wider than `min_trace_width` in every fab preset (0.09 to
+            // 0.1524) and equal to it only in the prototype table, so on a
+            // real board it threw away copper the fabricator would have made.
+            if let Some(rules) = rules {
                 let _ = writeln!(
                     out,
-                    "    (keepout (tracks {}) (vias {}) (pads {}) (copperpour {}) (footprints {}))",
-                    switch(KeepoutKind::Tracks),
-                    switch(KeepoutKind::Vias),
-                    switch(KeepoutKind::Pads),
-                    switch(KeepoutKind::Pour),
-                    switch(KeepoutKind::Footprints)
+                    "    (connect_pads (clearance {}))",
+                    mm(rules.pour_clearance)
                 );
-            } else {
-                // Both of these were literals, and both are fab numbers the design
-                // rules already carry.
-                //
-                // `connect_pads` clearance is the distance the pour keeps from
-                // pads it does not connect to - an antipad, not the thermal gap,
-                // which is a different number written below. The literal was
-                // 0.5mm against tables holding 0.2 to 0.3, so an exported pour
-                // stood roughly twice as far off every pad as the house asks.
-                //
-                // `min_thickness` is the narrowest fill the pour will keep, and
-                // anything thinner is not drawn - the same question as the
-                // narrowest trace the house will etch. The literal was 0.25mm,
-                // wider than `min_trace_width` in every fab preset (0.09 to
-                // 0.1524) and equal to it only in the prototype table, so on a
-                // real board it threw away copper the fabricator would have made.
-                if let Some(rules) = rules {
+                let _ = writeln!(out, "    (min_thickness {})", mm(rules.track_width));
+            }
+            // The relief comes from the fab table, not from here. It used
+            // to be two literals of 0.5mm, which is what a reader of this
+            // file got whatever the board was checked against - and both
+            // shipped export presets order 0.254mm, so the Gerbers and the
+            // KiCad file stated reliefs differing by a factor of about two
+            // for one board.
+            //
+            // With no rules chosen, nothing is stated: this file's own
+            // policy is that KiCad fills its defaults for what is left out
+            // and inventing a value here would be inventing a board. The
+            // same reasoning the export command already applies to the
+            // whole `(setup ...)` node - rules nobody chose are worse than
+            // none, because KiCad believes them.
+            match rules {
+                Some(rules) => {
                     let _ = writeln!(
                         out,
-                        "    (connect_pads (clearance {}))",
-                        mm(rules.pour_clearance)
+                        "    (fill yes (thermal_gap {}) (thermal_bridge_width {}))",
+                        mm(rules.thermal_relief_gap),
+                        mm(rules.thermal_relief_spoke_width)
                     );
-                    let _ = writeln!(out, "    (min_thickness {})", mm(rules.track_width));
                 }
-                // The relief comes from the fab table, not from here. It used
-                // to be two literals of 0.5mm, which is what a reader of this
-                // file got whatever the board was checked against - and both
-                // shipped export presets order 0.254mm, so the Gerbers and the
-                // KiCad file stated reliefs differing by a factor of about two
-                // for one board.
-                //
-                // With no rules chosen, nothing is stated: this file's own
-                // policy is that KiCad fills its defaults for what is left out
-                // and inventing a value here would be inventing a board. The
-                // same reasoning the export command already applies to the
-                // whole `(setup ...)` node - rules nobody chose are worse than
-                // none, because KiCad believes them.
-                match rules {
-                    Some(rules) => {
-                        let _ = writeln!(
-                            out,
-                            "    (fill yes (thermal_gap {}) (thermal_bridge_width {}))",
-                            mm(rules.thermal_relief_gap),
-                            mm(rules.thermal_relief_spoke_width)
-                        );
-                    }
-                    None => {
-                        let _ = writeln!(out, "    (fill yes)");
-                    }
+                None => {
+                    let _ = writeln!(out, "    (fill yes)");
                 }
             }
-            let _ = writeln!(out, "    (polygon");
-            // The corners of the zone: the ring it was drawn as, or the four
-            // corners of its box when it is a rectangle.
-            let ring: Vec<cypcb_core::Point> = match &outline {
-                Some(outline) => outline.corners().to_vec(),
-                None => vec![
-                    zone.bounds.min,
-                    cypcb_core::Point::new(zone.bounds.max.x, zone.bounds.min.y),
-                    zone.bounds.max,
-                    cypcb_core::Point::new(zone.bounds.min.x, zone.bounds.max.y),
-                ],
-            };
-            let xys: Vec<String> = ring
-                .iter()
-                .map(|corner| {
-                    let (x, y) = on_sheet(origin, corner.x, corner.y);
-                    format!("(xy {x} {y})")
-                })
-                .collect();
-            let _ = writeln!(out, "      (pts {})", xys.join(" "));
-            let _ = writeln!(out, "    )");
-            let _ = writeln!(out, "  )");
         }
+        let _ = writeln!(out, "    (polygon");
+        // The corners of the zone: the ring it was drawn as, or the four
+        // corners of its box when it is a rectangle.
+        let ring: Vec<cypcb_core::Point> = match &outline {
+            Some(outline) => outline.corners().to_vec(),
+            None => vec![
+                zone.bounds.min,
+                cypcb_core::Point::new(zone.bounds.max.x, zone.bounds.min.y),
+                zone.bounds.max,
+                cypcb_core::Point::new(zone.bounds.min.x, zone.bounds.max.y),
+            ],
+        };
+        let xys: Vec<String> = ring
+            .iter()
+            .map(|corner| {
+                let (x, y) = on_sheet(origin, corner.x, corner.y);
+                format!("(xy {x} {y})")
+            })
+            .collect();
+        let _ = writeln!(out, "      (pts {})", xys.join(" "));
+        let _ = writeln!(out, "    )");
+        let _ = writeln!(out, "  )");
     }
 }
 
@@ -1043,6 +1053,17 @@ fn write_teardrops(
         let _ = writeln!(out, "      (pts {points})");
         let _ = writeln!(out, "    )");
         let _ = writeln!(out, "  )");
+    }
+}
+
+/// The `(layer ...)` or `(layers ...)` node of a zone on these copper layers.
+fn zone_layers(layers: &[String]) -> String {
+    match layers {
+        [only] => format!("(layer \"{only}\")"),
+        many => {
+            let named: Vec<String> = many.iter().map(|layer| format!("\"{layer}\"")).collect();
+            format!("(layers {})", named.join(" "))
+        }
     }
 }
 
