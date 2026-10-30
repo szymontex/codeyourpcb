@@ -13,6 +13,7 @@ use cypcb_world::components::{rotate_about_origin, KeepoutKind, ZoneOutline};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, FootprintRef, Layer, NetConnections, NetId, Position, Rotation};
 
+use crate::edge_guard::EdgeGuard;
 use crate::grid::{index_to_layer, layer_to_index};
 
 /// The owner of a drawn trace that is on no net. Interned nets count up from
@@ -38,6 +39,8 @@ pub struct BoardObstacles {
     outlined_keepouts: Vec<(ZoneOutline, u32)>,
     /// The ones that forbid vias and not tracks, drawn as a polygon.
     outlined_via_keepouts: Vec<(ZoneOutline, u32)>,
+    /// The edge of the board, when the caller asked for copper to be kept off it.
+    edge: Option<EdgeGuard>,
 }
 
 /// A pad as the smallest circle that covers it, whatever its shape and
@@ -68,6 +71,19 @@ impl BoardObstacles {
     /// the designer placed.
     pub fn holes(&self) -> impl Iterator<Item = ([i64; 2], [i64; 2], i64)> + '_ {
         self.pads.iter().filter_map(|pad| pad.hole)
+    }
+
+    /// The same, and the edge of the board as an obstacle: a segment or a via
+    /// the optimizer puts down stays on the board, out of its cutouts, and
+    /// `edge_clearance` from every edge.
+    pub fn from_board_with_edge(
+        world: &mut BoardWorld,
+        library: &FootprintLibrary,
+        edge_clearance: Nm,
+    ) -> Self {
+        let mut board = Self::from_board(world, library);
+        board.edge = EdgeGuard::of_board(world, edge_clearance);
+        board
     }
 
     /// Read the pads, placed vias, drawn traces and keepouts off the board.
@@ -220,6 +236,7 @@ impl BoardObstacles {
             via_keepouts,
             outlined_keepouts,
             outlined_via_keepouts,
+            edge: None,
         }
     }
 }
@@ -634,7 +651,18 @@ fn board_clear(
             segment_distance(p1, p2, c, c) >= min_clearance.0 + width.0 / 2 + pad.radius.0
         });
 
-    pads_clear && keepouts_clear(board, layer, p1, p2, width, false)
+    pads_clear
+        && keepouts_clear(board, layer, p1, p2, width, false)
+        && edge_clear(board, p1, p2, width)
+}
+
+/// Whether a segment of `width` keeps to the board and its clearance from the
+/// edge. A via is the same question with its own width and the one point twice.
+fn edge_clear(board: &BoardObstacles, p1: [i64; 2], p2: [i64; 2], width: Nm) -> bool {
+    board
+        .edge
+        .as_ref()
+        .is_none_or(|guard| guard.allows(p1, p2, width))
 }
 
 /// Whether a segment on `layer` stays out of the board's keepouts: the ones
@@ -782,7 +810,11 @@ impl Surroundings<'_> {
             .filter(|pad| pad.net != Some(net))
             .filter(|pad| pad.layers.is_empty() || pad.layers.contains(&layer))
             .all(|pad| pad_gap(pad, p1, p2) >= c + width.0 / 2);
-        segments && vias && pads && keepouts_clear(self.board, layer, p1, p2, width, false)
+        segments
+            && vias
+            && pads
+            && keepouts_clear(self.board, layer, p1, p2, width, false)
+            && edge_clear(self.board, p1, p2, width)
     }
 
     /// Whether `via` moved to `at` clears every other net's copper on every
@@ -821,7 +853,12 @@ impl Surroundings<'_> {
             .into_iter()
             .chain((0..30).map(Layer::Inner))
             .all(|layer| keepouts_clear(self.board, layer, at, at, Nm(2 * r), true));
-        segments && vias && pads && board_holes && keepouts
+        segments
+            && vias
+            && pads
+            && board_holes
+            && keepouts
+            && edge_clear(self.board, at, at, Nm(2 * r))
     }
 }
 

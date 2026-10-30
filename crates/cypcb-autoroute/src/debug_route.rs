@@ -15,10 +15,11 @@ use cypcb_world::{BoardWorld, NetId};
 use serde::Serialize;
 use std::collections::HashMap;
 
+use crate::edge_guard::EdgeGuard;
 use crate::orchestrator::{extract_ratsnest, order_nets};
 use crate::pathfinder_v2::pathfinder_loop;
 use crate::postprocess;
-use crate::smoother::smooth_routes_on_pads;
+use crate::smoother::smooth_routes_within_edge;
 use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
 
@@ -192,6 +193,7 @@ pub fn route_with_debug(
 
     // Stage 3: Smoothing
     let min_clearance = rules.constraints_for_net(0).min_clearance;
+    let edge_guard = EdgeGuard::of_board(world, rules.constraints_for_net(0).min_edge_clearance);
     let net_ids: Vec<NetId> = {
         let mut ids: Vec<_> = raw_segments.iter().map(|s| s.net_id).collect();
         ids.sort_by_key(|n| n.id());
@@ -217,13 +219,14 @@ pub fn route_with_debug(
             .filter(|v| v.net_id == *net_id)
             .map(|v| v.position)
             .collect();
-        let smoothed = smooth_routes_on_pads(
+        let smoothed = smooth_routes_within_edge(
             &net_segs,
             &other_segs,
             &net_vias,
             &pads,
             min_clearance,
             config.params.roundness,
+            edge_guard.as_ref(),
         );
         smoothed_segments.extend(smoothed);
     }
@@ -247,7 +250,11 @@ pub fn route_with_debug(
     let (final_segments, final_vias) = optimize_vias(
         smoothed_segments,
         raw_vias,
-        &BoardObstacles::from_board(world, library),
+        &BoardObstacles::from_board_with_edge(
+            world,
+            library,
+            rules.constraints_for_net(0).min_edge_clearance,
+        ),
         min_clearance,
         rules.constraints_for_net(0).min_hole_to_hole,
     );

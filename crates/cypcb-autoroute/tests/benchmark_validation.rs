@@ -412,11 +412,19 @@ type Ratchet = (&'static str, &'static str, u32, u32, u32, u32);
 /// the pad it no longer routes to at its centre, as it reaches every pad,
 /// which `pads_that_touch_need_no_route` holds. The other five boards are
 /// unchanged.
+///
+/// 178 / 0 / 2 -> 176 / 0 / 3 on `shift_driver` on 2026-10-30. The router
+/// learned the edge of the board, the cells it shut moved the order in which
+/// the search meets cells of equal cost, and the board routes to other copper
+/// of the same cost class - 672 routes to 694. Two fewer entries are examined
+/// and one more is sharp: U1.13 at 40.9, D2.2 at 37.4 and U2.13 at 43.4
+/// degrees. The board's violations fall from 22 to 16 and its shorts stay at 0.
+/// The other five boards are unchanged.
 const ENTRY_CENSUS: [(usize, usize, usize); 6] = [
     (12, 0, 0),  // led_blink
     (176, 0, 1), // stm32_breakout
     (293, 8, 5), // multi_ic
-    (178, 0, 2), // shift_driver
+    (176, 0, 3), // shift_driver
     (176, 0, 2), // qfp_fanout
     (62, 0, 0),  // plane_board
 ];

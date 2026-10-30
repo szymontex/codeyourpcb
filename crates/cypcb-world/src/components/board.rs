@@ -439,6 +439,16 @@ impl BoardCutouts {
     }
 }
 
+/// The ring of a board's rectangle, from its size.
+fn size_rectangle(size: &BoardSize) -> Vec<cypcb_core::Point> {
+    vec![
+        cypcb_core::Point::new(Nm::ZERO, Nm::ZERO),
+        cypcb_core::Point::new(size.width, Nm::ZERO),
+        cypcb_core::Point::new(size.width, size.height),
+        cypcb_core::Point::new(Nm::ZERO, size.height),
+    ]
+}
+
 /// The edges of a ring given as points, closing it.
 fn ring_edges(
     points: &[cypcb_core::Point],
@@ -469,6 +479,30 @@ fn ring_contains(points: &[cypcb_core::Point], point: cypcb_core::Point) -> bool
         }
     }
     inside
+}
+
+/// The x of every crossing of a ring with the horizontal line at `y`,
+/// ascending. The same test and the same arithmetic as [`ring_contains`], so
+/// the spans built from them say what `ring_contains` says.
+fn ring_crossings(points: &[cypcb_core::Point], y: f64) -> Vec<f64> {
+    let mut crossings = Vec::new();
+    for (a, b) in ring_edges(points) {
+        let (ax, ay) = (a.x.raw() as f64, a.y.raw() as f64);
+        let (bx, by) = (b.x.raw() as f64, b.y.raw() as f64);
+        if (ay > y) != (by > y) {
+            crossings.push(ax + (y - ay) / (by - ay) * (bx - ax));
+        }
+    }
+    crossings.sort_by(f64::total_cmp);
+    crossings
+}
+
+/// The spans `[from, to)` of the line at `y` that lie inside one ring.
+fn ring_spans(points: &[cypcb_core::Point], y: f64) -> Vec<(f64, f64)> {
+    ring_crossings(points, y)
+        .chunks_exact(2)
+        .map(|pair| (pair[0], pair[1]))
+        .collect()
 }
 
 /// The edge of the board as the checks and the fabrication files see it: one
@@ -508,20 +542,63 @@ impl BoardEdge {
         }
         let outer = match outline {
             Some(outline) => outline.points.clone(),
-            None => {
-                let size = world.ecs().get::<BoardSize>(entity)?;
-                vec![
-                    cypcb_core::Point::new(Nm::ZERO, Nm::ZERO),
-                    cypcb_core::Point::new(size.width, Nm::ZERO),
-                    cypcb_core::Point::new(size.width, size.height),
-                    cypcb_core::Point::new(Nm::ZERO, size.height),
-                ]
-            }
+            None => size_rectangle(world.ecs().get::<BoardSize>(entity)?),
         };
         Some(BoardEdge {
             outer,
             cutouts: cutouts.map(|c| c.rings.clone()).unwrap_or_default(),
         })
+    }
+
+    /// The edge the board states, or the rectangle of its size when it states
+    /// none: a board with no ring still ends where its rectangle ends, and a
+    /// reader that places copper has to keep off that edge as much as off a
+    /// drawn one. `None` for a board whose size is zero, which has no edge to
+    /// keep off.
+    pub fn of_or_size(world: &crate::world::BoardWorld) -> Option<BoardEdge> {
+        BoardEdge::of(world).or_else(|| {
+            let size = world.ecs().get::<BoardSize>(world.board_entity()?)?;
+            (size.width.raw() > 0 && size.height.raw() > 0).then(|| BoardEdge {
+                outer: size_rectangle(size),
+                cutouts: Vec::new(),
+            })
+        })
+    }
+
+    /// The stretches of the horizontal line at `y` nanometres that are on the
+    /// board, as `[from, to)` in nanometres, ascending.
+    ///
+    /// The row-at-a-time form of [`contains`](Self::contains), for a reader
+    /// that asks about a million points in rows: a point `x` is on the board
+    /// exactly when `from <= x < to` for one of the spans. The spans of the
+    /// outer ring with the spans of every cutout taken out of them.
+    pub fn spans_at(&self, y: i64) -> Vec<(f64, f64)> {
+        let y = y as f64;
+        let mut spans = ring_spans(&self.outer, y);
+        for ring in &self.cutouts {
+            let holes = ring_spans(ring, y);
+            if holes.is_empty() {
+                continue;
+            }
+            let mut left = Vec::with_capacity(spans.len() + holes.len());
+            for (from, to) in spans {
+                let mut start = from;
+                for &(hole_from, hole_to) in &holes {
+                    if hole_to <= start || hole_from >= to {
+                        continue;
+                    }
+                    if hole_from > start {
+                        left.push((start, hole_from));
+                    }
+                    start = start.max(hole_to);
+                }
+                if start < to {
+                    left.push((start, to));
+                }
+            }
+            spans = left;
+        }
+        spans
     }
 
     /// The outer ring.

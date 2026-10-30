@@ -34,7 +34,11 @@ cd "$(dirname "$0")/.." || exit 2
 # 31 since 2026-10-11: the 0.95mm in the comment on `gullwing.rs` line 246 is
 # named by a test of the teardrop change, which uses the same figure for a
 # board edge; the count fell by that one.
-BASELINE_UNREAD=31
+# 30 since 2026-10-30: the 0.0635mm in the comment on `grid.rs` about a route
+# landing 0.0635mm from a pad that asks 0.127mm is named by the tests of the
+# edge change, which state the same half track when they work out where the
+# band along the board edge ends; the count fell by that one.
+BASELINE_UNREAD=30
 
 MODE=${1:-count}
 

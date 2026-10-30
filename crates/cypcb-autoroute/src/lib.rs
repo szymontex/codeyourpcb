@@ -28,6 +28,7 @@ pub mod clearance_field;
 pub mod congestion;
 pub mod cost;
 pub mod debug_route;
+pub mod edge_guard;
 pub mod grid;
 pub mod noise_band;
 pub mod orchestrator;

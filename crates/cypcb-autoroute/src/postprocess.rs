@@ -8,10 +8,14 @@
 //! 1. [`simplify_path`] — merge collinear grid steps into minimal straight segments
 //! 2. [`convert_to_route_segments`] — convert grid coordinates to Nm, apply trace widths
 
+use cypcb_core::{Nm, Point};
+use cypcb_drc::rules::clearance::segment_distance;
+use cypcb_drc::rules::NetPad;
 use cypcb_router::types::{RouteSegment, ViaPlacement};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::NetId;
 
+use crate::edge_guard::EdgeGuard;
 use crate::grid::{index_to_layer, RoutingGrid};
 use crate::pathfinder::GridNode;
 
@@ -170,6 +174,115 @@ pub fn convert_to_route_segments(
     }
 
     (segments, vias)
+}
+
+/// Join to its pad a route that ended beside it.
+///
+/// A route ends at the centre of the cell that holds the pad's centre, and a
+/// cell is up to 0.7 of its own width from the centre of anything inside it.
+/// On a fine grid that is inside the copper of every pad; on a coarse one it
+/// is beside a small pad, and the connection counts as routed while the pad
+/// has nothing of its net on it. For every pad of a net that has copper, that
+/// no copper of the net reaches, and that has an end of the net's copper
+/// within `reach` of its centre, this lays a segment from that end to the
+/// centre, on the layer of the end. It is laid like any other segment: not if
+/// it comes nearer another net's copper than `min_clearance`, and not off the
+/// board.
+///
+/// Returns how many segments it laid.
+pub fn join_pins(
+    segments: &mut Vec<RouteSegment>,
+    vias: &[ViaPlacement],
+    pads: &[NetPad],
+    reach: Nm,
+    min_clearance: Nm,
+    edge: Option<&EdgeGuard>,
+) -> usize {
+    let mut laid = Vec::new();
+    for pad in pads {
+        let own = |s: &&RouteSegment| s.net_id == pad.net;
+        if !segments.iter().any(|s| own(&s)) {
+            continue;
+        }
+        let touched = segments.iter().filter(own).any(|s| {
+            pad.mask & s.layer.to_copper_mask() != 0
+                && pad.touched_by(s.start, s.end, s.width.0 / 2)
+        }) || vias.iter().any(|v| {
+            v.net_id == pad.net && pad.touched_by(v.position, v.position, v.outer_diameter.0 / 2)
+        });
+        if touched {
+            continue;
+        }
+
+        // The nearest end of the net's copper on a layer the pad is on.
+        let nearest = segments
+            .iter()
+            .filter(own)
+            .filter(|s| pad.mask & s.layer.to_copper_mask() != 0)
+            .flat_map(|s| [(s.start, s), (s.end, s)])
+            .map(|(end, s)| (distance(end, pad.centre), end, s))
+            .filter(|(apart, _, _)| *apart <= reach.0)
+            .min_by_key(|(apart, _, _)| *apart);
+        let Some((_, end, owner)) = nearest else {
+            continue;
+        };
+
+        let (p1, p2) = ([end.x.0, end.y.0], [pad.centre.x.0, pad.centre.y.0]);
+        // A stub keeps the clearance, or at least comes no nearer than the end
+        // it starts from already is: on a pad at fine pitch that end is beside
+        // the neighbour, and the stub goes away from it.
+        let fine = |stub: i64, from_end: i64, need: i64| stub >= need || stub >= from_end;
+        let clear_of_segments = segments
+            .iter()
+            .chain(laid.iter())
+            .filter(|s| s.net_id != pad.net && s.layer == owner.layer)
+            .all(|s| {
+                let (a, b) = ([s.start.x.0, s.start.y.0], [s.end.x.0, s.end.y.0]);
+                fine(
+                    segment_distance(p1, p2, a, b),
+                    segment_distance(p1, p1, a, b),
+                    min_clearance.0 + owner.width.0 / 2 + s.width.0 / 2,
+                )
+            });
+        let clear_of_vias = vias.iter().filter(|v| v.net_id != pad.net).all(|v| {
+            let at = [v.position.x.0, v.position.y.0];
+            fine(
+                segment_distance(p1, p2, at, at),
+                segment_distance(p1, p1, at, at),
+                min_clearance.0 + owner.width.0 / 2 + v.outer_diameter.0 / 2,
+            )
+        });
+        let clear_of_pads = pads
+            .iter()
+            .filter(|other| other.net != pad.net && other.mask & owner.layer.to_copper_mask() != 0)
+            .all(|other| {
+                fine(
+                    other.distance_to(end, pad.centre),
+                    other.distance_to(end, end),
+                    min_clearance.0 + owner.width.0 / 2,
+                )
+            });
+        if clear_of_segments
+            && clear_of_vias
+            && clear_of_pads
+            && edge.is_none_or(|guard| guard.allows(p1, p2, owner.width))
+        {
+            laid.push(RouteSegment::new(
+                pad.net,
+                owner.layer,
+                owner.width,
+                end,
+                pad.centre,
+            ));
+        }
+    }
+    let count = laid.len();
+    segments.extend(laid);
+    count
+}
+
+fn distance(a: Point, b: Point) -> i64 {
+    (((a.x.0 - b.x.0) as f64).hypot((a.y.0 - b.y.0) as f64)).round() as i64
 }
 
 /// Convert multiple raw grid paths for a net into final output.

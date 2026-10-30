@@ -18,11 +18,12 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
 use crate::cost::RoutingCost;
+use crate::edge_guard::EdgeGuard;
 use crate::grid::RoutingGrid;
 use crate::orchestrator::{extract_ratsnest, NetRoute, PadTarget};
 use crate::pathfinder::{find_path_with_zones, GridNode, PadZone};
 use crate::postprocess;
-use crate::smoother::smooth_routes_on_pads;
+use crate::smoother::smooth_routes_within_edge;
 use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
@@ -120,6 +121,8 @@ impl RoutingStrategy for ImprovedAStarStrategy {
 
         // Smooth traces and optimize vias
         let min_clearance = rules.constraints_for_net(0).min_clearance;
+        let edge_guard =
+            EdgeGuard::of_board(world, rules.constraints_for_net(0).min_edge_clearance);
         let pre_smooth_segments = all_segments.len();
         let pre_smooth_vias = all_vias.len();
 
@@ -149,13 +152,14 @@ impl RoutingStrategy for ImprovedAStarStrategy {
                 .filter(|v| v.net_id == *net_id)
                 .map(|v| v.position)
                 .collect();
-            let smoothed = smooth_routes_on_pads(
+            let smoothed = smooth_routes_within_edge(
                 &net_segs,
                 &other_segs,
                 &net_vias,
                 &pads,
                 min_clearance,
                 config.params.roundness,
+                edge_guard.as_ref(),
             );
             smoothed_segments.extend(smoothed);
         }
@@ -164,7 +168,11 @@ impl RoutingStrategy for ImprovedAStarStrategy {
         let (optimized_segments, optimized_vias) = optimize_vias(
             all_segments,
             all_vias,
-            &BoardObstacles::from_board(world, library),
+            &BoardObstacles::from_board_with_edge(
+                world,
+                library,
+                rules.constraints_for_net(0).min_edge_clearance,
+            ),
             min_clearance,
             rules.constraints_for_net(0).min_hole_to_hole,
         );
