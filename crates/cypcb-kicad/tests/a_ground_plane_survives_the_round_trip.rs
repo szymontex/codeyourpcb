@@ -92,19 +92,19 @@ fn it_comes_back_on_its_own_net() {
 }
 
 #[test]
-fn a_plane_on_both_faces_is_written_as_two() {
-    // KiCad stores a pour per layer - `(layers ...)` on a zone is for rule
-    // areas rather than for copper - so a design pouring both faces has to
-    // produce two of them, or the back of the board loses its ground.
+fn a_plane_on_both_faces_is_written_as_one_zone_on_two_layers() {
+    // KiCad keeps a pour on several layers as one zone and lists the layers:
+    // `format( const ZONE* )` enumerates them for a zone on copper. Two zones
+    // would be two pours that do not know they are the same plane.
     let mut world = board_with_pour(0b11);
     let text = write_board(&mut world, "cypcb");
 
-    assert_eq!(text.matches("  (zone").count(), 2, "{text}");
-    assert!(text.contains("(layer \"F.Cu\")"));
-    assert!(text.contains("(layer \"B.Cu\")"));
+    assert_eq!(text.matches("  (zone").count(), 1, "{text}");
+    assert!(text.contains("(layers \"F.Cu\" \"B.Cu\")"));
 
     let zones = zones_after_round_trip(&mut board_with_pour(0b11));
-    assert_eq!(zones.len(), 2, "both faces came back: {zones:?}");
+    assert_eq!(zones.len(), 1, "one plane came back: {zones:?}");
+    assert_eq!(zones[0].layer_mask, 0b11);
 }
 
 #[test]
