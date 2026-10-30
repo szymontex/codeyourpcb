@@ -407,8 +407,8 @@ pub struct BoardOutline {
 /// the board. [`BoardOutline`] is one ring and cannot say so. Each ring here
 /// is closed implicitly, in board coordinates, like the outline.
 ///
-/// Only the board file carries these: the checks, the fabrication files and
-/// the language still read the outline alone and do not know a cutout.
+/// Readers do not take the ring and the cutouts apart: [`BoardEdge`] puts them
+/// together.
 #[derive(Component, Debug, Clone, PartialEq)]
 pub struct BoardCutouts {
     /// One ring per cutout, in the order the file gave them.
@@ -436,6 +436,119 @@ impl BoardCutouts {
             return None;
         }
         Some(BoardCutouts { rings })
+    }
+}
+
+/// The edges of a ring given as points, closing it.
+fn ring_edges(
+    points: &[cypcb_core::Point],
+) -> impl Iterator<Item = (cypcb_core::Point, cypcb_core::Point)> + '_ {
+    points
+        .iter()
+        .zip(points.iter().cycle().skip(1))
+        .take(points.len())
+        .map(|(a, b)| (*a, *b))
+}
+
+/// Whether a point is inside a ring given as points.
+///
+/// Ray casting along +x, counting crossings. A point exactly on an edge
+/// may fall either way, which is acceptable: a feature that close to the
+/// edge is a clearance violation whichever side of the line it lands on.
+fn ring_contains(points: &[cypcb_core::Point], point: cypcb_core::Point) -> bool {
+    let (x, y) = (point.x.raw() as f64, point.y.raw() as f64);
+    let mut inside = false;
+    for (a, b) in ring_edges(points) {
+        let (ax, ay) = (a.x.raw() as f64, a.y.raw() as f64);
+        let (bx, by) = (b.x.raw() as f64, b.y.raw() as f64);
+        if (ay > y) != (by > y) {
+            let cross = ax + (y - ay) / (by - ay) * (bx - ax);
+            if x < cross {
+                inside = !inside;
+            }
+        }
+    }
+    inside
+}
+
+/// The edge of the board as the checks and the fabrication files see it: one
+/// outer ring and the cutouts inside it.
+///
+/// [`BoardOutline`] is the outer ring and [`BoardCutouts`] the holes, and a
+/// reader that took the ring alone measured copper against the outside of a
+/// board and passed copper in a window. This is the one place that puts them
+/// together, so no reader learns the cutouts on its own.
+///
+/// Inside the board is inside the ring and outside every cutout. The edge is
+/// the ring and the edge of every cutout.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoardEdge {
+    outer: Vec<cypcb_core::Point>,
+    cutouts: Vec<Vec<cypcb_core::Point>>,
+}
+
+impl BoardEdge {
+    /// An edge from an outer ring and the rings cut out of it.
+    pub fn new(outer: Vec<cypcb_core::Point>, cutouts: Vec<Vec<cypcb_core::Point>>) -> Self {
+        BoardEdge { outer, cutouts }
+    }
+
+    /// The edge the board states, or `None` when it states neither an outline
+    /// nor a cutout, which leaves the rectangle of [`BoardSize`] as the edge
+    /// and every reader on the path it has always had.
+    ///
+    /// A board with cutouts and no outline - a rectangle drawn as one shape
+    /// has no ring - gets the rectangle of its size as the outer ring.
+    pub fn of(world: &crate::world::BoardWorld) -> Option<BoardEdge> {
+        let entity = world.board_entity()?;
+        let outline = world.ecs().get::<BoardOutline>(entity);
+        let cutouts = world.ecs().get::<BoardCutouts>(entity);
+        if outline.is_none() && cutouts.is_none() {
+            return None;
+        }
+        let outer = match outline {
+            Some(outline) => outline.points.clone(),
+            None => {
+                let size = world.ecs().get::<BoardSize>(entity)?;
+                vec![
+                    cypcb_core::Point::new(Nm::ZERO, Nm::ZERO),
+                    cypcb_core::Point::new(size.width, Nm::ZERO),
+                    cypcb_core::Point::new(size.width, size.height),
+                    cypcb_core::Point::new(Nm::ZERO, size.height),
+                ]
+            }
+        };
+        Some(BoardEdge {
+            outer,
+            cutouts: cutouts.map(|c| c.rings.clone()).unwrap_or_default(),
+        })
+    }
+
+    /// The outer ring.
+    pub fn outer(&self) -> &[cypcb_core::Point] {
+        &self.outer
+    }
+
+    /// The cutouts, one ring each.
+    pub fn cutouts(&self) -> &[Vec<cypcb_core::Point>] {
+        &self.cutouts
+    }
+
+    /// Every ring of the edge: the outer one first, then each cutout.
+    pub fn rings(&self) -> impl Iterator<Item = &[cypcb_core::Point]> {
+        std::iter::once(self.outer.as_slice()).chain(self.cutouts.iter().map(Vec::as_slice))
+    }
+
+    /// Every edge of every ring, each ring closed.
+    pub fn edges(&self) -> impl Iterator<Item = (cypcb_core::Point, cypcb_core::Point)> + '_ {
+        self.rings().flat_map(ring_edges)
+    }
+
+    /// Whether a point is on the board: inside the outer ring and outside
+    /// every cutout.
+    pub fn contains(&self, point: cypcb_core::Point) -> bool {
+        ring_contains(&self.outer, point)
+            && !self.cutouts.iter().any(|ring| ring_contains(ring, point))
     }
 }
 
@@ -551,11 +664,7 @@ impl BoardOutline {
 
     /// The outline's edges, as point pairs, closing the ring.
     pub fn edges(&self) -> impl Iterator<Item = (cypcb_core::Point, cypcb_core::Point)> + '_ {
-        self.points
-            .iter()
-            .zip(self.points.iter().cycle().skip(1))
-            .take(self.points.len())
-            .map(|(a, b)| (*a, *b))
+        ring_edges(&self.points)
     }
 
     /// Whether a point is inside the ring.
@@ -564,19 +673,7 @@ impl BoardOutline {
     /// may fall either way, which is acceptable: a feature that close to the
     /// edge is a clearance violation whichever side of the line it lands on.
     pub fn contains(&self, point: cypcb_core::Point) -> bool {
-        let (x, y) = (point.x.raw() as f64, point.y.raw() as f64);
-        let mut inside = false;
-        for (a, b) in self.edges() {
-            let (ax, ay) = (a.x.raw() as f64, a.y.raw() as f64);
-            let (bx, by) = (b.x.raw() as f64, b.y.raw() as f64);
-            if (ay > y) != (by > y) {
-                let cross = ax + (y - ay) / (by - ay) * (bx - ax);
-                if x < cross {
-                    inside = !inside;
-                }
-            }
-        }
-        inside
+        ring_contains(&self.points, point)
     }
 }
 

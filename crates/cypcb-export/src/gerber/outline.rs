@@ -7,7 +7,7 @@ use crate::apertures::{ApertureManager, ApertureShape};
 use crate::coords::{nm_to_gerber, CoordinateFormat};
 use crate::gerber::header::{write_header, GerberFileFunction};
 use cypcb_core::Nm;
-use cypcb_world::components::BoardOutline;
+use cypcb_world::components::BoardEdge;
 use cypcb_world::BoardWorld;
 
 /// Board outline export error types.
@@ -87,44 +87,44 @@ pub fn export_outline(
     // Select aperture
     drawing_commands.push_str(&format!("D{}*\n", dcode));
 
-    // The board's own outline when it states one, and the rectangle its size
+    // The board's own edge when it states one, and the rectangle its size
     // describes when it does not.
     //
     // This is what the fabricator routes to. Emitting a rectangle for a board
     // with a cutout does not produce a board with a cutout - it produces a
-    // rectangle, which is the wrong board.
-    let outline = world
-        .board_entity()
-        .and_then(|entity| world.ecs().get::<BoardOutline>(entity));
-
-    let mut corners: Vec<(Nm, Nm)> = match outline {
-        Some(outline) => outline
-            .points
-            .iter()
-            .map(|point| (point.x, point.y))
+    // rectangle, which is the wrong board. A cutout is a contour of its own,
+    // drawn after the outline, as KiCad plots every Edge.Cuts shape as it is
+    // (plot_board_layers.cpp:310-318, PlotLayer :54-61).
+    let rings: Vec<Vec<(Nm, Nm)>> = match BoardEdge::of(world) {
+        Some(edge) => edge
+            .rings()
+            .map(|ring| ring.iter().map(|point| (point.x, point.y)).collect())
             .collect(),
-        None => vec![
+        None => vec![vec![
             (Nm::ZERO, Nm::ZERO),                  // Bottom-left (0, 0)
             (board_size.width, Nm::ZERO),          // Bottom-right (w, 0)
             (board_size.width, board_size.height), // Top-right (w, h)
             (Nm::ZERO, board_size.height),         // Top-left (0, h)
-        ],
+        ]],
     };
-    // Close the path by returning to where it started.
-    if let Some(first) = corners.first().copied() {
-        corners.push(first);
-    }
 
-    // Move to first corner (D02)
-    let x = nm_to_gerber(corners[0].0 .0, format);
-    let y = nm_to_gerber(corners[0].1 .0, format);
-    drawing_commands.push_str(&format!("X{}Y{}D02*\n", x, y));
+    for mut corners in rings {
+        // Close the path by returning to where it started.
+        if let Some(first) = corners.first().copied() {
+            corners.push(first);
+        }
 
-    // Draw to remaining corners (D01)
-    for corner in corners.iter().skip(1) {
-        let x = nm_to_gerber(corner.0 .0, format);
-        let y = nm_to_gerber(corner.1 .0, format);
-        drawing_commands.push_str(&format!("X{}Y{}D01*\n", x, y));
+        // Move to first corner (D02)
+        let x = nm_to_gerber(corners[0].0 .0, format);
+        let y = nm_to_gerber(corners[0].1 .0, format);
+        drawing_commands.push_str(&format!("X{}Y{}D02*\n", x, y));
+
+        // Draw to remaining corners (D01)
+        for corner in corners.iter().skip(1) {
+            let x = nm_to_gerber(corner.0 .0, format);
+            let y = nm_to_gerber(corner.1 .0, format);
+            drawing_commands.push_str(&format!("X{}Y{}D01*\n", x, y));
+        }
     }
 
     // Emit aperture definitions

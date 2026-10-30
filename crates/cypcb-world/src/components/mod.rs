@@ -41,7 +41,7 @@ pub mod zone;
 
 // Re-export all components
 pub use board::{
-    ArcRun, Board, BoardCutouts, BoardDimension, BoardOutline, BoardSize, BoardText,
+    ArcRun, Board, BoardCutouts, BoardDimension, BoardEdge, BoardOutline, BoardSize, BoardText,
     CopperEnvironment, CurveSet, DrillPair, EdgeConnector, EdgeCurves, Fab, LayerCoverage,
     LayerStack, Stackup, StackupLayer, StackupLayerKind, StackupSheet, Teardrops,
 };

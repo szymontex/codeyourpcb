@@ -14,7 +14,7 @@
 //! with nothing in the workspace reading them. This is the second one closed.
 
 use cypcb_core::Nm;
-use cypcb_world::components::{BoardOutline, BoardSize};
+use cypcb_world::components::{BoardEdge, BoardSize};
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -38,7 +38,7 @@ impl DrcRule for HoleToEdgeRule {
         let Some(board_size) = world.ecs().get::<BoardSize>(board_entity).copied() else {
             return Vec::new();
         };
-        let outline = world.ecs().get::<BoardOutline>(board_entity).cloned();
+        let outline = BoardEdge::of(world);
 
         let mut violations = Vec::new();
         for hole in super::holes_of(world) {
