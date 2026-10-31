@@ -121,6 +121,16 @@ pub struct RouteCommand {
     /// that no longer exists.
     #[arg(long)]
     pub fast: bool,
+
+    /// Route a KiCad board as if its file held no copper.
+    ///
+    /// Without this flag the traces and vias the file already carries stay
+    /// where they are and the router goes round them, as it goes round a pad.
+    /// With it the router starts from the parts alone, which is the board a
+    /// benchmark of the router wants and not the board a person has drawn.
+    /// A `.cypcb` board has no copper to ignore, and the flag is refused there.
+    #[arg(long)]
+    pub ignore_board_copper: bool,
 }
 
 impl RouteCommand {
@@ -134,6 +144,14 @@ impl RouteCommand {
         // produce something neither reader can open.
         if crate::board_source::is_kicad(&self.file) {
             return self.route_kicad(start_time);
+        }
+
+        if self.ignore_board_copper {
+            return Err(miette::miette!(
+                "--ignore-board-copper applies to a .kicad_pcb board, and {} is not one. \
+                 A .cypcb board holds no copper the router could leave in place.",
+                self.file.display()
+            ));
         }
 
         // Read input file
@@ -567,6 +585,20 @@ impl RouteCommand {
         world.set_footprints(library.clone());
         world.rebuild_spatial_index_from_library(&library);
 
+        // The copper the file carries stays as it is, and the router goes
+        // round it. Read as the checker reads the written file
+        // (`board_source::load_kicad`), so the board the router and repair
+        // measure is the board the DRC line afterwards is about.
+        let file_copper_seen = parsed.reference_routes.is_some() && !self.ignore_board_copper;
+        if let (Some(routes), false) = (&parsed.reference_routes, self.ignore_board_copper) {
+            cypcb_router::apply_routes_as(
+                &mut world,
+                routes,
+                cypcb_world::components::trace::TraceSource::Manual,
+            );
+            world.rebuild_spatial_index_from_library(&library);
+        }
+
         let preset = crate::preset_choice::resolve(self.preset.as_deref(), &world)?;
         let rules = cypcb_drc::ruleset_for_world(preset, &world);
 
@@ -585,6 +617,34 @@ impl RouteCommand {
         } else {
             self.route_variants(&mut world, &library, &rules)?.0
         };
+
+        // Every connection is joined by copper the file carries, so there is
+        // nothing to lay. The output is the input, byte for byte: a run that
+        // had nothing to do did not fail, and a copy is what a script that
+        // reads the output file expects to find.
+        if file_copper_seen
+            && result.routes.is_empty()
+            && result.vias.is_empty()
+            && matches!(result.status, cypcb_router::types::RoutingStatus::Complete)
+        {
+            let out_path = self
+                .output
+                .clone()
+                .unwrap_or_else(|| self.file.with_extension("routed.kicad_pcb"));
+            std::fs::write(&out_path, &source)
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Failed to write {}", out_path.display()))?;
+            eprintln!(
+                "nothing to route: every connection is already joined by the copper in the file"
+            );
+            self.say_what_the_written_board_finds(&out_path)?;
+            eprintln!(
+                "Wrote {} (a copy of the input) in {:.2}s",
+                out_path.display(),
+                start_time.elapsed().as_secs_f64()
+            );
+            return Ok(());
+        }
 
         if result.routes.is_empty() {
             return Err(miette::miette!(
@@ -650,13 +710,7 @@ impl RouteCommand {
         // The same line a `.cypcb` board gets, from the same place: the file
         // as the checker reads it. A KiCad board printed no DRC line at all,
         // so the only number a routed KiCad board carried was the scorer's.
-        {
-            let written = crate::board_source::load_kicad(&out_path)
-                .wrap_err("The routed board does not read back")?;
-            let mut written_world = written.world;
-            let checked = crate::preset_choice::resolve(self.preset.as_deref(), &written_world)?;
-            say_what_the_checker_finds(&mut written_world, &checked);
-        }
+        self.say_what_the_written_board_finds(&out_path)?;
 
         eprintln!(
             "Wrote {} ({} segments, {} vias) in {:.2}s",
@@ -665,6 +719,16 @@ impl RouteCommand {
             result.vias.len(),
             start_time.elapsed().as_secs_f64()
         );
+        Ok(())
+    }
+
+    /// Read the file just written back and print the checker's line about it.
+    fn say_what_the_written_board_finds(&self, out_path: &Path) -> Result<()> {
+        let written = crate::board_source::load_kicad(out_path)
+            .wrap_err("The routed board does not read back")?;
+        let mut written_world = written.world;
+        let checked = crate::preset_choice::resolve(self.preset.as_deref(), &written_world)?;
+        say_what_the_checker_finds(&mut written_world, &checked);
         Ok(())
     }
 
