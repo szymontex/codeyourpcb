@@ -661,10 +661,27 @@ fn benchmark_500_component() {
     );
     eprintln!("╚══════════════════════════════════════════════════════════════╝\n");
 
+    // 2026-10-31: one connection open and 14 contacts of copper on copper,
+    // where this asserted `Complete`. The old answer was wrong: the board came
+    // back Complete with 21 contacts, among them `trace 'N487' <-> R10` at
+    // 0.00 mm, the trace of N487 laid over the pad of N9. The router now takes
+    // back each net whose path crosses another net's pad and routes it again
+    // where it may touch nothing: six nets, five found such a path, and N487,
+    // from (35.55, 6.5) to (19.45, 69.5) mm, found none. Both figures are held
+    // exactly, so drift in either direction fails.
     assert!(
-        matches!(result.status, RoutingStatus::Complete),
-        "every net of the synthetic board has two pads and a route; got {:?}",
+        matches!(result.status, RoutingStatus::Partial { unrouted_count: 1 }),
+        "the synthetic board leaves N487 open and nothing else; got {:?}",
         result.status
+    );
+    cypcb_router::apply_routes(&mut world, &result);
+    world.rebuild_spatial_index_from_library(&library);
+    let report = cypcb_drc::run_drc(&mut world, &cypcb_drc::DesignRules::jlcpcb_2layer());
+    let contacts = cypcb_drc::shorts(&report.violations);
+    assert_eq!(
+        contacts, 14,
+        "contacts of copper on copper on the synthetic board: 21 before the router \
+         took back the nets that cross another net's pad"
     );
     let min_segments = BENCHMARK_500_MIN_SEGMENTS_PER_NET * total_nets;
     assert!(

@@ -1491,7 +1491,7 @@ sentence. A board whose pads collide on the grid is a board
 fault; the grid is only how it is detected.
 
 **1. What the resolution is a function of.** One cell is one legal track
-position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:393`)
+position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:415`)
 takes the fab table for net 0 and returns `min_trace_width + min_clearance`,
 floored at 10 um. The comment records the measurement that settled it: a
 half-clearance grid let two nets sit in adjacent cells whose copper overlapped -
@@ -2802,6 +2802,14 @@ among 180 into a circular land**: J4.2 and J5.2 came in at 0.06 of their
 chords each, on copper rerouted around those pairs. Seven of eight clip the
 rim; J2.9 is still the one that does not. Measured 2026-09-27 by
 `cargo test -p cypcb-autoroute --test sharp_entry_anatomy -- --ignored`.
+
+Since 2026-10-31, when the router began to take back each net that ends its
+negotiation on another net's copper and to route it again where it may touch
+nothing, there are **7 sharp entries among 174 into a circular land**, at
+0.241, 0.205, 0.156, 0.123, 0.116, 0.06 and 0.06 of their chords. J2.9 is no
+longer made on the copper `multi_ic` is laid with now, so all seven clip the
+rim and the case to read first is not on these boards. Measured 2026-10-31 by
+the same command.
 
 **One statement about these entries is forced and must never be reported as
 evidence.** The distance from a pad centre to the line of a segment is at most

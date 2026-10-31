@@ -260,7 +260,10 @@ fn the_router_lays_copper_back_along_its_own_copper() {
 
     // The control: a scan that found nothing inside the router would make the
     // claim below vacuous, and so would a rule that had stopped reporting.
-    assert!(reported >= 100, "the rule reported {reported} of them");
+    // 2026-10-31: 60, from 100. The router strips a net that ends its
+    // negotiation on another net's copper and routes it again, and the copper
+    // drawn over itself the rule reports went from 110 to 66 with it.
+    assert!(reported >= 60, "the rule reported {reported} of them");
     // The other side of the same control: what the router holds is a subset of
     // what the rule sees, because the rule reads a world that holds this
     // copper and more. A count that runs past it is counting something else -
@@ -269,8 +272,11 @@ fn the_router_lays_copper_back_along_its_own_copper() {
         own <= reported,
         "{own} overlaps inside the router against {reported} the rule reports"
     );
+    // 2026-10-31: 75, from 80. 51 of 66 are inside the router's own output,
+    // 77 per cent, where 95 of 110 were (86) before the router stripped the nets
+    // that end their negotiation on another net's copper.
     assert!(
-        own * 100 / reported >= 80,
+        own * 100 / reported >= 75,
         "{own} of {reported} are inside the router's own output, and the \
          finding is that most of them are"
     );

@@ -501,7 +501,9 @@ impl VariantResult {
 /// ranking then placed below the board they started from.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RankKey {
-    /// Connections given up on, bare pins and nets DRC finds cut in two.
+    /// Connections given up on, bare pins, nets DRC finds cut in two, and
+    /// the copper-on-copper contacts: a connection that touches another net
+    /// is not a connection.
     pub incomplete: usize,
     /// Copper touching copper.
     pub shorts: u32,
@@ -513,7 +515,10 @@ impl RankKey {
     /// The key of a board the router left `unrouted` connections on.
     pub fn of(unrouted: usize, score: &RoutingScore) -> Self {
         RankKey {
-            incomplete: unrouted + score.unrouted_pins as usize + score.net_splits as usize,
+            incomplete: unrouted
+                + score.unrouted_pins as usize
+                + score.net_splits as usize
+                + score.shorts as usize,
             shorts: score.shorts,
             composite: score.composite,
         }
@@ -586,7 +591,10 @@ fn repair_winner(
     winner: &VariantResult,
 ) -> Option<VariantResult> {
     // Repair re-routes a complete board; one with connections missing is
-    // returned untouched, so there is nothing to spend.
+    // returned untouched, so there is nothing to spend. 2026-10-31: opened to
+    // a board with connections missing, repair undoes the strip of nets that
+    // share copper - shorts on esp32_starter went 7 -> 12, on mains-sequencer
+    // 11 -> 61 and on qfp_fanout 14 -> 34 - so it stays shut.
     if winner.unrouted > 0 {
         return None;
     }
@@ -1028,5 +1036,34 @@ mod tests {
             results[0].name, "whole",
             "a board with a net in two pieces won"
         );
+    }
+
+    #[test]
+    fn a_board_with_a_short_does_not_outrank_one_that_gave_a_connection_up() {
+        // Three contacts are three connections that touch another net. Two
+        // connections left unrouted are fewer, so the honest board wins - and
+        // a board that gave ten up still loses to three contacts.
+        let score = |shorts| RoutingScore {
+            total_length: Nm::from_mm(100.0),
+            via_count: 0,
+            drc_violations: 0,
+            shorts,
+            smoothness: 1.0,
+            crossings: 0,
+            layer_balance: 1.0,
+            composite: 10.0,
+            clearance_contacts: 0,
+            unrouted_pins: 0,
+            net_splits: 0,
+        };
+        let touching = RankKey::of(0, &score(3));
+        let unrouted_two = RankKey::of(2, &score(0));
+        let unrouted_ten = RankKey::of(10, &score(0));
+        assert_eq!(touching.incomplete, 3);
+        assert_eq!(
+            touching.cmp_rank(&unrouted_two),
+            std::cmp::Ordering::Greater
+        );
+        assert_eq!(touching.cmp_rank(&unrouted_ten), std::cmp::Ordering::Less);
     }
 }

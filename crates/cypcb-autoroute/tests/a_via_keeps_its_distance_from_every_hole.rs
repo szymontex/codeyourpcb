@@ -141,9 +141,19 @@ fn the_price_moves_the_vias_and_keeps_them_off_the_holes() {
             helped.push(board);
         }
     }
+    // 2026-10-31: three boards, where one was. The router now strips a net
+    // that ends its negotiation on another net's copper, which took the shorts
+    // of the unpriced run from 24 to 40 on stm32_breakout (the price then
+    // brings them to 26), from 53 to 18 on multi_ic and from 49 to 65 on
+    // qfp_fanout (to 56). Measured before the change: stm32_breakout 24 -> 33,
+    // multi_ic 53 -> 41, qfp_fanout 49 -> 65.
     assert_eq!(
         helped,
-        ["multi_ic.kicad_pcb"],
+        [
+            "stm32_breakout.kicad_pcb",
+            "multi_ic.kicad_pcb",
+            "qfp_fanout.kicad_pcb"
+        ],
         "the boards the price takes shorts off; the table in this file's \
          header is the measurement this list comes from"
     );

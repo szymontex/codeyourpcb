@@ -241,9 +241,12 @@ fn the_boards_that_duplicate_nothing_share_no_run_longer_than_a_cell() {
         .iter()
         .max_by_key(|(_, trunk, _)| *trunk)
         .expect("six boards");
+    // 2026-10-31: multi_ic, where qfp_fanout was. The nets that end their
+    // negotiation on another net's copper are stripped and routed again, and
+    // qfp_fanout lost 244 segments to it (1428 to 1184).
     assert_eq!(
-        most.0, "qfp_fanout.kicad_pcb",
-        "the board with the most duplicated copper is qfp_fanout and the board \
+        most.0, "multi_ic.kicad_pcb",
+        "the board with the most duplicated copper is multi_ic and the board \
          with the most shared cells is {}",
         most.0
     );

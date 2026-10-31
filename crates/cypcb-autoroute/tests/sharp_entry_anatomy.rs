@@ -436,11 +436,15 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     // in sharp on the copper laid around them and C11.2 left. Eleven since
     // 2026-10-30, when the router learned the edge of the board and
     // `shift_driver` routes to other copper of the same cost: U1.13, D2.2 and
-    // U2.13 are sharp where two entries were.
+    // U2.13 are sharp where two entries were. Nine since 2026-10-31, when the
+    // router began to take back each net that ends its negotiation on another
+    // net's copper and to route it again where it may touch nothing: C5.2,
+    // J2.9 and U1.17 are no longer made and C11.2 is, so three fewer and one
+    // more on the copper laid now.
     assert_eq!(
         sharp.len(),
-        11,
-        "the census reports eleven sharp entries across the six fixtures"
+        9,
+        "the census reports nine sharp entries across the six fixtures"
     );
 
     // The first reading, and the denominator that kills it. Every sharp pad is
@@ -884,7 +888,12 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
     // 0.205, U2.13 0.156, U1.13 0.123 and J4.12 0.116. J4.2 and J5.2 came in
     // at 0.06 each on 2026-09-27, on `multi_ic` copper rerouted around the
     // pairs of touching pads it no longer routes between.
-    const CANON_SHARP_RATIOS: &[f64] = &[0.683, 0.241, 0.205, 0.156, 0.123, 0.116, 0.06, 0.06];
+    //
+    // J2.9 at 0.683 left on 2026-10-31, when the router began to take back each
+    // net that ends its negotiation on another net's copper and to route it
+    // again where it may touch nothing: `multi_ic` is laid differently and the
+    // entry is no longer made. Seven are left, 174 into a circular land in all.
+    const CANON_SHARP_RATIOS: &[f64] = &[0.241, 0.205, 0.156, 0.123, 0.116, 0.06, 0.06];
     let mut printed: Vec<f64> = readings
         .iter()
         .filter(|r| r.sharp)

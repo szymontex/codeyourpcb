@@ -263,6 +263,26 @@ pub struct AutorouteConfig {
     /// can pay for the copper it adds.
     pub pad_zone_blocks_foreign_copper: bool,
 
+    /// Whether the first routing searches each connection with every cell
+    /// another net's copper or pad holds shut, pad zones included, and only
+    /// searches again with the zone open if that finds nothing.
+    ///
+    /// Off by default. The nets stripped after the negotiation (see
+    /// `resolve_contested`) are always routed again this way. Measured on
+    /// 2026-10-30 over 179 boards, on in the first routing as well it left
+    /// more shorts than the strip alone and changed 49 boards where the strip
+    /// alone changed 17.
+    pub pad_zone_strict_first: bool,
+
+    /// Whether a net that ended the negotiation sharing copper with another
+    /// net is stripped and routed again on tier 1 alone.
+    ///
+    /// The negotiation can end with two nets on one cell, and a connection
+    /// routed through a pad's zone can cross another net's pad. Both are
+    /// shorts the board will carry. Stripped, such a net gets a path that keeps clear of
+    /// other nets, or is left unrouted and said so. Added 2026-10-30.
+    pub resolve_contested: bool,
+
     /// Whether a connection may finish on the copper its own net already
     /// holds, instead of running all the way to the pad at the far end.
     ///
@@ -375,6 +395,8 @@ impl Default for AutorouteConfig {
             pad_zone_margin_cells: crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS,
             pad_rect_extra_cells: Some(2),
             pad_zone_blocks_foreign_copper: false,
+            pad_zone_strict_first: false,
+            resolve_contested: true,
             stop_at_own_copper: false,
             reserve_trace_footprint: true,
             via_foreign_copper_penalty: 0.25,

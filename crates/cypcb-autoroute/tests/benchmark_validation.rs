@@ -420,14 +420,68 @@ type Ratchet = (&'static str, &'static str, u32, u32, u32, u32);
 /// and one more is sharp: U1.13 at 40.9, D2.2 at 37.4 and U2.13 at 43.4
 /// degrees. The board's violations fall from 22 to 16 and its shorts stay at 0.
 /// The other five boards are unchanged.
+///
+/// 176 / 293 / 176 -> 144 / 240 / 131 examined on `stm32_breakout`, `multi_ic`
+/// and `qfp_fanout` on 2026-10-31, and the rule did not stop looking: the
+/// router takes back the nets that end the negotiation on another net's
+/// copper, and routes them again where they may touch nothing. Connections it
+/// finds no such path for stay open - 13, 21 and 19 - and a connection left
+/// open has no entry to examine. Sharp and refused did not move. The floor
+/// follows the copper down.
 const ENTRY_CENSUS: [(usize, usize, usize); 6] = [
     (12, 0, 0),  // led_blink
-    (176, 0, 1), // stm32_breakout
-    (293, 8, 5), // multi_ic
+    (144, 0, 1), // stm32_breakout
+    (240, 8, 5), // multi_ic
     (176, 0, 3), // shift_driver
-    (176, 0, 2), // qfp_fanout
+    (131, 0, 2), // qfp_fanout
     (62, 0, 0),  // plane_board
 ];
+
+/// Connections the router may leave open on a fixture. Zero on all six until
+/// 2026-10-31.
+///
+/// 13 on `stm32_breakout`, 21 on `multi_ic` and 19 on `qfp_fanout` since that
+/// day, when the router began to take back each net that ends its negotiation
+/// on another net's copper and to route it again where it may touch nothing.
+/// A connection with no such path stays open, and the run says which. The
+/// fixtures' shorts fell with it: 50 to 37 on `stm32_breakout`, 56 to 26 on
+/// `multi_ic` and 67 to 21 on `qfp_fanout` in one routing. A connection left
+/// open is a thing the designer finishes; a contact is a board that does not
+/// work. These are ceilings and may only fall.
+fn unrouted_allowed(label: &str) -> usize {
+    match label {
+        "stm32_breakout" => 13,
+        "multi_ic" => 21,
+        "qfp_fanout" => 19,
+        _ => 0,
+    }
+}
+
+/// The shorts a fixture may carry, tighter than the ratchet in `DRC_RATCHETS`
+/// where the router has moved far under it. Held with `unrouted_allowed`: a
+/// connection left open is allowed only against a contact that is gone.
+///
+/// Since 2026-10-31, when the router began to take back each net that ends its
+/// negotiation on another net's copper and to route it again where it may touch
+/// nothing, measured in one routing of each board against the routing before:
+///
+/// | board          | shorts before | shorts now | ratchet was | open before | open now |
+/// |----------------|---------------|------------|-------------|-------------|----------|
+/// | stm32_breakout | 50        | 37     | 58          | 0           | 13       |
+/// | multi_ic       | 56        | 26     | 62          | 0           | 21       |
+/// | qfp_fanout     | 67        | 21     | 117         | 0           | 19       |
+///
+/// The ceilings are the measured values with no room, so the open
+/// connections cannot grow back into shorts, and the strip cannot be loosened
+/// without this line saying so.
+fn shorts_ceiling(label: &str) -> Option<u32> {
+    match label {
+        "stm32_breakout" => Some(37),
+        "multi_ic" => Some(26),
+        "qfp_fanout" => Some(21),
+        _ => None,
+    }
+}
 
 // The fifth and sixth fields are a **baseline**, not a reading of today's
 // router: they record what the board routed to on the day the band beside them
@@ -851,9 +905,10 @@ fn benchmark_all_fixtures_drc() {
             eprintln!("      sharp entry: {entry}");
         }
 
-        if *unrouted != 0 {
+        let allowed = unrouted_allowed(label);
+        if *unrouted > allowed {
             failures.push(format!(
-                "{label}: {unrouted} unrouted connections, threshold 0"
+                "{label}: {unrouted} unrouted connections, threshold {allowed}"
             ));
         }
         if *route_count == 0 {
@@ -863,6 +918,13 @@ fn benchmark_all_fixtures_drc() {
             failures.push(format!(
                 "{label}: {violations} DRC violations, threshold {ratchet} - the router got worse"
             ));
+        }
+        if let Some(ceiling) = shorts_ceiling(label) {
+            if *shorts > ceiling {
+                failures.push(format!(
+                    "{label}: {shorts} of the violations are copper touching copper, ceiling {ceiling} - a connection was left open to take shorts off, and they came back"
+                ));
+            }
         }
         if shorts > shorts_ratchet {
             failures.push(format!(

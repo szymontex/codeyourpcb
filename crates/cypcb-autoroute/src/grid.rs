@@ -1343,6 +1343,14 @@ impl RoutingGrid {
         }
     }
 
+    /// Claim a cell's pad copper for `net`, for a test that needs a pad on a
+    /// grid it built by hand.
+    #[cfg(test)]
+    pub(crate) fn set_pad_owner(&mut self, x: u32, y: u32, layer: usize, net: u32) {
+        let idx = layer * self.plane + y as usize * self.width as usize + x as usize;
+        self.pad_net[idx] = net;
+    }
+
     /// Mark cells along a route for a specific net.
     pub fn mark_route(&mut self, x: u32, y: u32, layer: usize, net_id: u32) {
         if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
