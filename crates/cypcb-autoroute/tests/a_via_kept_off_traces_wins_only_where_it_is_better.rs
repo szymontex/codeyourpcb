@@ -99,10 +99,17 @@ fn high_density_kept_off_traces_wins_stm32_breakout() {
     );
 }
 
+/// 2026-10-31: `Kept Off Traces` wins `shift_driver`, which it lost. A
+/// connection that touches another net is counted among the incomplete ones
+/// now, so the pair that was 27 incomplete against 30 with 3 shorts against 0
+/// is 30 against 30, and the shorts decide it: 0 against 3.
 #[test]
-fn high_density_kept_off_traces_loses_shift_driver() {
+fn high_density_kept_off_traces_wins_shift_driver_on_shorts() {
     let pair = [HIGH_DENSITY, HIGH_DENSITY_KEPT_OFF];
-    assert_eq!(winner_on("shift_driver.kicad_pcb", pair), HIGH_DENSITY);
+    assert_eq!(
+        winner_on("shift_driver.kicad_pcb", pair),
+        HIGH_DENSITY_KEPT_OFF
+    );
 }
 
 #[test]
@@ -126,8 +133,14 @@ fn default_keeps_led_blink_where_the_two_tie() {
     assert_eq!(winner_on("led_blink.kicad_pcb", pair), DEFAULT);
 }
 
+/// 2026-10-31: `Kept Off Traces` wins `qfp_fanout`, which it lost (53 shorts
+/// against 49). With the nets that end on another net's copper stripped and
+/// routed again it has 28 shorts and 71 incomplete against 65 and 88.
 #[test]
-fn high_density_kept_off_traces_loses_qfp_fanout() {
+fn high_density_kept_off_traces_wins_qfp_fanout_after_the_strip() {
     let pair = [HIGH_DENSITY, HIGH_DENSITY_KEPT_OFF];
-    assert_eq!(winner_on("qfp_fanout.kicad_pcb", pair), HIGH_DENSITY);
+    assert_eq!(
+        winner_on("qfp_fanout.kicad_pcb", pair),
+        HIGH_DENSITY_KEPT_OFF
+    );
 }

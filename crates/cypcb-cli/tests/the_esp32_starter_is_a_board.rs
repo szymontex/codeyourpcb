@@ -129,12 +129,24 @@ fn the_board_routes() {
     assert!(output.status.success(), "routing failed:\n{said}");
 
     let text = std::fs::read_to_string(&routed).expect("the routed board was written");
-    for net in ["USB_DP", "USB_DM", "V3V3", "EN"] {
+    // 2026-10-31: USB_DM has no trace. The router strips a net that ends its
+    // negotiation on another net's copper and routes it again where it may
+    // touch nothing; USB_DM, whose pin B7 sits 0.5 mm from CC1's A5 in one
+    // 0.627 mm cell, has no such path, and the run says so.
+    for net in ["USB_DP", "V3V3", "EN"] {
         assert!(
             text.contains(&format!("trace {net} ")),
             "the routed board carries no trace on {net}"
         );
     }
+    assert!(
+        !text.contains("trace USB_DM "),
+        "USB_DM has a trace again: the pin pair 0.5 mm apart routes, say so here"
+    );
+    assert!(
+        said.contains("could not be routed"),
+        "a net left open has to be said:\n{said}"
+    );
 
     let check = cypcb()
         .arg("check")

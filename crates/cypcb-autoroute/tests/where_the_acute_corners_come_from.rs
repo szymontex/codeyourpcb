@@ -235,9 +235,13 @@ fn the_smoother_is_not_where_they_come_from() {
     // 159 since 2026-09-27, when two pads of one net that touch became one
     // piece and multi_ic stopped routing between them (65 -> 58).
     let total: usize = table.iter().map(|(_, on, _)| on.acute).sum();
+    // 116 since 2026-10-31, when a net that ends its negotiation on another
+    // net's copper is stripped and routed again: 160 corners became 116 as
+    // 1428 segments on qfp_fanout became 1184 and the others fell with them.
+    // The floor is the measured 116, with no room.
     assert!(
-        total >= 159,
-        "the six fixtures drew 159 acute corners between them on 2026-09-27 \
+        total >= 116,
+        "the six fixtures drew 116 acute corners between them on 2026-10-31 \
          and this run counted {total}"
     );
 }

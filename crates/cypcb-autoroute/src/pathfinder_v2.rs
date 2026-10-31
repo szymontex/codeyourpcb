@@ -306,12 +306,14 @@ impl PathFinderStrategy {
             "Post-routing smoothing complete"
         );
 
-        if loop_result.unrouted.is_empty() {
+        if loop_result.is_clean() {
             tracing::info!(
                 segments = all_segments.len(),
                 vias = all_vias.len(),
                 iterations = loop_result.iterations,
                 converged = loop_result.converged,
+                tier_two_connections = loop_result.tier_two_connections,
+                stripped_nets = loop_result.stripped_nets,
                 routing_strategy = self.name(),
                 "All nets routed successfully"
             );
@@ -359,6 +361,12 @@ pub struct PathFinderLoopResult {
     /// vector is on - why a cost change of a hundredth moves the result by 28
     /// violations - is a question about the path, not the endpoint.
     pub overuse_per_iteration: Vec<usize>,
+    /// Connections routed on tier 2 of the pad-zone admission.
+    pub tier_two_connections: usize,
+    /// Nets stripped after the negotiation because they shared copper.
+    pub stripped_nets: usize,
+    /// Nets still sharing copper with another net when routing ended.
+    pub shorted_nets: usize,
 }
 
 /// Take out the pads copper already on the board connects.
@@ -573,6 +581,10 @@ pub fn pathfinder_loop(
     // Enables O(path_length) rip-up instead of scanning the entire grid.
     let mut net_cells: HashMap<u32, Vec<(u32, u32, u8)>> = HashMap::new();
 
+    // Per-net connections that only a tier-2 search could route, as indices
+    // into the net's spanning tree. Kept for the last routing of each net.
+    let mut tier_two: HashMap<u32, Vec<usize>> = HashMap::new();
+
     // Per-net routed paths: net_id -> list of GridNode paths
     let mut routed_paths: HashMap<u32, Vec<Vec<GridNode>>> = HashMap::new();
 
@@ -624,54 +636,434 @@ pub fn pathfinder_loop(
         config.max_ripup_iterations.min(MAX_PATHFINDER_ITERATIONS)
     };
 
-    for iteration in 1..=iteration_cap {
-        final_iteration = iteration;
-        let _iter_span = tracing::info_span!("pathfinder_iteration", iteration).entered();
-
-        // Determine which nets to re-route
-        let nets_to_route: Vec<usize> = if iteration == 1 {
-            // First iteration: route all nets
-            order.to_vec()
+    // Pass 0 is the negotiation. Pass 1 strips the nets that ended it
+    // sharing copper with another net and routes them again where only
+    // tier 1 may go.
+    let mut pass = 0u8;
+    let mut victims: Vec<usize> = Vec::new();
+    let mut stripped_nets = 0usize;
+    'passes: loop {
+        let iterations = if pass == 0 {
+            1..=iteration_cap
         } else {
-            // Subsequent: only nets passing through overused cells
-            let overused = congestion_map.overused_cells();
-            overuse_per_iteration.push(overused.len());
-            if overused.is_empty() {
+            final_iteration + 1..=final_iteration + 1
+        };
+        for iteration in iterations {
+            final_iteration = iteration;
+            let _iter_span = tracing::info_span!("pathfinder_iteration", iteration).entered();
+
+            // Determine which nets to re-route
+            let nets_to_route: Vec<usize> = if pass == 1 {
+                victims.clone()
+            } else if iteration == 1 {
+                // First iteration: route all nets
+                order.to_vec()
+            } else {
+                // Subsequent: only nets passing through overused cells
+                let overused = congestion_map.overused_cells();
+                overuse_per_iteration.push(overused.len());
+                if overused.is_empty() {
+                    converged = true;
+                    tracing::info!(iteration, "PathFinder converged — zero overused cells");
+                    break;
+                }
+
+                if overused.len() < best_overused {
+                    best_overused = overused.len();
+                    iterations_without_progress = 0;
+                } else {
+                    iterations_without_progress += 1;
+                    if stagnation_limit > 0 && iterations_without_progress >= stagnation_limit {
+                        tracing::info!(
+                            iteration,
+                            overused = overused.len(),
+                            "PathFinder stalled — overused set stopped shrinking"
+                        );
+                        break;
+                    }
+                }
+
+                nets_needing_reroute(order, ratsnest, &net_cells, &overused)
+            };
+
+            let nets_to_route_count = nets_to_route.len();
+
+            for &net_idx in &nets_to_route {
+                let net = &ratsnest[net_idx];
+                let net_id = net.net_id.id();
+
+                // Rip up previous route if exists.
+                //
+                // Clear only the cells this net actually recorded. Scanning the whole
+                // grid for the net id (clear_route) does the same work in
+                // width * height * layers steps per rip-up, and PathFinder rips up
+                // most nets on every iteration.
+                if let Some(rings) = ring_cells.remove(&net_id) {
+                    congestion_map.unmark_rings(&rings);
+                }
+                if let Some(holes) = hole_cells.remove(&net_id) {
+                    congestion_map.unmark_holes(&holes);
+                }
+                if let Some(cells) = net_cells.remove(&net_id) {
+                    congestion_map.unmark_net(&cells);
+                    grid.clear_cells(&cells, net_id);
+                }
+                routed_paths.remove(&net_id);
+                tier_two.remove(&net_id);
+
+                // Route this net's connections
+                let connections = build_spanning_tree(&net.pads);
+                let net_pad_zones = &pad_zones_per_net[net_idx];
+
+                // A via's ring plus the clearance and half the trace that meets it:
+                // the radius the next net has to stay outside of.
+                let constraints = rules.constraints_for_net(net_id);
+                let via_keepout_nm = constraints.min_via_drill.raw() / 2
+                    + constraints.min_via_annular_ring.raw()
+                    + constraints.min_clearance.raw()
+                    + constraints.min_trace_width.raw() / 2;
+                let via_radius_cells =
+                    ((via_keepout_nm + grid.resolution() - 1) / grid.resolution()).max(0) as u32;
+
+                // The copper a via ring actually is, in cells: drill plus annular
+                // ring, without the clearance the keepout radius adds. Rounded
+                // rather than ceilinged, because a ring 1.09 cells across that is
+                // rounded up owns two cells in every direction.
+                let via_copper_nm =
+                    constraints.min_via_drill.raw() / 2 + constraints.min_via_annular_ring.raw();
+                let via_copper_cells =
+                    ((via_copper_nm + grid.resolution() - 1) / grid.resolution()).max(1) as u32;
+
+                let mut net_path_cells: Vec<(u32, u32, u8)> = Vec::new();
+                // The path on its own, without the via rings that go into the
+                // congestion map with it. Two nets sharing one of these is copper
+                // on copper; two nets sharing a ring cell is not, and mixing them
+                // is what made the overuse figure unreadable.
+                let mut net_trace_cells: Vec<(u32, u32, u8)> = Vec::new();
+                let mut net_ring_cells: Vec<(u32, u32, u8)> = Vec::new();
+                let mut net_hole_cells: Vec<(u32, u32, u8)> = Vec::new();
+                let mut net_paths: Vec<Vec<GridNode>> = Vec::new();
+                let mut net_ok = true;
+                let mut net_tier_two: Vec<usize> = Vec::new();
+
+                for (conn_index, conn) in connections.iter().enumerate() {
+                    let from_pad = &net.pads[conn.from_idx];
+                    let to_pad = &net.pads[conn.to_idx];
+
+                    // `build_spanning_tree` grows its tree one pad at a time, so
+                    // `to_idx` is the pad that is not connected yet and
+                    // `from_idx` is one that already is. A connection allowed to
+                    // use its own net's copper does not choose an end to start
+                    // from: the search is seeded with every cell the net already
+                    // owns, each at cost zero, and stops at the pad this
+                    // connection adds - the step PathFinder itself takes
+                    // (McMurchie and Ebeling, ACM/SIGDA FPGA 1995). The second
+                    // copy of a trunk cannot be drawn, because the wave already
+                    // stands on all of the first.
+                    let own_copper = if config.stop_at_own_copper {
+                        OwnCopper::of_paths(&net_paths)
+                    } else {
+                        None
+                    };
+                    let start = pad_to_grid_node(grid, from_pad);
+                    let end = pad_to_grid_node(grid, to_pad);
+                    let any_end = is_multi_layer(to_pad.layer_mask);
+
+                    // Copper the designer drew is one conductor with the pad it
+                    // touches. A connection may leave from any piece a pad of the
+                    // tree sits on - the tree is the first pad and every pad
+                    // reached since, because a connection that fails ends the
+                    // net - and has arrived when it touches the piece its new pad
+                    // sits on. Without this a pad wired half-way by hand was
+                    // routed to in full, alongside its own wire.
+                    let mut hand_seeds: Vec<GridNode> = std::iter::once(connections[0].from_idx)
+                        .chain(connections[..conn_index].iter().map(|c| c.to_idx))
+                        .flat_map(|pad| {
+                            grid.hand_copper(net_id, pad_to_grid_node(grid, &net.pads[pad]))
+                                .iter()
+                                .copied()
+                        })
+                        .collect();
+                    hand_seeds.sort_unstable();
+                    hand_seeds.dedup();
+                    let hand_goals = grid.hand_copper(net_id, end).to_vec();
+
+                    // Route with congestion-augmented cost
+                    let search = Search {
+                        rules,
+                        net_id,
+                        pad_zones: net_pad_zones,
+                        via_cost_multiplier: config.via_cost_multiplier,
+                        layer_preference: config.params.layer_preference,
+                        block_foreign_copper: config.pad_zone_blocks_foreign_copper,
+                        strict_zone: false,
+                        via_foreign_copper_penalty: config.via_foreign_copper_penalty,
+                        via_touching_trace_penalty: config.via_touching_trace_penalty,
+                        via_foreign_pad_penalty: config.via_foreign_pad_penalty,
+                        foreign_pad_penalty: config.foreign_pad_penalty,
+                        pad_layer_change_penalty: config.pad_layer_change_penalty,
+                        yield_halo: false,
+                        heuristic_weight: config.heuristic_weight,
+                        field,
+                        clearance_barrier: config.clearance_barrier,
+                    };
+                    // Tier 1 shuts every cell another net's copper or pad holds,
+                    // inside a pad zone as much as outside it. A connection with
+                    // no path there is searched again on tier 2, which is the
+                    // admission the router had before and the one that lays a
+                    // trace across a neighbour's pad when two pins share a cell.
+                    let tiers: &[bool] = if pass == 1 {
+                        &[true]
+                    } else if config.pad_zone_strict_first {
+                        &[true, false]
+                    } else {
+                        &[false]
+                    };
+                    let mut path = None;
+                    let mut on_tier_two = false;
+                    for &strict_zone in tiers {
+                        let tier = Search {
+                            strict_zone,
+                            ..search
+                        };
+                        path = find_path_congestion_augmented(
+                            grid,
+                            &mut scratch,
+                            start,
+                            end,
+                            any_end,
+                            own_copper.as_ref(),
+                            &hand_seeds,
+                            &hand_goals,
+                            &congestion_map,
+                            &tier,
+                        );
+
+                        // A reservation that cannot be relaxed is a veto, and three
+                        // measured experiments in this vector say a veto costs more
+                        // than it buys. When the strict attempt finds nothing, the
+                        // second one may route through the copper a neighbouring trace
+                        // only brushes - never through its centre line. An abandoned
+                        // connection is a board that does not work; a tight gap is a
+                        // violation the checker will name.
+                        // Tier 1 does not relax the reservation: a connection that
+                        // brushes a neighbour's copper to avoid a pad zone has traded
+                        // one contact for another.
+                        if path.is_none() && config.reserve_trace_footprint && !strict_zone {
+                            let relaxed = Search {
+                                yield_halo: true,
+                                ..tier
+                            };
+                            path = find_path_congestion_augmented(
+                                grid,
+                                &mut scratch,
+                                start,
+                                end,
+                                any_end,
+                                own_copper.as_ref(),
+                                &hand_seeds,
+                                &hand_goals,
+                                &congestion_map,
+                                &relaxed,
+                            );
+                        }
+                        if path.is_some() {
+                            on_tier_two = config.pad_zone_strict_first && !strict_zone;
+                            break;
+                        }
+                    }
+
+                    match path {
+                        Some(p) => {
+                            if on_tier_two {
+                                net_tier_two.push(conn_index);
+                            }
+                            // Reserve the copper the trace actually covers, not
+                            // the centre line the search walked. A minimum-width
+                            // trace is 0.127mm on a 0.254mm cell, so the cell next
+                            // to a marked one is free as far as the grid knows and
+                            // the two nets' copper ends up touching - which is what
+                            // 176 of stm32_breakout's 238 clearance violations are.
+                            // The returned cells go into net_path_cells so rip-up
+                            // clears them; a cell marked and not recorded is a
+                            // permanent wall.
+                            if config.reserve_trace_footprint {
+                                for cell in grid.mark_route_footprint(&p, net_id, 1) {
+                                    net_path_cells.push(cell);
+                                    net_trace_cells.push(cell);
+                                }
+                            } else {
+                                for node in &p {
+                                    net_path_cells.push((node.0 as u32, node.1 as u32, node.2));
+                                    net_trace_cells.push((node.0 as u32, node.1 as u32, node.2));
+                                }
+                            }
+                            // Wherever the path changes layer there is a via, and a
+                            // via is far wider than the single cell the path marks.
+                            for pair in p.windows(2) {
+                                let (a, b) = (pair[0], pair[1]);
+                                if a.2 != b.2 && a.0 == b.0 && a.1 == b.1 {
+                                    let spanned = grid.via_layers(a.2, b.2);
+                                    for layer in grid.layers_in(spanned) {
+                                        net_hole_cells.push((a.0 as u32, a.1 as u32, layer));
+                                    }
+
+                                    let ring = grid.via_footprint_cells(
+                                        a.0 as u32,
+                                        a.1 as u32,
+                                        (a.2, b.2),
+                                        via_radius_cells,
+                                    );
+                                    net_ring_cells.extend(ring.iter().copied());
+                                    net_path_cells.extend(ring);
+
+                                    // Under the same flag as the trace above, the
+                                    // ring's own copper is reserved in the grid.
+                                    // Not its keepout: marking the full keepout
+                                    // disc was measured and rejected - at 0.254mm
+                                    // per cell it blocks 0.508mm around a ring
+                                    // that is 0.277mm across, and both boards got
+                                    // worse. This marks what the copper covers,
+                                    // and only cells no other net already owns.
+                                    if config.reserve_trace_footprint {
+                                        let via: Vec<GridNode> = grid
+                                            .layers_in(spanned)
+                                            .map(|layer| (a.0, a.1, layer))
+                                            .collect();
+                                        for cell in grid.mark_route_footprint(
+                                            &via,
+                                            net_id,
+                                            via_copper_cells,
+                                        ) {
+                                            net_path_cells.push(cell);
+                                        }
+                                    }
+                                }
+                            }
+                            net_paths.push(p);
+                        }
+                        None => {
+                            // A router that gives up has to say on what. Without
+                            // this the result carries a count and nothing else, so
+                            // "6 unrouted" is a number nobody can act on.
+                            tracing::warn!(
+                                net = %net.net_name,
+                                from = %format!(
+                                    "{}.{} at {:.3},{:.3}mm",
+                                    net.net_name,
+                                    from_pad.pin,
+                                    from_pad.position.x.to_mm(),
+                                    from_pad.position.y.to_mm()
+                                ),
+                                to = %format!(
+                                    "{}.{} at {:.3},{:.3}mm",
+                                    net.net_name,
+                                    to_pad.pin,
+                                    to_pad.position.x.to_mm(),
+                                    to_pad.position.y.to_mm()
+                                ),
+                                "No path found: connection abandoned"
+                            );
+                            net_ok = false;
+                            if pass == 1 {
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // A net occupies a cell once. net_path_cells collects every
+                // connection of the net, so the cells where its own branches meet
+                // appear twice, and marking them twice pushes occupancy over a
+                // capacity of one - the router then spends every remaining
+                // iteration negotiating against itself over junctions it created
+                // and cannot remove.
+                net_path_cells.sort_unstable();
+                net_path_cells.dedup();
+                net_trace_cells.sort_unstable();
+                net_trace_cells.dedup();
+                net_ring_cells.sort_unstable();
+                net_ring_cells.dedup();
+                net_hole_cells.sort_unstable();
+                net_hole_cells.dedup();
+
+                if (net_ok || (pass == 1 && !net_paths.is_empty())) && !connections.is_empty() {
+                    if !net_tier_two.is_empty() {
+                        tier_two.insert(net_id, net_tier_two);
+                    }
+                    // Update congestion map with this net's cells
+                    congestion_map.mark_net(&net_path_cells);
+                    congestion_map.mark_rings(&net_ring_cells);
+                    ring_cells.insert(net_id, net_ring_cells);
+                    congestion_map.mark_holes(&net_hole_cells);
+                    hole_cells.insert(net_id, net_hole_cells);
+                    trace_cells.insert(net_id, net_trace_cells);
+                    net_cells.insert(net_id, net_path_cells);
+                    routed_paths.insert(net_id, net_paths);
+                } else if !connections.is_empty() {
+                    // Partially routed or failed — still track what we got
+                    // Mark cells we did place
+                    if !net_path_cells.is_empty() {
+                        congestion_map.mark_net(&net_path_cells);
+                        net_cells.insert(net_id, net_path_cells);
+                    }
+                    routed_paths.insert(net_id, net_paths);
+                }
+            }
+
+            // Update history costs
+            let beta = beta_base + beta_increment * (iteration as f64 - 1.0);
+            congestion_map.update_history(beta);
+
+            let overuse = congestion_map.overuse_count();
+
+            tracing::info!(
+                iteration,
+                overused_cells = overuse,
+                nets_rerouted = nets_to_route_count,
+                total_nets = ratsnest.len(),
+                beta = format!("{:.1}", beta),
+                "PathFinder iteration complete"
+            );
+
+            if pass == 0 && overuse == 0 {
                 converged = true;
                 tracing::info!(iteration, "PathFinder converged — zero overused cells");
                 break;
             }
+        }
 
-            if overused.len() < best_overused {
-                best_overused = overused.len();
-                iterations_without_progress = 0;
-            } else {
-                iterations_without_progress += 1;
-                if stagnation_limit > 0 && iterations_without_progress >= stagnation_limit {
-                    tracing::info!(
-                        iteration,
-                        overused = overused.len(),
-                        "PathFinder stalled — overused set stopped shrinking"
-                    );
-                    break;
-                }
-            }
-
-            nets_needing_reroute(order, ratsnest, &net_cells, &overused)
-        };
-
-        let nets_to_route_count = nets_to_route.len();
-
-        for &net_idx in &nets_to_route {
-            let net = &ratsnest[net_idx];
+        if pass == 1 || !config.resolve_contested {
+            break 'passes;
+        }
+        let found = nets_sharing_copper(
+            grid,
+            ratsnest,
+            order,
+            &trace_cells,
+            &routed_paths,
+            rules.constraints_for_net(0).min_trace_width.raw() / 2,
+        );
+        if found.is_empty() {
+            break 'passes;
+        }
+        for victim in &found {
+            let net = &ratsnest[victim.net_idx];
             let net_id = net.net_id.id();
-
-            // Rip up previous route if exists.
-            //
-            // Clear only the cells this net actually recorded. Scanning the whole
-            // grid for the net id (clear_route) does the same work in
-            // width * height * layers steps per rip-up, and PathFinder rips up
-            // most nets on every iteration.
+            tracing::info!(
+                net = %net.net_name,
+                cell = %format!(
+                    "cell ({}, {}) layer {} = {:.3},{:.3}mm",
+                    victim.cell.0,
+                    victim.cell.1,
+                    victim.cell.2,
+                    grid.grid_to_nm_x(victim.cell.0) as f64 / 1_000_000.0,
+                    grid.grid_to_nm_y(victim.cell.1) as f64 / 1_000_000.0
+                ),
+                why = %victim.why,
+                "Net stripped: it shares copper with another net"
+            );
             if let Some(rings) = ring_cells.remove(&net_id) {
                 congestion_map.unmark_rings(&rings);
             }
@@ -683,288 +1075,31 @@ pub fn pathfinder_loop(
                 grid.clear_cells(&cells, net_id);
             }
             routed_paths.remove(&net_id);
-
-            // Route this net's connections
-            let connections = build_spanning_tree(&net.pads);
-            let net_pad_zones = &pad_zones_per_net[net_idx];
-
-            // A via's ring plus the clearance and half the trace that meets it:
-            // the radius the next net has to stay outside of.
-            let constraints = rules.constraints_for_net(net_id);
-            let via_keepout_nm = constraints.min_via_drill.raw() / 2
-                + constraints.min_via_annular_ring.raw()
-                + constraints.min_clearance.raw()
-                + constraints.min_trace_width.raw() / 2;
-            let via_radius_cells =
-                ((via_keepout_nm + grid.resolution() - 1) / grid.resolution()).max(0) as u32;
-
-            // The copper a via ring actually is, in cells: drill plus annular
-            // ring, without the clearance the keepout radius adds. Rounded
-            // rather than ceilinged, because a ring 1.09 cells across that is
-            // rounded up owns two cells in every direction.
-            let via_copper_nm =
-                constraints.min_via_drill.raw() / 2 + constraints.min_via_annular_ring.raw();
-            let via_copper_cells =
-                ((via_copper_nm + grid.resolution() - 1) / grid.resolution()).max(1) as u32;
-
-            let mut net_path_cells: Vec<(u32, u32, u8)> = Vec::new();
-            // The path on its own, without the via rings that go into the
-            // congestion map with it. Two nets sharing one of these is copper
-            // on copper; two nets sharing a ring cell is not, and mixing them
-            // is what made the overuse figure unreadable.
-            let mut net_trace_cells: Vec<(u32, u32, u8)> = Vec::new();
-            let mut net_ring_cells: Vec<(u32, u32, u8)> = Vec::new();
-            let mut net_hole_cells: Vec<(u32, u32, u8)> = Vec::new();
-            let mut net_paths: Vec<Vec<GridNode>> = Vec::new();
-            let mut net_ok = true;
-
-            for (conn_index, conn) in connections.iter().enumerate() {
-                let from_pad = &net.pads[conn.from_idx];
-                let to_pad = &net.pads[conn.to_idx];
-
-                // `build_spanning_tree` grows its tree one pad at a time, so
-                // `to_idx` is the pad that is not connected yet and
-                // `from_idx` is one that already is. A connection allowed to
-                // use its own net's copper does not choose an end to start
-                // from: the search is seeded with every cell the net already
-                // owns, each at cost zero, and stops at the pad this
-                // connection adds - the step PathFinder itself takes
-                // (McMurchie and Ebeling, ACM/SIGDA FPGA 1995). The second
-                // copy of a trunk cannot be drawn, because the wave already
-                // stands on all of the first.
-                let own_copper = if config.stop_at_own_copper {
-                    OwnCopper::of_paths(&net_paths)
-                } else {
-                    None
-                };
-                let start = pad_to_grid_node(grid, from_pad);
-                let end = pad_to_grid_node(grid, to_pad);
-                let any_end = is_multi_layer(to_pad.layer_mask);
-
-                // Copper the designer drew is one conductor with the pad it
-                // touches. A connection may leave from any piece a pad of the
-                // tree sits on - the tree is the first pad and every pad
-                // reached since, because a connection that fails ends the
-                // net - and has arrived when it touches the piece its new pad
-                // sits on. Without this a pad wired half-way by hand was
-                // routed to in full, alongside its own wire.
-                let mut hand_seeds: Vec<GridNode> = std::iter::once(connections[0].from_idx)
-                    .chain(connections[..conn_index].iter().map(|c| c.to_idx))
-                    .flat_map(|pad| {
-                        grid.hand_copper(net_id, pad_to_grid_node(grid, &net.pads[pad]))
-                            .iter()
-                            .copied()
-                    })
-                    .collect();
-                hand_seeds.sort_unstable();
-                hand_seeds.dedup();
-                let hand_goals = grid.hand_copper(net_id, end).to_vec();
-
-                // Route with congestion-augmented cost
-                let search = Search {
-                    rules,
-                    net_id,
-                    pad_zones: net_pad_zones,
-                    via_cost_multiplier: config.via_cost_multiplier,
-                    layer_preference: config.params.layer_preference,
-                    block_foreign_copper: config.pad_zone_blocks_foreign_copper,
-                    via_foreign_copper_penalty: config.via_foreign_copper_penalty,
-                    via_touching_trace_penalty: config.via_touching_trace_penalty,
-                    via_foreign_pad_penalty: config.via_foreign_pad_penalty,
-                    foreign_pad_penalty: config.foreign_pad_penalty,
-                    pad_layer_change_penalty: config.pad_layer_change_penalty,
-                    yield_halo: false,
-                    heuristic_weight: config.heuristic_weight,
-                    field,
-                    clearance_barrier: config.clearance_barrier,
-                };
-                let mut path = find_path_congestion_augmented(
-                    grid,
-                    &mut scratch,
-                    start,
-                    end,
-                    any_end,
-                    own_copper.as_ref(),
-                    &hand_seeds,
-                    &hand_goals,
-                    &congestion_map,
-                    &search,
-                );
-
-                // A reservation that cannot be relaxed is a veto, and three
-                // measured experiments in this vector say a veto costs more
-                // than it buys. When the strict attempt finds nothing, the
-                // second one may route through the copper a neighbouring trace
-                // only brushes - never through its centre line. An abandoned
-                // connection is a board that does not work; a tight gap is a
-                // violation the checker will name.
-                if path.is_none() && config.reserve_trace_footprint {
-                    let relaxed = Search {
-                        yield_halo: true,
-                        ..search
-                    };
-                    path = find_path_congestion_augmented(
-                        grid,
-                        &mut scratch,
-                        start,
-                        end,
-                        any_end,
-                        own_copper.as_ref(),
-                        &hand_seeds,
-                        &hand_goals,
-                        &congestion_map,
-                        &relaxed,
-                    );
-                }
-
-                match path {
-                    Some(p) => {
-                        // Reserve the copper the trace actually covers, not
-                        // the centre line the search walked. A minimum-width
-                        // trace is 0.127mm on a 0.254mm cell, so the cell next
-                        // to a marked one is free as far as the grid knows and
-                        // the two nets' copper ends up touching - which is what
-                        // 176 of stm32_breakout's 238 clearance violations are.
-                        // The returned cells go into net_path_cells so rip-up
-                        // clears them; a cell marked and not recorded is a
-                        // permanent wall.
-                        if config.reserve_trace_footprint {
-                            for cell in grid.mark_route_footprint(&p, net_id, 1) {
-                                net_path_cells.push(cell);
-                                net_trace_cells.push(cell);
-                            }
-                        } else {
-                            for node in &p {
-                                net_path_cells.push((node.0 as u32, node.1 as u32, node.2));
-                                net_trace_cells.push((node.0 as u32, node.1 as u32, node.2));
-                            }
-                        }
-                        // Wherever the path changes layer there is a via, and a
-                        // via is far wider than the single cell the path marks.
-                        for pair in p.windows(2) {
-                            let (a, b) = (pair[0], pair[1]);
-                            if a.2 != b.2 && a.0 == b.0 && a.1 == b.1 {
-                                let spanned = grid.via_layers(a.2, b.2);
-                                for layer in grid.layers_in(spanned) {
-                                    net_hole_cells.push((a.0 as u32, a.1 as u32, layer));
-                                }
-
-                                let ring = grid.via_footprint_cells(
-                                    a.0 as u32,
-                                    a.1 as u32,
-                                    (a.2, b.2),
-                                    via_radius_cells,
-                                );
-                                net_ring_cells.extend(ring.iter().copied());
-                                net_path_cells.extend(ring);
-
-                                // Under the same flag as the trace above, the
-                                // ring's own copper is reserved in the grid.
-                                // Not its keepout: marking the full keepout
-                                // disc was measured and rejected - at 0.254mm
-                                // per cell it blocks 0.508mm around a ring
-                                // that is 0.277mm across, and both boards got
-                                // worse. This marks what the copper covers,
-                                // and only cells no other net already owns.
-                                if config.reserve_trace_footprint {
-                                    let via: Vec<GridNode> = grid
-                                        .layers_in(spanned)
-                                        .map(|layer| (a.0, a.1, layer))
-                                        .collect();
-                                    for cell in
-                                        grid.mark_route_footprint(&via, net_id, via_copper_cells)
-                                    {
-                                        net_path_cells.push(cell);
-                                    }
-                                }
-                            }
-                        }
-                        net_paths.push(p);
-                    }
-                    None => {
-                        // A router that gives up has to say on what. Without
-                        // this the result carries a count and nothing else, so
-                        // "6 unrouted" is a number nobody can act on.
-                        tracing::warn!(
-                            net = %net.net_name,
-                            from = %format!(
-                                "{}.{} at {:.3},{:.3}mm",
-                                net.net_name,
-                                from_pad.pin,
-                                from_pad.position.x.to_mm(),
-                                from_pad.position.y.to_mm()
-                            ),
-                            to = %format!(
-                                "{}.{} at {:.3},{:.3}mm",
-                                net.net_name,
-                                to_pad.pin,
-                                to_pad.position.x.to_mm(),
-                                to_pad.position.y.to_mm()
-                            ),
-                            "No path found: connection abandoned"
-                        );
-                        net_ok = false;
-                        break;
-                    }
-                }
-            }
-
-            // A net occupies a cell once. net_path_cells collects every
-            // connection of the net, so the cells where its own branches meet
-            // appear twice, and marking them twice pushes occupancy over a
-            // capacity of one - the router then spends every remaining
-            // iteration negotiating against itself over junctions it created
-            // and cannot remove.
-            net_path_cells.sort_unstable();
-            net_path_cells.dedup();
-            net_trace_cells.sort_unstable();
-            net_trace_cells.dedup();
-            net_ring_cells.sort_unstable();
-            net_ring_cells.dedup();
-            net_hole_cells.sort_unstable();
-            net_hole_cells.dedup();
-
-            if net_ok && !connections.is_empty() {
-                // Update congestion map with this net's cells
-                congestion_map.mark_net(&net_path_cells);
-                congestion_map.mark_rings(&net_ring_cells);
-                ring_cells.insert(net_id, net_ring_cells);
-                congestion_map.mark_holes(&net_hole_cells);
-                hole_cells.insert(net_id, net_hole_cells);
-                trace_cells.insert(net_id, net_trace_cells);
-                net_cells.insert(net_id, net_path_cells);
-                routed_paths.insert(net_id, net_paths);
-            } else if !connections.is_empty() {
-                // Partially routed or failed — still track what we got
-                // Mark cells we did place
-                if !net_path_cells.is_empty() {
-                    congestion_map.mark_net(&net_path_cells);
-                    net_cells.insert(net_id, net_path_cells);
-                }
-                routed_paths.insert(net_id, net_paths);
-            }
+            tier_two.remove(&net_id);
+            trace_cells.remove(&net_id);
         }
+        stripped_nets = found.len();
+        victims = found.iter().map(|v| v.net_idx).collect();
+        pass = 1;
+    }
 
-        // Update history costs
-        let beta = beta_base + beta_increment * (iteration as f64 - 1.0);
-        congestion_map.update_history(beta);
-
-        let overuse = congestion_map.overuse_count();
-
+    for &net_idx in &victims {
+        let net = &ratsnest[net_idx];
+        let wanted = build_spanning_tree(&net.pads).len();
+        let routed = routed_paths
+            .get(&net.net_id.id())
+            .map_or(0, |paths| paths.len());
         tracing::info!(
-            iteration,
-            overused_cells = overuse,
-            nets_rerouted = nets_to_route_count,
-            total_nets = ratsnest.len(),
-            beta = format!("{:.1}", beta),
-            "PathFinder iteration complete"
+            net = %net.net_name,
+            routed,
+            wanted,
+            result = if routed == wanted {
+                "routed on tier 1"
+            } else {
+                "unrouted connections left"
+            },
+            "Stripped net routed again"
         );
-
-        if overuse == 0 {
-            converged = true;
-            tracing::info!(iteration, "PathFinder converged — zero overused cells");
-            break;
-        }
     }
 
     if !converged {
@@ -1039,6 +1174,40 @@ pub fn pathfinder_loop(
         }
     }
 
+    let mut tier_two_connections = 0usize;
+    for net in ratsnest.iter() {
+        let Some(indices) = tier_two.get(&net.net_id.id()) else {
+            continue;
+        };
+        let connections = build_spanning_tree(&net.pads);
+        for &index in indices {
+            let conn = &connections[index];
+            tier_two_connections += 1;
+            tracing::info!(
+                net = %net.net_name,
+                from = %net.pads[conn.from_idx].pin,
+                to = %net.pads[conn.to_idx].pin,
+                "Connection routed on tier 2: no path kept clear of other nets' copper and pads"
+            );
+        }
+    }
+
+    // With the strip off the router is what it was: it says nothing of the
+    // nets that share copper.
+    let shorted_nets = if config.resolve_contested {
+        nets_sharing_copper(
+            grid,
+            ratsnest,
+            order,
+            &trace_cells,
+            &routed_paths,
+            rules.constraints_for_net(0).min_trace_width.raw() / 2,
+        )
+        .len()
+    } else {
+        0
+    };
+
     PathFinderLoopResult {
         routed_paths,
         unrouted,
@@ -1046,7 +1215,131 @@ pub fn pathfinder_loop(
         iterations: final_iteration,
         converged,
         overuse_per_iteration,
+        tier_two_connections,
+        stripped_nets,
+        shorted_nets,
     }
+}
+
+impl PathFinderLoopResult {
+    /// Whether every connection is routed and no net shares copper with
+    /// another. A connection that touches another net is not a connection.
+    pub fn is_clean(&self) -> bool {
+        self.unrouted.is_empty() && self.shorted_nets == 0
+    }
+}
+
+/// A net that holds copper another net holds, and where.
+struct Victim {
+    net_idx: usize,
+    cell: (u32, u32, u8),
+    why: String,
+}
+
+/// The nets that share copper with another net, in routing order.
+///
+/// Two nets holding one trace cell are both named, and all but the one
+/// routed first are returned. A connection routed on tier 2 whose path runs
+/// over another net's pad is named too. What is returned is what a pass that
+/// routes again would have to move.
+fn nets_sharing_copper(
+    grid: &RoutingGrid,
+    ratsnest: &[NetRoute],
+    order: &[usize],
+    trace_cells: &HashMap<u32, Vec<(u32, u32, u8)>>,
+    routed_paths: &HashMap<u32, Vec<Vec<GridNode>>>,
+    half_trace_nm: i64,
+) -> Vec<Victim> {
+    use std::collections::BTreeMap;
+    let rank: HashMap<u32, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(rank, &idx)| (ratsnest[idx].net_id.id(), rank))
+        .collect();
+    let name_of = |id: u32| -> String {
+        ratsnest
+            .iter()
+            .find(|net| net.net_id.id() == id)
+            .map_or_else(|| "?".to_string(), |net| net.net_name.clone())
+    };
+    let mut holders: BTreeMap<(u32, u32, u8), Vec<u32>> = BTreeMap::new();
+    for (net_id, cells) in trace_cells {
+        for cell in cells {
+            holders.entry(*cell).or_default().push(*net_id);
+        }
+    }
+    let mut chosen: BTreeMap<u32, ((u32, u32, u8), String)> = BTreeMap::new();
+    for (cell, nets) in holders.iter().filter(|(_, nets)| nets.len() > 1) {
+        let keeper = *nets
+            .iter()
+            .min_by_key(|id| rank.get(id).copied().unwrap_or(usize::MAX))
+            .expect("two holders");
+        for &net_id in nets.iter().filter(|&&id| id != keeper) {
+            chosen
+                .entry(net_id)
+                .or_insert_with(|| (*cell, format!("holds the cell with {}", name_of(keeper))));
+        }
+    }
+    // A path that runs over another net's pad. The grid's pad owner covers
+    // the pad and the reach round it, so it only picks the cells worth
+    // measuring; the pad's own box decides.
+    let at = |node: &GridNode| {
+        (
+            grid.grid_to_nm_x(node.0 as u32),
+            grid.grid_to_nm_y(node.1 as u32),
+        )
+    };
+    for (net_id, paths) in routed_paths {
+        if chosen.contains_key(net_id) {
+            continue;
+        }
+        'paths: for path in paths {
+            for (k, node) in path.iter().enumerate() {
+                let Some(owner) = grid.pad_owner(node.0 as u32, node.1 as u32, node.2 as usize)
+                else {
+                    continue;
+                };
+                if owner == *net_id {
+                    continue;
+                }
+                let Some(other) = ratsnest.iter().find(|n| n.net_id.id() == owner) else {
+                    continue;
+                };
+                let next = path.get(k + 1).filter(|n| n.2 == node.2).unwrap_or(node);
+                let (from, to) = (at(node), at(next));
+                for pad in &other.pads {
+                    if pad.layer_mask >> node.2 & 1 == 0 {
+                        continue;
+                    }
+                    let half = (
+                        pad.pad_size.0.raw() / 2 + half_trace_nm,
+                        pad.pad_size.1.raw() / 2 + half_trace_nm,
+                    );
+                    let lo = (pad.position.x.raw() - half.0, pad.position.y.raw() - half.1);
+                    let hi = (pad.position.x.raw() + half.0, pad.position.y.raw() + half.1);
+                    if segment_meets_box(from, to, lo, hi) {
+                        chosen.insert(
+                            *net_id,
+                            (
+                                (node.0 as u32, node.1 as u32, node.2),
+                                format!("crosses a pad of {}", other.net_name),
+                            ),
+                        );
+                        break 'paths;
+                    }
+                }
+            }
+        }
+    }
+    let mut victims: Vec<Victim> = chosen
+        .into_iter()
+        .filter_map(|(net_id, (cell, why))| {
+            let net_idx = ratsnest.iter().position(|net| net.net_id.id() == net_id)?;
+            Some(Victim { net_idx, cell, why })
+        })
+        .collect();
+    victims.sort_by_key(|v| rank.get(&ratsnest[v.net_idx].net_id.id()).copied());
+    victims
 }
 
 /// Find a path using A* with congestion-augmented neighbor cost.
@@ -1130,6 +1423,9 @@ struct Search<'a> {
     via_cost_multiplier: f64,
     layer_preference: f64,
     block_foreign_copper: bool,
+    /// Tier 1 of the pad zone: a cell another net's copper or pad holds stays
+    /// shut whatever the zone says. Off, the zone admits it - tier 2.
+    strict_zone: bool,
     via_foreign_copper_penalty: f64,
     /// What one cell of another net's trace touching a via's copper costs.
     via_touching_trace_penalty: f64,
@@ -1196,6 +1492,7 @@ fn find_path_congestion_augmented(
         via_cost_multiplier,
         layer_preference,
         block_foreign_copper,
+        strict_zone,
         via_foreign_copper_penalty,
         via_touching_trace_penalty,
         via_foreign_pad_penalty,
@@ -1334,6 +1631,7 @@ fn find_path_congestion_augmented(
                     net_id,
                     pad_zones,
                     block_foreign_copper,
+                    strict_zone,
                 )
                 || grid.net_at(ux, uy, nl as usize) == Some(net_id)
                 || grid.is_own_fixed_copper(ux, uy, nl as usize, net_id)
@@ -1428,6 +1726,7 @@ fn find_path_congestion_augmented(
                     net_id,
                     pad_zones,
                     block_foreign_copper,
+                    strict_zone,
                 )
                 || grid.net_at(nx as u32, ny as u32, target_layer as usize) == Some(net_id)
                 || grid.is_own_fixed_copper(nx as u32, ny as u32, target_layer as usize, net_id)
@@ -1609,6 +1908,10 @@ fn clearance_penalty(distance: Option<i64>, required_nm: i64, k: f64) -> f64 {
 /// inside the zone, whatever is already in it. With it on, a cell another
 /// net's route holds is refused - the zone is there to get through a keepout,
 /// not through someone else's trace.
+///
+/// `strict` is tier 1 of the admission: a cell another net's route or another
+/// net's pad holds is refused, and `block_foreign_copper` is not asked. A
+/// connection with no path on tier 1 is searched again with `strict` off.
 #[allow(clippy::too_many_arguments)]
 fn pad_zone_open(
     grid: &RoutingGrid,
@@ -1618,9 +1921,15 @@ fn pad_zone_open(
     net_id: u32,
     zones: &[PadZone],
     block_foreign_copper: bool,
+    strict: bool,
 ) -> bool {
     if !in_pad_zone(x as u16, y as u16, zones) {
         return false;
+    }
+
+    if strict {
+        return !matches!(grid.net_at(x, y, layer), Some(owner) if owner != net_id)
+            && !matches!(grid.pad_owner(x, y, layer), Some(owner) if owner != net_id);
     }
 
     if !block_foreign_copper {
@@ -1645,6 +1954,31 @@ fn in_pad_zone(x: u16, y: u16, zones: &[PadZone]) -> bool {
 #[inline]
 fn float_to_int_cost(f: f64) -> u64 {
     (f * 1000.0).round() as u64
+}
+
+/// Whether the segment from `a` to `b` meets the box `lo`..`hi`.
+fn segment_meets_box(a: (i64, i64), b: (i64, i64), lo: (i64, i64), hi: (i64, i64)) -> bool {
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    let d = ((b.0 - a.0) as f64, (b.1 - a.1) as f64);
+    for (p, q, l, h) in [(a.0, d.0, lo.0, hi.0), (a.1, d.1, lo.1, hi.1)] {
+        let (p, l, h) = (p as f64, l as f64, h as f64);
+        if q == 0.0 {
+            if p < l || p > h {
+                return false;
+            }
+        } else {
+            let (mut u0, mut u1) = ((l - p) / q, (h - p) / q);
+            if u0 > u1 {
+                std::mem::swap(&mut u0, &mut u1);
+            }
+            t0 = t0.max(u0);
+            t1 = t1.min(u1);
+            if t0 > t1 {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -1765,6 +2099,7 @@ mod tests {
             via_cost_multiplier: 1.0,
             layer_preference: 0.0,
             block_foreign_copper: false,
+            strict_zone: false,
             via_foreign_copper_penalty: 0.0,
             via_foreign_pad_penalty: 0.0,
             via_touching_trace_penalty: 0.0,
@@ -2122,6 +2457,7 @@ mod tests {
             via_cost_multiplier: 1.0,
             layer_preference: 0.0,
             block_foreign_copper: false,
+            strict_zone: false,
             via_foreign_copper_penalty: 0.0,
             via_foreign_pad_penalty: 0.0,
             via_touching_trace_penalty: 0.0,
@@ -2155,5 +2491,215 @@ mod tests {
                 pair[1].2
             );
         }
+    }
+
+    /// A pad zone covering the whole of a small single-layer grid, around the
+    /// goal at (18, 2).
+    fn a_zone_over_the_grid() -> [PadZone; 1] {
+        [PadZone {
+            cx: 18,
+            cy: 2,
+            radius: 40,
+        }]
+    }
+
+    #[test]
+    fn a_cell_another_net_holds_is_shut_on_tier_one_and_open_on_tier_two() {
+        let mut grid = make_test_grid(20, 5, 100_000, 1);
+        let zones = a_zone_over_the_grid();
+        grid.mark_route(5, 2, 0, 2);
+        grid.set_pad_owner(7, 2, 0, 2);
+        grid.set_pad_owner(9, 2, 0, 1);
+        grid.mark_route(11, 2, 0, 1);
+
+        // Another net's trace and another net's pad: tier 1 refuses both.
+        assert!(!pad_zone_open(&grid, 5, 2, 0, 1, &zones, false, true));
+        assert!(!pad_zone_open(&grid, 7, 2, 0, 1, &zones, false, true));
+        // The net's own pad and own trace stay open to it.
+        assert!(pad_zone_open(&grid, 9, 2, 0, 1, &zones, false, true));
+        assert!(pad_zone_open(&grid, 11, 2, 0, 1, &zones, false, true));
+        // Tier 2 is what the router did before: the zone admits all four.
+        for x in [5, 7, 9, 11] {
+            assert!(pad_zone_open(&grid, x, 2, 0, 1, &zones, false, false));
+        }
+        // Outside the zone the answer is no on either tier.
+        let far = [PadZone {
+            cx: 0,
+            cy: 0,
+            radius: 1,
+        }];
+        assert!(!pad_zone_open(&grid, 5, 2, 0, 1, &far, false, true));
+        assert!(!pad_zone_open(&grid, 5, 2, 0, 1, &far, false, false));
+    }
+
+    fn search_across_a_wall(strict_zone: bool, gap: Option<u32>) -> Option<Vec<GridNode>> {
+        let mut grid = make_test_grid(20, 5, 100_000, 1);
+        for y in 0..5 {
+            if Some(y) != gap {
+                grid.mark_route(10, y, 0, 2);
+            }
+        }
+        let rules = TestRules::new();
+        let congestion = CongestionMap::new(20, 5, 1);
+        let zones = a_zone_over_the_grid();
+        let search = Search {
+            rules: &rules,
+            net_id: 1,
+            pad_zones: &zones,
+            via_cost_multiplier: 1.0,
+            layer_preference: 0.0,
+            block_foreign_copper: false,
+            strict_zone,
+            via_foreign_copper_penalty: 0.0,
+            via_foreign_pad_penalty: 0.0,
+            via_touching_trace_penalty: 0.0,
+            foreign_pad_penalty: 0.0,
+            pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
+            yield_halo: false,
+            heuristic_weight: 1.0,
+            field: None,
+            clearance_barrier: 0.0,
+        };
+        let mut scratch =
+            GridSearchScratch::for_grid(grid.width(), grid.height(), grid.layer_count() as usize);
+        find_path_congestion_augmented(
+            &mut grid,
+            &mut scratch,
+            (1, 2, 0),
+            (18, 2, 0),
+            false,
+            None,
+            &[],
+            &[],
+            &congestion,
+            &search,
+        )
+    }
+
+    #[test]
+    fn a_wall_of_another_nets_copper_inside_the_zone_stops_tier_one_and_not_tier_two() {
+        // Tier 2 walks through the wall, as the router did before the tiers.
+        let through = search_across_a_wall(false, None).expect("tier 2 finds the way through");
+        assert!(through.iter().any(|node| node.0 == 10));
+        // Tier 1 finds nothing, and that is what sends the connection to tier 2.
+        assert!(search_across_a_wall(true, None).is_none());
+    }
+
+    #[test]
+    fn tier_one_goes_round_a_wall_through_its_gap() {
+        let path = search_across_a_wall(true, Some(4)).expect("the gap is a way through");
+        for node in &path {
+            assert!(
+                !(node.0 == 10 && node.1 != 4),
+                "tier 1 stepped onto the wall at ({}, {})",
+                node.0,
+                node.1
+            );
+        }
+        assert!(path.iter().any(|node| node.0 == 10 && node.1 == 4));
+    }
+
+    fn a_loop_result(unrouted: Vec<u32>, shorted_nets: usize) -> PathFinderLoopResult {
+        PathFinderLoopResult {
+            routed_paths: HashMap::new(),
+            unrouted,
+            unrouted_connections: 0,
+            iterations: 1,
+            converged: false,
+            overuse_per_iteration: Vec::new(),
+            tier_two_connections: 0,
+            stripped_nets: 0,
+            shorted_nets,
+        }
+    }
+
+    #[test]
+    fn a_routing_with_a_net_on_another_nets_copper_is_not_clean() {
+        assert!(a_loop_result(Vec::new(), 0).is_clean());
+        assert!(!a_loop_result(Vec::new(), 1).is_clean());
+        assert!(!a_loop_result(vec![7], 0).is_clean());
+    }
+
+    #[test]
+    fn a_segment_meets_a_box_it_crosses_or_ends_in_and_not_one_it_passes() {
+        let (lo, hi) = ((10, 10), (20, 20));
+        assert!(segment_meets_box((0, 15), (30, 15), lo, hi));
+        assert!(segment_meets_box((15, 15), (15, 15), lo, hi));
+        assert!(segment_meets_box((0, 0), (12, 12), lo, hi));
+        assert!(!segment_meets_box((0, 25), (30, 25), lo, hi));
+        assert!(!segment_meets_box((0, 0), (9, 30), lo, hi));
+        assert!(!segment_meets_box((25, 0), (25, 30), lo, hi));
+    }
+
+    fn a_pad(x_mm: f64, y_mm: f64) -> crate::orchestrator::PadTarget {
+        crate::orchestrator::PadTarget {
+            position: cypcb_core::Point::from_mm(x_mm, y_mm),
+            layer_mask: 1,
+            pad_size: (Nm::from_mm(0.4), Nm::from_mm(0.4)),
+            pin: "1".to_string(),
+        }
+    }
+
+    fn a_net(id: u32, name: &str, pads: Vec<crate::orchestrator::PadTarget>) -> NetRoute {
+        NetRoute {
+            net_id: cypcb_world::NetId::new(id),
+            net_name: name.to_string(),
+            pads,
+        }
+    }
+
+    #[test]
+    fn a_path_over_another_nets_pad_is_named_and_one_beside_it_is_not() {
+        // Net 2's pad is centred on cell (10, 10) and 0.4 mm square. A path
+        // along row 10 crosses it. Row 13 is 0.3 mm off its centre line, so a
+        // trace 0.127 mm wide stays 0.0865 mm clear - and the grid's pad owner
+        // covers that row too, so only the pad's own box can tell them apart.
+        let mut grid = make_test_grid(20, 20, 100_000, 1);
+        for (x, y) in [(10, 10), (10, 13)] {
+            grid.set_pad_owner(x, y, 0, 2);
+        }
+        let ratsnest = vec![
+            a_net(1, "A", Vec::new()),
+            a_net(2, "B", vec![a_pad(1.05, 1.05)]),
+            a_net(3, "C", Vec::new()),
+        ];
+        let across: Vec<GridNode> = (5..=15).map(|x| (x, 10, 0)).collect();
+        let beside: Vec<GridNode> = (5..=15).map(|x| (x, 13, 0)).collect();
+        let routed: HashMap<u32, Vec<Vec<GridNode>>> =
+            HashMap::from([(1, vec![across]), (3, vec![beside])]);
+
+        let found = nets_sharing_copper(
+            &grid,
+            &ratsnest,
+            &[0, 1, 2],
+            &HashMap::new(),
+            &routed,
+            63_500,
+        );
+
+        assert_eq!(found.len(), 1, "only the path over the pad is named");
+        assert_eq!(found[0].net_idx, 0);
+        assert!(found[0].why.contains("crosses a pad of B"));
+    }
+
+    #[test]
+    fn of_two_nets_on_one_cell_the_one_routed_later_gives_way() {
+        let grid = make_test_grid(20, 20, 100_000, 1);
+        let ratsnest = vec![a_net(1, "A", Vec::new()), a_net(3, "C", Vec::new())];
+        let near: Vec<GridNode> = (5..=9).map(|x| (x, 2, 0)).collect();
+        let far: Vec<GridNode> = (5..=9).map(|x| (x, 15, 0)).collect();
+        let routed: HashMap<u32, Vec<Vec<GridNode>>> =
+            HashMap::from([(1, vec![near.clone()]), (3, vec![far, near])]);
+        let cells: HashMap<u32, Vec<(u32, u32, u8)>> =
+            HashMap::from([(1, vec![(7, 2, 0)]), (3, vec![(7, 2, 0)])]);
+
+        let found = nets_sharing_copper(&grid, &ratsnest, &[0, 1], &cells, &routed, 63_500);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].net_idx, 1, "net 3 comes second and gives way");
+        assert!(found[0].why.contains("holds the cell with A"));
+
+        let found = nets_sharing_copper(&grid, &ratsnest, &[1, 0], &cells, &routed, 63_500);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].net_idx, 0, "routed first now, so net 3 stays");
     }
 }

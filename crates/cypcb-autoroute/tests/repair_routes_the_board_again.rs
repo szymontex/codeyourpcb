@@ -45,6 +45,14 @@ fn routed(filename: &str, variant: &str, repair_passes: u32) -> (RoutingResult, 
         .find(|config| config.name == variant)
         .unwrap_or_else(|| panic!("no variant named {variant}"))
         .autoroute_config(repair_passes);
+    // 2026-10-31: the router strips a net that ends its negotiation on another
+    // net's copper and routes it again, which leaves `multi_ic` with 22
+    // connections open. Repair starts only from a board with every connection
+    // routed, so it spends nothing there and these tests, which are about what
+    // repair does with a board, would read a stripped one as a repair that
+    // found nothing.
+    let mut config = config;
+    config.resolve_contested = false;
 
     let result = route_board(&mut world, &library, &rules, &config);
     apply_routes(&mut world, &result);
