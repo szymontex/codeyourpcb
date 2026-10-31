@@ -28,7 +28,7 @@ use std::collections::{HashMap, HashSet};
 use bevy_ecs::entity::Entity;
 
 use cypcb_core::{Nm, Point};
-use cypcb_drc::{run_drc, DesignRules, ViolationKind};
+use cypcb_drc::{run_drc, DesignRules, DrcViolation, ViolationKind};
 use cypcb_router::apply_routes;
 use cypcb_router::types::{RoutingResult, RoutingStatus};
 use cypcb_rules::RoutingRuleSet;
@@ -292,21 +292,9 @@ fn measure(
         })
         .collect();
 
-    let mut touching: HashMap<u32, u32> = HashMap::new();
-    for violation in &report.violations {
-        if violation.kind != ViolationKind::Clearance || violation.actual != Some(Nm::ZERO) {
-            continue;
-        }
-        let nets: HashSet<u32> = [Some(violation.entity), violation.other_entity]
-            .into_iter()
-            .flatten()
-            .filter_map(|entity| world.ecs().get::<NetId>(entity))
-            .map(|net| net.id())
-            .collect();
-        for net in nets {
-            *touching.entry(net).or_insert(0) += 1;
-        }
-    }
+    let touching = touching_by_net(&report.violations, |entity| {
+        world.ecs().get::<NetId>(entity).map(|net| net.id())
+    });
     let open_nets: HashSet<u32> = report
         .violations
         .iter()
@@ -382,11 +370,38 @@ fn dedup(blockers: Vec<Blocker>, resolution: i64) -> Vec<Blocker> {
     out
 }
 
+/// For each net, the places where its copper touches another net's.
+///
+/// A place is a clearance row measured at 0.00 mm; a gap that is under spec
+/// but not closed is not one. A place between two nets counts for both. An
+/// entity `net_of` knows no net for - a pad of no net, a pour - counts for
+/// none, so a place between it and a trace counts for the trace's net alone.
+fn touching_by_net(
+    violations: &[DrcViolation],
+    net_of: impl Fn(Entity) -> Option<u32>,
+) -> HashMap<u32, u32> {
+    let mut touching: HashMap<u32, u32> = HashMap::new();
+    for violation in violations {
+        if violation.kind != ViolationKind::Clearance || violation.actual != Some(Nm::ZERO) {
+            continue;
+        }
+        let nets: HashSet<u32> = [Some(violation.entity), violation.other_entity]
+            .into_iter()
+            .flatten()
+            .filter_map(&net_of)
+            .collect();
+        for net in nets {
+            *touching.entry(net).or_insert(0) += 1;
+        }
+    }
+    touching
+}
+
 /// The net of the pin an `unrouted-pin` violation names.
 ///
 /// The violation carries the part and says `REF.PIN is on a net ...`; the pin
 /// is read from that text because it is the only place the pin is stated.
-fn net_of_pin(world: &BoardWorld, violation: &cypcb_drc::DrcViolation) -> Option<u32> {
+fn net_of_pin(world: &BoardWorld, violation: &DrcViolation) -> Option<u32> {
     let refdes = world.ecs().get::<RefDes>(violation.entity)?;
     let pin = violation
         .message
@@ -562,13 +577,92 @@ mod tests {
         assert!(!best.admits(&footing(0, &[(1, 2)])));
     }
 
+    /// Net 3 is open in the best board and closed in the candidate, which lays
+    /// it across net 4. The candidate has no net with a pin open, so the nets
+    /// to hold to their count are the best board's, not the candidate's.
+    #[test]
+    fn a_net_the_attempt_closed_may_not_touch_more_than_it_did_open() {
+        let best = footing_of_nets(1, &[3], &[(1, 2)]);
+        let candidate = footing_of_nets(0, &[], &[(3, 4)]);
+
+        assert!(candidate.open_nets.is_empty());
+        assert_eq!(
+            candidate.key.cmp_rank(&best.key),
+            std::cmp::Ordering::Less,
+            "the ranking alone would keep it"
+        );
+        assert!(!best.admits(&candidate));
+    }
+
+    fn entity(index: u32) -> Entity {
+        Entity::from_raw(index)
+    }
+
+    /// Entities 1, 2 and 3 are on nets 10, 20 and 30; entity 9 is on none.
+    fn net_of(entity: Entity) -> Option<u32> {
+        match entity.index() {
+            index @ 1..=3 => Some(index * 10),
+            _ => None,
+        }
+    }
+
+    fn row(kind: ViolationKind, a: u32, b: Option<u32>, actual: Option<Nm>) -> DrcViolation {
+        DrcViolation {
+            kind,
+            location: Point::from_mm(0.0, 0.0),
+            entity: entity(a),
+            other_entity: b.map(entity),
+            source_span: None,
+            message: String::new(),
+            actual,
+            required: None,
+            area: None,
+        }
+    }
+
+    #[test]
+    fn a_touch_counts_for_both_nets() {
+        let rows = [row(ViolationKind::Clearance, 1, Some(2), Some(Nm::ZERO))];
+
+        let touching = touching_by_net(&rows, net_of);
+
+        assert_eq!(touching, HashMap::from([(10, 1), (20, 1)]));
+    }
+
+    #[test]
+    fn a_gap_under_spec_is_not_a_touch() {
+        let rows = [
+            row(ViolationKind::Clearance, 1, Some(2), Some(Nm(50_000))),
+            row(ViolationKind::Clearance, 1, Some(3), None),
+        ];
+
+        assert!(touching_by_net(&rows, net_of).is_empty());
+    }
+
+    #[test]
+    fn only_a_clearance_row_is_a_touch() {
+        let rows = [row(
+            ViolationKind::EdgeClearance,
+            1,
+            Some(2),
+            Some(Nm::ZERO),
+        )];
+
+        assert!(touching_by_net(&rows, net_of).is_empty());
+    }
+
     #[test]
     fn copper_of_no_net_is_not_counted_against_a_net() {
-        // A place between a pad and a pour: neither entity carries a net.
-        let best = footing(0, &[(1, 2)]);
-        let mut candidate = footing(0, &[]);
-        candidate.key.incomplete = 0;
+        let rows = [
+            // A trace on a pad of no net: the trace's net alone.
+            row(ViolationKind::Clearance, 1, Some(9), Some(Nm::ZERO)),
+            // Two features of no net: nobody's.
+            row(ViolationKind::Clearance, 9, Some(9), Some(Nm::ZERO)),
+            row(ViolationKind::Clearance, 9, None, Some(Nm::ZERO)),
+        ];
 
-        assert!(best.admits(&candidate));
+        let touching = touching_by_net(&rows, net_of);
+
+        assert_eq!(touching, HashMap::from([(10, 1)]));
     }
 }
