@@ -867,6 +867,19 @@ impl RoutingGrid {
         }
     }
 
+    /// The net of the copper already on the board in this cell, if any.
+    ///
+    /// Copper of no net, or of two nets in one cell, answers with a value no
+    /// net carries, so it is foreign to every net.
+    #[inline]
+    pub fn fixed_owner(&self, x: u32, y: u32, layer: usize) -> Option<u32> {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
+            return None;
+        }
+        let owner = self.fixed_net[self.cell_index(x, y, layer)];
+        (owner != u32::MAX).then_some(owner)
+    }
+
     /// Whether this cell is blocked only by copper already on the board that
     /// belongs to `net_id`.
     ///
@@ -1349,6 +1362,14 @@ impl RoutingGrid {
     pub(crate) fn set_pad_owner(&mut self, x: u32, y: u32, layer: usize, net: u32) {
         let idx = layer * self.plane + y as usize * self.width as usize + x as usize;
         self.pad_net[idx] = net;
+    }
+
+    /// Lay hand copper of `net` in one cell, as a trace the file carries
+    /// would, for a test that builds its grid by hand.
+    #[cfg(test)]
+    pub(crate) fn set_fixed_copper(&mut self, x: u32, y: u32, layer: usize, net: u32) {
+        self.mark_obstacle(x, y, layer, 0, CELL_TRACE);
+        self.claim_fixed_disc(x, y, layer, 0, net);
     }
 
     /// Mark cells along a route for a specific net.

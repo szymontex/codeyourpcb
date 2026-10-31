@@ -1927,6 +1927,12 @@ fn pad_zone_open(
         return false;
     }
 
+    // Copper the board already carries is never given way: another net's
+    // hand trace or via in a pad's reach is a short whatever tier asks.
+    if matches!(grid.fixed_owner(x, y, layer), Some(owner) if owner != net_id) {
+        return false;
+    }
+
     if strict {
         return !matches!(grid.net_at(x, y, layer), Some(owner) if owner != net_id)
             && !matches!(grid.pad_owner(x, y, layer), Some(owner) if owner != net_id);
@@ -2530,6 +2536,55 @@ mod tests {
         }];
         assert!(!pad_zone_open(&grid, 5, 2, 0, 1, &far, false, true));
         assert!(!pad_zone_open(&grid, 5, 2, 0, 1, &far, false, false));
+    }
+
+    /// Copper the file carries is not the router's to give way. A pad zone
+    /// opened another net's hand trace on every tier, and on `issue17429`
+    /// the router laid 20 of its contacts on the file's traces that way.
+    #[test]
+    fn another_nets_copper_from_the_file_is_shut_on_every_tier() {
+        let mut grid = make_test_grid(20, 5, 100_000, 1);
+        let zones = a_zone_over_the_grid();
+        grid.set_fixed_copper(5, 2, 0, 2);
+        grid.set_fixed_copper(7, 2, 0, 1);
+        grid.set_fixed_copper(9, 2, 0, 1);
+        grid.set_fixed_copper(9, 2, 0, 2);
+
+        for (block_foreign_copper, strict) in [(false, true), (false, false), (true, false)] {
+            // Another net's trace from the file.
+            assert!(!pad_zone_open(
+                &grid,
+                5,
+                2,
+                0,
+                1,
+                &zones,
+                block_foreign_copper,
+                strict
+            ));
+            // The net's own trace from the file.
+            assert!(pad_zone_open(
+                &grid,
+                7,
+                2,
+                0,
+                1,
+                &zones,
+                block_foreign_copper,
+                strict
+            ));
+            // A cell two nets' copper reaches is nobody's, so it is foreign.
+            assert!(!pad_zone_open(
+                &grid,
+                9,
+                2,
+                0,
+                1,
+                &zones,
+                block_foreign_copper,
+                strict
+            ));
+        }
     }
 
     fn search_across_a_wall(strict_zone: bool, gap: Option<u32>) -> Option<Vec<GridNode>> {
