@@ -36,10 +36,15 @@ fn scratch(who: &str) -> cypcb_fixtures::ScratchPath {
 
 /// Route it, returning the routed file's text.
 fn route(board: &Path, out: &Path) -> String {
+    // 2026-10-31: the copper this file carries joins every net, so routed with
+    // it in place the router has nothing to lay and the copy is the input.
+    // These tests are about the copy a router writes into a file that declares
+    // no nets, so they ask for the parts alone.
     let output = cypcb()
         .arg("route")
         .arg(board)
         .arg("--fast")
+        .arg("--ignore-board-copper")
         .arg("-o")
         .arg(out)
         .output()
