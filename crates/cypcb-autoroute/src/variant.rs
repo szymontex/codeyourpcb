@@ -590,19 +590,22 @@ fn repair_winner(
     config: &VariantConfig,
     winner: &VariantResult,
 ) -> Option<VariantResult> {
-    // Repair re-routes a complete board; one with connections missing is
-    // returned untouched, so there is nothing to spend. 2026-10-31: opened to
-    // a board with connections missing, repair undoes the strip of nets that
-    // share copper - shorts on esp32_starter went 7 -> 12, on mains-sequencer
-    // 11 -> 61 and on qfp_fanout 14 -> 34 - so it stays shut.
-    if winner.unrouted > 0 {
-        return None;
-    }
     #[cfg(not(target_arch = "wasm32"))]
     let start = std::time::Instant::now();
 
     clear_autorouted_traces(world);
-    let initial = RoutingResult::complete(winner.routes.clone(), winner.vias.clone());
+    // A board with connections open goes in as it is, `Partial`. Repair routes
+    // it again with the strip of nets that share copper on and then off, and
+    // keeps an attempt only if it opens nothing and touches no net more
+    // (repair.rs `Footing::admits`). Opened with the ranking alone, repair
+    // swapped open connections for shorts: on 2026-10-31 shorts on
+    // esp32_starter went 7 -> 12, on mains-sequencer 11 -> 61 and on
+    // qfp_fanout 14 -> 34.
+    let initial = if winner.unrouted > 0 {
+        RoutingResult::partial(winner.routes.clone(), winner.vias.clone(), winner.unrouted)
+    } else {
+        RoutingResult::complete(winner.routes.clone(), winner.vias.clone())
+    };
     let repaired = crate::repair::repair_routes(
         world,
         library,
@@ -611,6 +614,10 @@ fn repair_winner(
         initial,
     );
 
+    let unrouted = match repaired.status {
+        RoutingStatus::Partial { unrouted_count } => unrouted_count,
+        _ => 0,
+    };
     apply_routes(world, &repaired);
     rebuild_spatial_index(world, library);
     let score = score_board(world, design_rules, &ScoreWeights::default());
@@ -619,7 +626,7 @@ fn repair_winner(
         score,
         routes: repaired.routes,
         vias: repaired.vias,
-        unrouted: 0,
+        unrouted,
         #[cfg(not(target_arch = "wasm32"))]
         elapsed_ms: winner.elapsed_ms + start.elapsed().as_millis() as u64,
         #[cfg(target_arch = "wasm32")]
