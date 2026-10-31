@@ -238,8 +238,9 @@ fn the_smoother_is_not_where_they_come_from() {
     // 116 since 2026-10-31, when a net that ends its negotiation on another
     // net's copper is stripped and routed again: 160 corners became 116 as
     // 1428 segments on qfp_fanout became 1184 and the others fell with them.
+    // The floor is the measured 116, with no room.
     assert!(
-        total >= 100,
+        total >= 116,
         "the six fixtures drew 116 acute corners between them on 2026-10-31 \
          and this run counted {total}"
     );

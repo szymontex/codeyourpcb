@@ -305,6 +305,16 @@ fn what_ending_on_its_own_copper_costs_and_saves() {
     // took the doubled junctions from 110 to 66, and with it on they stay at
     // 18, so the share that is left went from 16 per cent to 27. The setting
     // still removes most of what is there; the bound is one in three.
+    // Both figures are held as measured, so a drift in either direction fails:
+    // 66 or more with the setting off, 18 or fewer with it on.
+    assert!(
+        off_doubled >= 66,
+        "the setting off draws copper over copper {off_doubled} times, where 66 was measured"
+    );
+    assert!(
+        on_doubled <= 18,
+        "the setting on draws copper over copper {on_doubled} times, where 18 was measured"
+    );
     assert!(
         on_doubled * 3 <= off_doubled,
         "most of the {off_doubled} doubled junctions should be impossible to \
