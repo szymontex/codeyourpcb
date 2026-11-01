@@ -1350,7 +1350,9 @@ fn nets_sharing_copper(
 #[allow(clippy::too_many_arguments)]
 /// How many cells inside a via's keepout belong to another net.
 ///
-/// Both layers the via joins are counted, because its copper is on both.
+/// Both layers the via joins are counted, because its copper is on both. The
+/// last count is the cells of another net's copper from the file the via's
+/// own copper would meet: that is a short the search refuses outright.
 fn foreign_cells_in_via_keepout(
     grid: &RoutingGrid,
     x: u32,
@@ -1359,12 +1361,13 @@ fn foreign_cells_in_via_keepout(
     net_id: u32,
     radius: u32,
     touch_nm: i64,
-) -> (u32, u32, u32) {
+) -> (u32, u32, u32, u32) {
     let r = radius as i64;
     let res = grid.resolution();
     let mut routed = 0;
     let mut pads = 0;
     let mut touching = 0;
+    let mut fixed_touching = 0;
     for layer in grid.layers_in(grid.via_layers(layers.0, layers.1)) {
         for dy in -r..=r {
             for dx in -r..=r {
@@ -1402,11 +1405,17 @@ fn foreign_cells_in_via_keepout(
                     // 336 -> 392, because a keepout disc covers many more pad
                     // cells than trace cells on a dense board.
                     pads += 1;
+                } else if matches!(
+                    grid.fixed_owner(cx as u32, cy as u32, layer as usize),
+                    Some(owner) if owner != net_id
+                ) && (dx * dx + dy * dy) * res * res < touch_nm * touch_nm
+                {
+                    fixed_touching += 1;
                 }
             }
         }
     }
-    (routed, pads, touching)
+    (routed, pads, touching, fixed_touching)
 }
 
 /// Everything the search charges for beyond distance, and the net it is
@@ -1517,7 +1526,8 @@ fn find_path_congestion_augmented(
 
     // The radius a via's ring wants clear of foreign copper: the hole, the
     // annular ring, the fab's clearance and half the trace that meets it.
-    // Used as a price, never as a veto - see `via_foreign_copper_penalty`.
+    // Used as a price, never as a veto - see `via_foreign_copper_penalty`. The
+    // one veto is another net's copper from the file within `via_touch_nm`.
     let via_keepout_cells = if via_foreign_copper_penalty > 0.0 {
         let constraints = rules.constraints_for_net(net_id);
         let keepout_nm = constraints.min_via_drill.raw() / 2
@@ -1535,6 +1545,7 @@ fn find_path_congestion_augmented(
         let constraints = rules.constraints_for_net(net_id);
         constraints.min_via_drill.raw() + constraints.min_trace_width.raw() / 2
     };
+    let via_touch_cells = ((via_touch_nm + grid.resolution() - 1) / grid.resolution()) as u32;
 
     // Validate bounds
     if start.0 as u32 >= grid_w
@@ -1773,16 +1784,19 @@ fn find_path_congestion_augmented(
                 } else {
                     0.0
                 };
+                let (routed, pads, touching, fixed_touching) = foreign_cells_in_via_keepout(
+                    grid,
+                    nx as u32,
+                    ny as u32,
+                    (nl, target_layer),
+                    net_id,
+                    via_keepout_cells.max(via_touch_cells),
+                    via_touch_nm,
+                );
+                if fixed_touching > 0 {
+                    continue;
+                }
                 let crowding = if via_keepout_cells > 0 {
-                    let (routed, pads, touching) = foreign_cells_in_via_keepout(
-                        grid,
-                        nx as u32,
-                        ny as u32,
-                        (nl, target_layer),
-                        net_id,
-                        via_keepout_cells,
-                        via_touch_nm,
-                    );
                     routed as f64 * via_foreign_copper_penalty
                         + pads as f64 * via_foreign_pad_penalty
                         + touching as f64 * via_touching_trace_penalty
@@ -2497,6 +2511,65 @@ mod tests {
                 pair[1].2
             );
         }
+    }
+
+    /// A via never lands on another net's copper the file carries. Priced or
+    /// not, `foreign_cells_in_via_keepout` saw only routed copper and pads, and
+    /// with every price at zero it was not asked at all. Measured 2026-10-31,
+    /// `route --fast` on `issue2904`: contacts 2 to 0.
+    #[test]
+    fn the_search_does_not_drill_into_another_nets_copper_from_the_file() {
+        let mut grid = make_test_grid(40, 40, 100_000, 4);
+        grid.set_fixed_copper(22, 20, TOP as usize, 2);
+        let rules = TestRules::new();
+        let constraints = rules.constraints_for_net(1);
+        let touch_nm = constraints.min_via_drill.raw() + constraints.min_trace_width.raw() / 2;
+        let congestion = CongestionMap::new(40, 40, 4);
+        let search = Search {
+            rules: &rules,
+            net_id: 1,
+            pad_zones: &[],
+            via_cost_multiplier: 1.0,
+            layer_preference: 0.0,
+            block_foreign_copper: false,
+            strict_zone: false,
+            via_foreign_copper_penalty: 0.0,
+            via_foreign_pad_penalty: 0.0,
+            via_touching_trace_penalty: 0.0,
+            foreign_pad_penalty: 0.0,
+            pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
+            yield_halo: false,
+            heuristic_weight: 1.0,
+            field: None,
+            clearance_barrier: 0.0,
+        };
+        let mut scratch =
+            GridSearchScratch::for_grid(grid.width(), grid.height(), grid.layer_count() as usize);
+        let path = find_path_congestion_augmented(
+            &mut grid,
+            &mut scratch,
+            (20, 20, TOP),
+            (20, 20, INNER_1),
+            false,
+            None,
+            &[],
+            &[],
+            &congestion,
+            &search,
+        )
+        .expect("the via has somewhere else to go");
+        let via = path
+            .windows(2)
+            .find(|pair| pair[0].2 != pair[1].2)
+            .map(|pair| pair[0])
+            .expect("two layers need a via");
+        let (dx, dy) = (via.0 as i64 - 22, via.1 as i64 - 20);
+        assert!(
+            (dx * dx + dy * dy) * 100_000 * 100_000 >= touch_nm * touch_nm,
+            "a via at ({}, {}) touches net 2's copper from the file at (22, 20)",
+            via.0,
+            via.1
+        );
     }
 
     /// A pad zone covering the whole of a small single-layer grid, around the
